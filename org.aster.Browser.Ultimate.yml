@@ -1,0 +1,37 @@
+app-id: org.aster.Browser
+runtime: org.kde.Platform
+runtime-version: '6.10'
+sdk: org.kde.Sdk
+command: aster-browser
+build-options:
+  build-args:
+    - --share=network
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=home
+  - --env=QTWEBENGINE_CHROMIUM_FLAGS=--ozone-platform-hint=auto
+modules:
+  - name: aster-browser-source-bundle
+    buildsystem: simple
+    build-commands:
+      - chmod +x Aster-Browser-Ultimate-TTS-TransparencyFix.sh
+      - mkdir -p extracted
+      - ./Aster-Browser-Ultimate-TTS-TransparencyFix.sh --extract-only extracted
+      - install -d /app/share/aster-browser
+      - cp -a extracted/. /app/share/aster-browser/
+      - pip3 install --prefix=/app --no-cache-dir -r /app/share/aster-browser/requirements.txt
+      - install -Dm755 /app/share/aster-browser/packaging/linux/aster-flatpak-launcher.sh /app/bin/aster-browser
+      - install -Dm644 /app/share/aster-browser/packaging/linux/aster.svg /app/share/icons/hicolor/scalable/apps/org.aster.Browser.svg
+      - install -Dm644 /app/share/aster-browser/packaging/linux/aster.desktop /app/share/applications/org.aster.Browser.desktop
+      - sed -i 's#^Exec=.*#Exec=aster-browser#' /app/share/applications/org.aster.Browser.desktop
+      - sed -i 's#^Name=.*#Name=Aster Browser Ultimate#' /app/share/applications/org.aster.Browser.desktop
+      - sed -i 's#^Comment=.*#Comment=Linux-first browser with dashboard menu, transparency fixes, read-aloud, and downloads#' /app/share/applications/org.aster.Browser.desktop
+      - sed -i 's#^Icon=.*#Icon=org.aster.Browser#' /app/share/applications/org.aster.Browser.desktop
+    sources:
+      - type: file
+        path: ./Aster-Browser-Ultimate-TTS-TransparencyFix.sh
