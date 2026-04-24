@@ -103,6 +103,50 @@ It stores your key locally in your user profile and updates the app launcher to 
 
 See [`docs/AI-SETUP.md`](docs/AI-SETUP.md) for the full guide.
 
+## How to install on Linux
+
+```bash
+chmod +x Aster-Browser-Merged-Linux.sh
+./Aster-Browser-Merged-Linux.sh -y
+```
+## To install and launch immediately:
+
+```bash
+./Aster-Browser-Merged-Linux.sh --run
+```
+## To uninstall:
+
+```bash
+./Aster-Browser-Merged-Linux.sh --uninstall
+```
+
+## Flatpak
+
+Inside the Flatpak ZIP, run:
+
+```bash
+cd aster-browser-flatpak-kit
+./packaging/flatpak/build-flatpak.sh
+```
+## Windows
+```
+powershell -ExecutionPolicy Bypass -File .\packaging\windows\install_aster_windows.ps1 -UseWinget
+```
+## To build a Windows executable:
+```
+powershell -ExecutionPolicy Bypass -File .\packaging\windows\build_windows_exe.ps1
+```
+## Then use:
+
+```
+packaging/windows/AsterBrowser.nsi
+```
+
+## with NSIS to make:
+
+```
+Aster-Browser-Setup.exe
+```
 ## Useful environment variables
 
 ```bash
