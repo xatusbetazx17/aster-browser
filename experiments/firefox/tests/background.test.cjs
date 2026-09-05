@@ -61,3 +61,11 @@ test('a missing container never restores a page into default cookies', async()=>
   assert.equal(h.counts().created,0);
   assert.equal((await h.send('state')).value.state.parked.length,1);
 });
+test('a copied parked-page URL cannot change the saved cookie identity', async()=>{
+  const h=harness({version:1,settings:{},workspaces:[],parked:[{id:'saved-one',url:'https://example.com/',title:'Example',cookieStoreId:'firefox-container-8',savedAt:1}]});
+  h.tabs[0].url='moz-extension://aster/parked.html?id=saved-one';
+  const result=await h.send('restore',{id:'saved-one'});
+  assert.equal(result.ok,false);
+  assert.equal(h.counts().updates,0);
+  assert.equal(h.counts().created,0);
+});

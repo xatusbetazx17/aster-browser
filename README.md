@@ -12,13 +12,13 @@ The new [Aster WebKit experiment](experiments/webkit/README.md) uses **GTK 4, We
 
 This is a separate Linux prototype with its own launcher and profile. The existing installers below still launch the Qt version. See the [WebKit setup and validation instructions](experiments/webkit/README.md) to try the new engine path and understand the features still to be ported.
 
-## Why Aster exists
-
-### Cross-platform non-Chromium companion
+## Cross-platform non-Chromium companion
 
 The experimental [Aster Companion for Firefox](experiments/firefox/README.md) adds persistent parked pages, workspaces, optional host blocking, reading tools, local commands, and container controls to official Firefox. It uses Firefox's existing Gecko engine and streaming support. It targets Windows, modern Linux, Steam Deck via Firefox Flatpak, and Firefox for Android; device coverage and feature parity remain incomplete.
 
 This is an **add-on**, not a standalone cross-platform Aster browser. The unsigned test package requires temporary loading on desktop; a normal desktop/Android release requires Mozilla signing. See its [platform matrix, feature audit and DRM limits](experiments/firefox/README.md) before testing. The original installers still launch the Qt edition.
+
+## Why Aster exists
 
 Most browsers are strong general-purpose browsers, but Linux users often still want a browser that feels more tailored to their machines and workflows:
 

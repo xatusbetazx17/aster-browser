@@ -42,7 +42,7 @@ async function restore(id) {
   await ready; check();
   const record = state.parked.find(r => r.id === id);
   if (!record) throw Error("This saved page no longer exists.");
-  const existing = (await browser.tabs.query({})).find(t => t.url === parkedURL(id));
+  const existing = (await browser.tabs.query({})).find(t => !t.incognito && t.url === parkedURL(id) && (t.cookieStoreId || "firefox-default") === record.cookieStoreId);
   if (existing) {
     // Updating the existing tab preserves its cookie container.
     await browser.tabs.update(existing.id, {url: record.url, active: true});

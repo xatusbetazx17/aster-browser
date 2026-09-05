@@ -110,7 +110,7 @@ python -m pip install selenium==4.35.0
 python experiments/firefox/tests/smoke_firefox.py
 ```
 
-The [workflow](../../.github/workflows/firefox-companion.yml) runs on Linux and Windows, temporarily installs the actual unsigned add-on into a fresh Firefox profile, tests storage and UI, and uploads the unsigned XPI and viewport screenshots. Selenium Manager obtains a compatible driver. Tests use a localhost article and no service accounts.
+The [workflow](../../.github/workflows/firefox-companion.yml) runs on Linux and Windows, temporarily installs the actual unsigned add-on into a fresh Firefox profile, tests storage and UI, and uploads the unsigned XPI and viewport screenshots. Selenium Manager obtains a compatible driver. Tests use a localhost article and no service accounts. The isolated test driver uses Mozilla’s documented `--allow-system-access` flag to automate extension documents; the launcher does not enable browser automation.
 
 Covered: navigation/rule/backup unit checks, real Firefox workspace UI, page parking/resuming, storage across dashboard reload, lazy workspace restore, corrupt import rejection, article extraction excluding forms, text escaping and responsive overflow checks. Not covered: signed-install restart persistence, Android runtime, Deck hardware, permission prompts, live blocking interception, container isolation, speech output, downloads or paid DRM. These are release gates, not implied successes.
 
