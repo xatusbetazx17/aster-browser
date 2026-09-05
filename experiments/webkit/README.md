@@ -1,6 +1,6 @@
 # Aster WebKit
 
-For repeatable installation and updates, use the new [platform setup guides](../../docs/setup/README.md). They include managed desktop installs, rollback, and the remaining Android signing requirements.
+For repeatable installation and updates, use the [standalone setup guides](../../docs/setup/README.md). They include Linux installs and rollback, with honest Windows/Android build status. See [the product direction](../../PROJECT_DIRECTION.md): Aster runs as its own application; WebKit supplies the rendering engine.
 
 A separate **Linux desktop prototype** with a Chrome-like layout and a non-Chromium engine. The interface belongs to Aster; HTML/CSS rendering comes from **WebKitGTK**, and JavaScript runs in **JavaScriptCore**. This is an existing alternative engine, not a newly written Aster engine.
 

@@ -126,7 +126,7 @@ class BrowserTab(Gtk.Box):
 
 class BrowserWindow(Adw.ApplicationWindow):
     def __init__(self, application):
-        super().__init__(application=application, title="Aster WebKit", default_width=1180, default_height=780)
+        super().__init__(application=application, title="Aster", default_width=1180, default_height=780)
         self.browser = application
         self.downloads = {}
         self.pending_tabs = set()
@@ -309,7 +309,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         tab = self.current
         if not tab:
             return
-        self.set_title(f"{tab.view.get_title() or 'New tab'} — Aster WebKit")
+        self.set_title(f"{tab.view.get_title() or 'New tab'} — Aster")
         if force_address or not self.address_focus.contains_focus():
             self.address.set_text("" if tab.uri == "about:blank" else tab.uri)
         self.back.set_sensitive(tab.view.can_go_back())
@@ -465,7 +465,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         return False
 
     def about(self):
-        dialog = Gtk.AboutDialog(transient_for=self, modal=True, program_name="Aster WebKit",
+        dialog = Gtk.AboutDialog(transient_for=self, modal=True, program_name="Aster",
                                  version=__version__, website="https://github.com/xatusbetazx17/aster-browser",
                                  comments="An experimental Linux browser powered by WebKitGTK and JavaScriptCore.",
                                  license_type=Gtk.License.MIT_X11)
@@ -529,3 +529,4 @@ class BrowserApplication(Adw.Application):
             window.download_started(session, download)
         else:
             download.cancel()
+

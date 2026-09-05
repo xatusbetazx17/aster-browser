@@ -1,10 +1,7 @@
-name: Aster Firefox companion
+name: Archived Firefox companion (manual only)
 
+# Retired experiment; excluded from the active standalone Aster checks.
 on:
-  pull_request:
-    paths:
-      - 'experiments/firefox/**'
-      - '.github/workflows/firefox-companion.yml'
   workflow_dispatch:
 
 permissions:

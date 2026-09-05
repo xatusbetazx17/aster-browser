@@ -23,7 +23,7 @@ class FixtureSource:
         return self.commit
 
     def files(self, _commit, _edition):
-        return [{"path": "experiments/firefox/example.py", "sha": setup.git_hash(self.payload), "size": len(self.payload)}]
+        return [{"path": "experiments/webkit/example.py", "sha": setup.git_hash(self.payload), "size": len(self.payload)}]
 
     def file(self, _commit, _entry):
         self.calls += 1
@@ -44,7 +44,7 @@ class ManagedUpdateTests(unittest.TestCase):
         self.source = FixtureSource()
 
     def install(self, rollback=False):
-        return setup.install(self.root, "firefox", "native", self.source, rollback)
+        return setup.install(self.root, "webkit", "webkit", self.source, rollback)
 
     def state(self):
         return json.loads((self.root / setup.MARKER).read_text())
@@ -88,7 +88,7 @@ class ManagedUpdateTests(unittest.TestCase):
 
     def test_local_edits_are_preserved_and_update_refused(self):
         self.install()
-        edited = self.root / "releases" / self.source.commit / "experiments/firefox/example.py"
+        edited = self.root / "releases" / self.source.commit / "experiments/webkit/example.py"
         edited.write_text("my changes")
         self.source.advance()
         with self.assertRaisesRegex(setup.SetupError, "changed"):
@@ -106,7 +106,7 @@ class ManagedUpdateTests(unittest.TestCase):
         file.unlink()
         self.install()
         with self.assertRaises(setup.SetupError):
-            setup.install(self.root, "webkit", "webkit", self.source)
+            setup.install(self.root, "firefox", "native", self.source)
 
     def test_failed_pointer_write_keeps_old_version_and_retry_succeeds(self):
         self.install()
@@ -134,7 +134,7 @@ class ManagedUpdateTests(unittest.TestCase):
 
     def test_check_mode_does_not_download_install_or_create_a_directory(self):
         with patch.object(setup, "runtime_setup") as runtime, patch.object(setup.Source, "head") as head:
-            result = setup.main(["--edition", "firefox", "--install-dir", str(self.root), "--check"])
+            result = setup.main(["--edition", "webkit", "--install-dir", str(self.root), "--check"])
             self.assertEqual(result, 0)
             runtime.assert_not_called()
             head.assert_not_called()
@@ -153,10 +153,18 @@ class ManagedUpdateTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(setup.SetupError):
                 setup.safe_path(path)
 
-    def test_flatpak_choice_does_not_silently_switch_to_native_firefox(self):
-        with patch.object(setup.sys, "platform", "linux"), patch.object(setup, "firefox_native", return_value="/usr/bin/firefox"), patch.object(setup.shutil, "which", return_value="/usr/bin/flatpak"), patch.object(setup.subprocess, "run") as run:
-            run.return_value.returncode = 0
-            self.assertEqual(setup.runtime_setup("firefox", True, "flatpak"), "flatpak")
+    def test_windows_does_not_install_or_substitute_another_browser(self):
+        with patch.object(setup.sys, "platform", "win32"), patch.object(setup, "system") as system:
+            result = setup.main(["--install-dir", str(self.root)])
+            self.assertEqual(result, 1)
+            system.assert_not_called()
+        self.assertFalse(self.root.exists())
+
+    def test_steamos_does_not_change_the_immutable_system(self):
+        with patch.object(setup.sys, "platform", "linux"), patch.object(setup, "distro", return_value={"ID": "steamos"}), patch.object(setup, "system") as system:
+            with self.assertRaisesRegex(setup.SetupError, "SteamOS"):
+                setup.runtime_setup("webkit", False)
+            system.assert_not_called()
 
     def test_linked_release_directory_cannot_redirect_writes(self):
         self.install()

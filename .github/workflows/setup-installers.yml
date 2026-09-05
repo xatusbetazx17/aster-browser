@@ -32,12 +32,12 @@ jobs:
         run: |
           bash -n installers/install-linux.sh
           bash installers/install-linux.sh --help
-          bash installers/install-linux.sh --edition firefox --check --install-dir "$RUNNER_TEMP/aster-check"
-      - name: Validate Windows bootstrap without installing software
+          bash installers/install-linux.sh --edition webkit --check --install-dir "$RUNNER_TEMP/aster-check"
+      - name: Check Windows availability without installing another browser
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          & ./installers/install-windows.ps1 -Check -InstallDir (Join-Path $env:RUNNER_TEMP 'Aster check with spaces')
+          & ./installers/install-windows.ps1 -Check
           if ($LASTEXITCODE -ne 0) { throw 'Setup check failed' }
       - name: Verify real downloads from this repository branch
         if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository

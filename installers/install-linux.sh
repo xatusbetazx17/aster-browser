@@ -5,11 +5,11 @@ set -euo pipefail
 if [[ "${1:-}" == "--help" ]]; then
   cat <<'HELP'
 Aster Linux install / update
-  bash install-linux.sh [--edition webkit|firefox] [--install-dir PATH]
+  bash install-linux.sh [--edition webkit] [--install-dir PATH]
                         [--skip-dependencies] [--check] [--rollback]
-Default: standalone WebKit on desktop Linux; Firefox on SteamOS/immutable Linux.
+Installs standalone Aster on supported desktop Linux.
 Python 3.10+ and curl or wget are required to bootstrap setup.
-The Firefox companion still needs temporary loading in Firefox after setup.
+SteamOS and immutable-Linux packaging is still pending.
 HELP
   exit 0
 fi

@@ -22,7 +22,7 @@ curl --fail --location --proto '=https' --proto-redir '=https' \
 bash install-aster-linux.sh --edition webkit
 ```
 
-The script installs/checks the native GTK/WebKit dependencies, then installs the verified Aster source. Automatic dependency commands cover Debian/Ubuntu families, Arch and Fedora; the distro must provide WebKitGTK's **6.0 API**. Unsupported or older distributions should use the Firefox path below, or install the dependencies themselves and run with `--skip-dependencies`.
+The script installs/checks the native GTK/WebKit dependencies, then installs the verified Aster source. Automatic dependency commands cover Debian/Ubuntu families, Arch and Fedora; the distro must provide WebKitGTK's **6.0 API**. On other distributions, install the dependencies yourself and run with `--skip-dependencies` if the WebKitGTK 6.0 runtime is available. This is not a guarantee of compatibility with every distro.
 
 Launch the standalone browser:
 
@@ -56,38 +56,9 @@ bash install-aster-linux.sh --edition webkit --rollback
 
 Rollback does not restore or change browser-profile data. Old release directories are kept so custom files can be recovered; setup does not delete them automatically.
 
-## Firefox companion and Steam Deck
+## Steam Deck and immutable Linux
 
-On Steam Deck, first switch to **Desktop Mode**. Download the same Linux script, then run:
-
-```bash
-bash install-aster-linux.sh --edition firefox
-```
-
-If native Firefox is installed on a conventional desktop, setup uses it. Otherwise it installs or updates Firefox Flatpak using Flatpak's normal confirmations. SteamOS and immutable Linux default to Flatpak. If Flatpak itself is unavailable on an immutable system, install it through that system's software center first. Setup does not unlock or modify the read-only OS image.
-
-Open Firefox in Aster's isolated profile:
-
-```bash
-python3 "$HOME/.local/share/aster-testing-firefox/start-aster.py"
-```
-
-Then load the test companion:
-
-1. Enter `about:debugging#/runtime/this-firefox` in Firefox.
-2. Select **Load Temporary Add-on**.
-3. Select the **full `manifest.json` path printed by setup**. It is under the managed install's `releases/<commit>/experiments/firefox/extension/` folder.
-4. Open the Aster toolbar button, then **Open workspace**.
-
-After updating, use **Load Temporary Add-on** and select the **new manifest path printed by setup**. Clicking Reload on an entry pointing to the old release keeps the old files. Reinstalling the same extension ID is handled by Firefox; export an Aster JSON backup first, and avoid removing the add-on before loading the update. Temporary loading is required again after a Firefox restart. [Mozilla temporary installation guide](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/)
-
-Update source again with:
-
-```bash
-python3 "$HOME/.local/share/aster-testing-firefox/start-aster.py" --update
-```
-
-The script cannot silently activate unsigned add-on updates inside Firefox. Normal permanent installation and automatic add-on updates need a signed release. Steam Deck controller/Gaming Mode support and hardware playback remain unverified.
+A maintained standalone Aster package for SteamOS/immutable Linux is not ready yet. Setup reports that limit and does not unlock the OS image or install a different browser. A future Flatpak or other native package must bundle Aster's own application and be tested on Steam Deck hardware.
 
 ## Existing Git checkouts or old Aster installations
 
@@ -105,11 +76,10 @@ Run these only inside that checkout. If Git reports local changes or divergence,
 
 ## Troubleshooting
 
-- **Missing WebKit package:** check your distro version, use the Firefox edition, or install the [native dependencies](../../experiments/webkit/README.md) yourself.
+- **Missing WebKit package:** check your distro version and the [native dependency instructions](../../experiments/webkit/README.md).
 - **Source files changed:** keep your edits and choose another `--install-dir`, or restore the modified files before updating.
 - **Download failed / GitHub rate limit:** retry later. The previous active code revision remains selected.
 - **Another setup may be running:** wait for it to finish. Only remove the exact `.setup-lock` file mentioned in the error after confirming the earlier setup process has exited.
-- **Firefox cannot see the manifest:** use its file chooser to select the printed location. A sandboxed Firefox package may require a location it can access; `--install-dir "$HOME/Downloads/AsterCompanion"` creates a separate accessible test installation on common setups.
-- **Prime Video:** update Firefox, enable DRM-controlled content in Firefox Settings, and try with Aster blocking off. Setup itself does not verify paid streaming. [Mozilla DRM help](https://support.mozilla.org/en-US/kb/enable-drm)
+- **Protected video:** premium DRM playback inside Aster has not been validated. Setup does not install another browser as a workaround. Ordinary video support also depends on your distro's codec packages.
 
-For native Firefox updates, use its existing distro or Mozilla updater. Keep WebKit updated through normal system updates. [Mozilla Linux installation guidance](https://support.mozilla.org/en-US/kb/install-firefox-linux)
+Keep WebKit and GTK updated through your distribution's normal updates. See [the standalone product direction](../../PROJECT_DIRECTION.md) for the remaining Windows, Android and streaming work.

@@ -2,7 +2,7 @@
 """Install or update Aster experiments from a single verified GitHub revision.
 
 Python 3.10+, standard library only. Browser profiles live outside this managed
-code directory. Firefox add-on loading/signing remains a separate browser step.
+code directory. This installer is for the standalone Linux WebKit application.
 """
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -27,6 +26,8 @@ API = f"https://api.github.com/repos/{REPOSITORY}"
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 12 * 1024 * 1024
 MARKER = "aster-install.json"
+# The previously generated launcher remains valid for existing WebKit installs.
+PREVIOUS_LAUNCHER_SHA256 = '195abe6683fcb4d93960d3cdd79c8781a9d92cfee29821d10f8f9d2de2886eea'
 LAUNCHER = '''"""Launch the currently installed Aster experiment, or update its code."""
 import json
 from pathlib import Path
@@ -46,10 +47,7 @@ if args and args[0] == "--update":
 elif state["edition"] == "webkit":
     command = ["/usr/bin/python3", str(release / "experiments/webkit/run_aster_webkit.py"), *args]
 else:
-    command = [sys.executable, str(release / "experiments/firefox/launch_aster.py")]
-    if state["runtime"] == "flatpak":
-        command.append("--flatpak")
-    command.extend(args)
+    raise SystemExit("This setup supports standalone Aster only. See the platform guides.")
 raise SystemExit(subprocess.call(command))
 '''
 
@@ -100,7 +98,7 @@ class Source:
         selected = []
         for entry in data["tree"]:
             path = safe_path(entry["path"])
-            wanted = path in {"LICENSE", "README.md"} or path.startswith((f"experiments/{edition}/", "installers/", "docs/setup/"))
+            wanted = path in {"LICENSE", "README.md", "PROJECT_DIRECTION.md"} or path.startswith((f"experiments/{edition}/", "installers/", "docs/setup/"))
             if not wanted or entry["type"] == "tree":
                 continue
             if entry["type"] != "blob" or entry["mode"] not in {"100644", "100755"}:
@@ -110,7 +108,7 @@ class Source:
             selected.append({"path": path, "sha": entry["sha"], "size": entry["size"]})
         paths = {f["path"] for f in selected}
         required = {"installers/setup.py", "LICENSE", "README.md"}
-        required.add("experiments/webkit/run_aster_webkit.py" if edition == "webkit" else "experiments/firefox/extension/manifest.json")
+        required.add("experiments/webkit/run_aster_webkit.py")
         if not required <= paths or len(paths) != len(selected) or len(selected) > 150 or sum(f["size"] for f in selected) > MAX_TOTAL:
             raise SetupError("The revision does not contain a complete, bounded Aster package.")
         return selected
@@ -187,6 +185,8 @@ def verify_release(release: Path):
 
 
 def install(root: Path, edition: str, runtime: str, source: Source, rollback: bool = False) -> dict:
+    if edition != "webkit":
+        raise SetupError("Only standalone Aster WebKit is supported by this installer.")
     state = read_state(root, edition)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with lock(root):
@@ -201,7 +201,8 @@ def install(root: Path, edition: str, runtime: str, source: Source, rollback: bo
         if state["commit"]:
             verify_release(root / "releases" / state["commit"])
         launcher = root / "start-aster.py"
-        if launcher.is_symlink() or (launcher.exists() and launcher.read_text(encoding="utf-8") != LAUNCHER):
+        launcher_hash = hashlib.sha256(launcher.read_text(encoding="utf-8").encode()).hexdigest() if launcher.exists() and not launcher.is_symlink() else None
+        if launcher.is_symlink() or (launcher_hash is not None and launcher_hash not in {hashlib.sha256(LAUNCHER.encode()).hexdigest(), PREVIOUS_LAUNCHER_SHA256}):
             raise SetupError("The generated launcher has been edited. Preserve it and use another --install-dir.")
         target = state.get("previous") if rollback else source.head()
         if not target:
@@ -259,7 +260,7 @@ def linux_packages(packages: dict[str, list[str]]):
     info = distro()
     family = " ".join((info.get("ID", ""), info.get("ID_LIKE", ""))).split()
     if info.get("ID") == "steamos" or Path("/run/ostree-booted").exists():
-        raise SetupError("Use the Firefox Flatpak edition on this immutable system; install Flatpak through its software center first.")
+        raise SetupError("A standalone Aster package for this immutable system is not ready. See docs/setup/linux.md; the OS image was not changed.")
     sudo = [] if os.geteuid() == 0 else ["sudo"]
     if any(x in family for x in ("debian", "ubuntu")):
         system([*sudo, "apt-get", "update"])
@@ -272,65 +273,22 @@ def linux_packages(packages: dict[str, list[str]]):
         raise SetupError("Automatic dependencies support Debian/Ubuntu, Arch and Fedora. Install the runtime yourself and use --skip-dependencies; see docs/setup/linux.md.")
 
 
-def firefox_native():
-    found = shutil.which("firefox") or shutil.which("firefox-esr")
-    if found:
-        return found
-    for base in (os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)"), os.environ.get("LOCALAPPDATA")):
-        if base and (Path(base) / "Mozilla Firefox/firefox.exe").is_file():
-            return str(Path(base) / "Mozilla Firefox/firefox.exe")
-    return None
-
-
 def runtime_setup(edition: str, skip: bool, preferred: str | None = None) -> str:
-    if edition == "webkit":
-        if sys.platform != "linux":
-            raise SetupError("The standalone WebKit experiment currently runs on Linux only.")
-        if distro().get("ID") == "steamos" or Path("/run/ostree-booted").exists():
-            raise SetupError("Use --edition firefox on SteamOS/immutable Linux; the WebKit package is not validated there.")
-        if not skip:
-            linux_packages({"apt": ["python3-gi", "gir1.2-gtk-4.0", "gir1.2-adw-1", "gir1.2-webkit-6.0"], "pacman": ["python", "python-gobject", "gtk4", "libadwaita", "webkitgtk-6.0"], "dnf": ["python3-gobject", "gtk4", "libadwaita", "webkitgtk6.0"]})
-        system(["/usr/bin/python3", "-c", "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1'); gi.require_version('WebKit','6.0'); from gi.repository import Gtk,Adw,WebKit"])
-        return "webkit"
-    if preferred is None and sys.platform == "linux" and (distro().get("ID") == "steamos" or Path("/run/ostree-booted").exists()):
-        preferred = "flatpak"
-    if preferred != "flatpak" and firefox_native():
-        # Browser updates remain with the existing installation's updater.
-        return "native"
-    if sys.platform == "win32":
-        if skip or not shutil.which("winget"):
-            raise SetupError("Install official Firefox first, or run again with WinGet available and without --skip-dependencies.")
-        system(["winget", "install", "--id", "Mozilla.Firefox", "--exact", "--source", "winget"])
-        if not firefox_native():
-            raise SetupError("Firefox installation could not be located. Reopen the terminal and try again.")
-        return "native"
-    if sys.platform != "linux":
-        raise SetupError("These setup scripts support Linux and Windows. Android installation is documented separately.")
-    if preferred == "native":
-        raise SetupError("This installation uses native Firefox. Reinstall it through its original package manager, then retry; setup will keep your runtime choice.")
-    if not shutil.which("flatpak"):
-        if skip:
-            raise SetupError("Install Firefox or Flatpak first.")
-        linux_packages({"apt": ["flatpak"], "pacman": ["flatpak"], "dnf": ["flatpak"]})
-    for scope in ("--user", "--system"):
-        if subprocess.run(["flatpak", "info", scope, "org.mozilla.firefox"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-            if not skip:
-                system(["flatpak", "update", scope, "org.mozilla.firefox"])
-            return "flatpak"
-    if skip:
-        raise SetupError("Firefox Flatpak is not installed.")
-    # An explicit repository URL lets Flatpak obtain Mozilla's official app
-    # using Flathub's normal signature and permission checks.
-    system(["flatpak", "install", "--user", "https://flathub.org/repo/appstream/org.mozilla.firefox.flatpakref"])
-    return "flatpak"
+    if edition != "webkit" or sys.platform != "linux":
+        raise SetupError("A standalone Windows/Android build is not available yet. This setup supports Linux Aster only.")
+    if distro().get("ID") == "steamos" or Path("/run/ostree-booted").exists():
+        raise SetupError("A standalone SteamOS/immutable-Linux package is not ready. The OS image was not changed.")
+    if not skip:
+        linux_packages({"apt": ["python3-gi", "gir1.2-gtk-4.0", "gir1.2-adw-1", "gir1.2-webkit-6.0"], "pacman": ["python", "python-gobject", "gtk4", "libadwaita", "webkitgtk-6.0"], "dnf": ["python3-gobject", "gtk4", "libadwaita", "webkitgtk6.0"]})
+    system(["/usr/bin/python3", "-c", "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1'); gi.require_version('WebKit','6.0'); from gi.repository import Gtk,Adw,WebKit"])
+    return "webkit"
 
 
 def main(argv=None):
     if sys.version_info < (3, 10):
         raise SystemExit("Aster setup requires Python 3.10 or newer.")
-    default_edition = "firefox" if sys.platform == "win32" or distro().get("ID") == "steamos" or Path("/run/ostree-booted").exists() else "webkit"
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--edition", choices=("webkit", "firefox"), default=default_edition)
+    parser.add_argument("--edition", choices=("webkit",), default="webkit")
     parser.add_argument("--install-dir", type=Path)
     parser.add_argument("--skip-dependencies", action="store_true", help="Only check the runtime; do not invoke a package manager")
     parser.add_argument("--check", action="store_true", help="Show local installation status without downloading or installing")
@@ -340,6 +298,8 @@ def main(argv=None):
     root = (args.install_dir or base / f"aster-testing-{args.edition}").expanduser().absolute()
     try:
         state = read_state(root, args.edition)
+        if sys.platform != "linux" and not args.check:
+            raise SetupError("A standalone build for this platform is not available yet. No browser was installed or substituted.")
         if args.check:
             print("Edition:", args.edition, "\nInstall directory:", root)
             print("Revision:", state["commit"] if state else "not installed")
@@ -357,11 +317,6 @@ def main(argv=None):
         print("Revision:", result["commit"])
         print("Launcher:", root / "start-aster.py")
         print("To update again, run this setup command again, or run the launcher with --update.")
-        if args.edition == "firefox":
-            print("Firefox add-on loading is still required: about:debugging -> This Firefox -> Load Temporary Add-on.")
-            print("Select:", root / "releases" / result["commit"] / "experiments/firefox/extension/manifest.json")
-            print("After an update, load this NEW manifest path; reloading the older path keeps the older code.")
-            print("This is unsigned test source, not a signed add-on or standalone Windows/Android browser.")
         return 0
     except (SetupError, OSError, ValueError, KeyError) as error:
         print("Aster setup:", error, file=sys.stderr)

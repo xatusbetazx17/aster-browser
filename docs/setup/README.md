@@ -1,50 +1,42 @@
-# Install or update Aster
+# Install or update standalone Aster
 
-Use the guide for your device. **Run the same desktop setup command again to update the managed Aster source.** If the selected experiment has not been installed by these scripts, setup creates a new installation.
+Aster must run as its own browser. The active setup path installs the standalone Linux application and does not require Firefox, Chrome or Chromium.
 
-| Device | Guide | What is available now |
+| Device | Guide | Current deliverable |
 | --- | --- | --- |
-| Desktop Linux | [Linux install and update](linux.md) | Standalone WebKit experiment, or Firefox companion source |
-| Steam Deck / immutable Linux | [Firefox on Linux](linux.md#firefox-companion-and-steam-deck) | Firefox companion source; hardware/Gaming Mode unverified |
-| Windows | [Windows install and update](windows.md) | Firefox companion source and launcher; no standalone Aster EXE |
-| Android | [Android install and update](android.md) | Firefox installation/update now; Aster installation requires a future signed add-on |
+| Supported desktop Linux | [Install, update and roll back](linux.md) | Standalone Aster using WebKitGTK |
+| Windows | [Build status](windows.md) | Native Aster app not built yet |
+| Android | [Build status](android.md) | Native Aster app not built yet |
+| Steam Deck / immutable Linux | [Linux platform limits](linux.md#steam-deck-and-immutable-linux) | Standalone package not ready yet |
 
-## What the desktop updater does
+## Reusing the Linux installer
 
-- Downloads the selected experiment from `codex/aster-webkit-desktop`, pinned to one GitHub commit.
-- Downloads only experiment, setup, license and guide files, avoiding the repository's legacy installer archives.
-- Checks each file against its size and Git blob hash from that revision over HTTPS. This checks download consistency; it is not a signed-release verification scheme.
-- Activates the new code only after its complete download passes verification.
-- Keeps earlier code directories and offers `--rollback`. Rollback changes application code, not browser profile data.
-- Refuses to overwrite an unrelated directory, modified installed source, modified launcher or unreadable installation state.
-- Uses your existing Firefox runtime when present. If it previously used Flatpak, it keeps using Flatpak on subsequent updates.
-- Installs missing runtime packages on supported desktop distributions, uses Firefox Flatpak on SteamOS/immutable Linux, or installs missing Firefox through WinGet on Windows. OS package managers may ask for your password or confirmation.
+Run the same setup command to install Aster if it is missing, or update an installation created by this tool. It downloads the selected branch's application code into a managed per-user directory. It does not overwrite arbitrary source checkouts or the old Qt installation.
 
-It does **not** replace the original Qt Aster installation, convert a Qt profile, update an arbitrary Git checkout, silently install an unsigned Firefox extension, or create a native Android app. Existing test checkouts and old installers remain where they are. These scripts create their own managed code installation; they do not move your personal browser data into it.
+The updater pins downloads to one GitHub commit, checks their sizes and Git blob hashes over HTTPS, and selects the new code only after verification succeeds. This validates download consistency, not a signed-release identity. Older code directories remain available for `--rollback`.
 
-The Linux WebKit experiment continues using its existing `aster-webkit` profile. The Firefox launcher continues using its existing isolated Aster profile. If you load the companion into another Firefox profile, its data belongs to that profile. Export an Aster JSON backup before replacing a temporary add-on.
+Modified installed source, unreadable state and unrelated directories cause a clear error instead of being overwritten. Interrupted downloads preserve the previous selected version. Browser profile data remains in the existing separate `aster-webkit` location; rollback changes code only, not personal data.
 
-## Code updates versus browser updates
+## Options
 
-These scripts update **Aster code when you run them**. They do not install a background service or scheduled task. Existing native Firefox installations keep their normal Firefox/distro updater. Linux WebKit/GTK security updates come from your distribution; setup does not perform a whole-system upgrade. Firefox Flatpak is updated when selected setup runs with dependencies enabled.
-
-For a future signed companion release, Firefox can manage add-on updates through AMO or a configured, maintained update feed. Neither distribution channel has been published for this experiment yet. The [Android guide](android.md) explains both installation states without claiming the unsigned test build can be installed normally.
-
-## Advanced setup flags
-
-| Flag | Effect |
+| Option | Behavior |
 | --- | --- |
-| `--edition webkit` | Linux standalone WebKit experiment |
-| `--edition firefox` | Firefox companion source |
-| `--install-dir PATH` | A separate managed directory, including paths containing spaces |
-| `--skip-dependencies` | Check for the runtime without invoking package managers |
-| `--check` | Report local installation status; no application download or install |
-| `--rollback` | Activate the previous managed code revision without downloading |
+| `--edition webkit` | Select standalone Linux Aster; this is the default |
+| `--install-dir PATH` | Use a separate managed code directory |
+| `--skip-dependencies` | Check installed runtime libraries without invoking a package manager |
+| `--check` | Show local installation status without installing the application |
+| `--rollback` | Select the previous downloaded code revision |
 
-Python 3.10+ is required. A standalone bootstrap may first download `setup.py` to read these options; a repository checkout includes the helper already. Network errors, missing runtimes, integrity failures or local edits produce a nonzero exit status and an explanation.
+Python 3.10+ is required. A standalone downloaded bootstrap first obtains the Python setup helper; a repository checkout already includes it. Run setup as your normal desktop user. It uses sudo only for native packages on supported distributions. GTK and WebKit are libraries, not separately installed browsers.
 
-## Validation and remaining limits
+## Updates and compatibility
 
-The setup workflow runs on Windows and Ubuntu. Tests cover managed install/update, no-op repeat, failed downloads and file verification, refused local edits, rollback, pointer-write failures, concurrent setup, path boundaries and preserved runtime choice. A live test downloads the real branch into a temporary directory and checks the generated launcher without installing OS packages.
+Aster code updates occur when you run setup; no automatic background service is installed. Keep WebKit and GTK updated through your distribution's normal system updates. No whole-system upgrade is performed by setup. Windows/Android builds, all-distro compatibility and Steam Deck hardware support are not implied by the source updater's tests.
 
-Package-manager installation/UAC/password prompts, all Linux distributions, Steam Deck hardware and Android installation have **not** been automatically validated. No signed Aster release, Android APK or guaranteed Prime Video playback is supplied by these scripts.
+The Windows script at the previous download location now reports build availability and exits without installing anything. The retired Firefox companion is no longer an install/update target. Previously downloaded companion code is not deleted, and existing browsers or their profiles are not removed.
+
+## Validation
+
+Tests cover first installation, repeated updates, interrupted downloads, integrity failures, local changes, rollback, pointer-write failures, concurrent setup, path boundaries and platform rejection without installing a substitute browser. A Windows/Linux workflow also exercises real source downloads and the generated updater in temporary directories, without installing system packages.
+
+See [the project direction](../../PROJECT_DIRECTION.md) for the remaining standalone browser work. Protected streaming inside Aster has not been validated.

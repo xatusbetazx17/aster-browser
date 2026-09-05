@@ -1,3 +1,9 @@
+# Retired Firefox companion experiment
+
+This experiment is not the active Aster browser and is no longer part of its installation/update path. The product must run as a standalone Aster application. Source is retained for historical reference; the instructions below describe the retired experiment only. Use [the standalone Linux setup](../../docs/setup/linux.md) and [project direction](../../PROJECT_DIRECTION.md) for current development.
+
+---
+
 # Aster Companion for Firefox
 
 For repeatable installation and updates, use the new [platform setup guides](../../docs/setup/README.md). They include managed desktop installs, rollback, and the remaining Android signing requirements.

@@ -1,260 +1,37 @@
 # Aster Browser
 
-Aster Browser is an **experimental Linux-first web browser project** focused on three things that many Linux users care about: **lower memory pressure**, **native control**, and **AI-assisted workflows**.
+Aster is being developed as a **standalone browser with its own interface and features**. The active prototype opens directly as Aster. Its Linux application uses GTK4, WebKitGTK and JavaScriptCore, with no Firefox, Chrome or Chromium installation required.
 
-It combines a full website mode powered by **Qt WebEngine** with a custom low-memory companion mode called **Aster Lite**, plus a tab parking system, native ad/tracker blocking, container profiles, and portable install options for desktop Linux and Steam Deck.
+**Status: experimental.** The standalone application does not yet have all original v15 features, native Windows/Android ports, a validated Steam Deck package or verified premium streaming. WebKit is an existing rendering engine; a complete Aster engine written from scratch has not been implemented.
 
-> **Status:** Alpha / test build. Aster is real and testable, but it is not yet a drop-in replacement for Firefox, Brave, or Chromium on every site.
+Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 
-## Install or update the new experiments
+## Install or update standalone Aster
 
-Use the dedicated [Linux](docs/setup/linux.md), [Windows](docs/setup/windows.md), or [Android](docs/setup/android.md) guide. The desktop setup scripts install missing Aster test code or update their existing managed installation when run again, with verified downloads and rollback. They keep the original Qt browser separate. Android still requires a future signed companion release. See the [setup overview](docs/setup/README.md).
+- [Linux installation, updates and rollback](docs/setup/linux.md)
+- [Windows build status](docs/setup/windows.md)
+- [Android build status](docs/setup/android.md)
+- [Setup behavior and data preservation](docs/setup/README.md)
 
-## Non-Chromium desktop prototype
+On supported desktop Linux, run the same setup command again to update Aster's managed code installation. The updater verifies downloads and preserves earlier code revisions for rollback. Browser profile data is separate from those code directories.
 
-The new [Aster WebKit experiment](experiments/webkit/README.md) uses **GTK 4, WebKitGTK 6.0, and JavaScriptCore**. It provides a familiar horizontal tab bar, rounded address/search field, bookmarks, navigation controls, page search, zoom, and download save dialogs, without loading Qt WebEngine or Chromium.
+## Implemented in the standalone Linux prototype
 
-This is a separate Linux prototype with its own launcher and profile. The existing installers below still launch the Qt version. See the [WebKit setup and validation instructions](experiments/webkit/README.md) to try the new engine path and understand the features still to be ported.
+- Aster's native horizontal tab bar and address/search field.
+- Navigation, close/reopen tabs, page-load progress and per-tab zoom.
+- Bookmarks with local atomic storage.
+- Find in page and developer tools.
+- Native download save/cancel dialogs.
+- A separate persistent profile and shared cookies between Aster tabs.
 
-## Cross-platform non-Chromium companion
+See the [standalone application's instructions and test details](experiments/webkit/README.md).
 
-The experimental [Aster Companion for Firefox](experiments/firefox/README.md) adds persistent parked pages, workspaces, optional host blocking, reading tools, local commands, and container controls to official Firefox. It uses Firefox's existing Gecko engine and streaming support. It targets Windows, modern Linux, Steam Deck via Firefox Flatpak, and Firefox for Android; device coverage and feature parity remain incomplete.
+## Work needed to reach the original goal
 
-This is an **add-on**, not a standalone cross-platform Aster browser. The unsigned test package requires temporary loading on desktop; a normal desktop/Android release requires Mozilla signing. See its [platform matrix, feature audit and DRM limits](experiments/firefox/README.md) before testing. The original installers still launch the Qt edition.
+The original parking, adblock customization, containers, reading/Lite tools, full assistant and plugin features must be integrated into the standalone application. Native Windows and Android applications, maintained SteamOS packaging and legitimate protected-video support require additional work. These are requirements, not completed features.
 
-## Why Aster exists
+## Historical experiments
 
-Most browsers are strong general-purpose browsers, but Linux users often still want a browser that feels more tailored to their machines and workflows:
+The v15 ZIPs and legacy installers in this repository run the older Qt/Chromium edition. The Firefox companion was a separate experiment and is **retired from the active product and installation path**. Neither is presented as the new standalone Aster browser. Historical files are retained for reference; new setup commands use the standalone Linux application.
 
-- lower RAM pressure when many tabs are open
-- portable installs that do not require a full distro package
-- stronger user control over profiles, containers, and settings
-- built-in ad and tracker blocking
-- optional AI tools without forcing cloud-only use
-- a path toward a more independent engine over time
-
-Aster is built around that idea.
-
-## Core features
-
-- **Tabbed browser shell** for Linux desktop use
-- **Full Web Mode** through Qt WebEngine for modern websites
-- **Aster Lite** custom low-memory mode for lightweight reading and recovery
-- **Tab parking** to reduce memory pressure from inactive tabs
-- **Native ad/tracker blocking** through request interception
-- **Container profiles**: `default`, `work`, `media`, `banking`
-- **AI side panel** with slash commands like `/open`, `/search`, `/park`, `/lite`, `/stats`
-- **Plugin system** with a sample `focus_mode` plugin
-- **Portable launcher support** for Steam Deck and other Linux systems
-- **Flatpak packaging skeleton**
-
-## Honest limitations
-
-Aster is open about what is still in progress:
-
-- Full modern web compatibility still comes from **Qt WebEngine**.
-- **Aster Lite** is a real custom mode, but it is not yet a complete browser engine for arbitrary modern websites.
-- DRM streaming compatibility depends on host codecs, GPU support, and distribution packaging.
-- This repo is best treated as an **alpha project** for testing, contribution, and iteration.
-
-## Architecture at a glance
-
-Aster currently has three browsing states:
-
-1. **Full Web Mode**
-   - powered by Qt WebEngine
-   - used for complex modern websites, streaming pages, and general browsing
-
-2. **Aster Lite**
-   - custom text-first lightweight mode
-   - intended for low-memory fallback, reading, recovery, and reduced-resource browsing
-
-3. **Parked Tabs**
-   - inactive tabs can be unloaded and restored later
-   - keeps the browser responsive instead of keeping every tab fully alive all the time
-
-That combination is what makes Aster feel different from a standard wrapper around an existing browser core.
-
-## Quick start
-
-### Standard Linux install
-
-```bash
-python -m pip install -r requirements.txt
-python run_aster.py
-```
-
-### Arch Linux
-
-```bash
-sudo pacman -S --needed python python-pip python-pyqt6 python-pyqt6-webengine qt6-wayland
-python run_aster.py
-```
-
-### Steam Deck / portable install
-
-Use the bundled launcher script:
-
-```bash
-chmod +x tools/Aster-Browser-SteamDeck.sh
-./tools/Aster-Browser-SteamDeck.sh
-```
-
-That script installs Aster into your home folder, creates a private Python environment, and adds an app-menu entry.
-
-## AI setup
-
-Aster supports local or cloud AI providers.
-
-For local-only testing, use an OpenAI-compatible local endpoint such as Ollama.
-
-For OpenAI API testing, use the helper script:
-
-```bash
-chmod +x tools/Aster-Enable-OpenAI.sh
-./tools/Aster-Enable-OpenAI.sh
-```
-
-It stores your key locally in your user profile and updates the app launcher to start with those settings.
-
-See [`docs/AI-SETUP.md`](docs/AI-SETUP.md) for the full guide.
-
-## How to install on Linux
-
-```bash
-chmod +x Aster-Browser-Merged-Linux.sh
-./Aster-Browser-Merged-Linux.sh -y
-```
-## To install and launch immediately:
-
-```bash
-./Aster-Browser-Merged-Linux.sh --run
-```
-## To uninstall:
-
-```bash
-./Aster-Browser-Merged-Linux.sh --uninstall
-```
-
-## Flatpak
-
-Inside the Flatpak ZIP, run:
-
-```bash
-cd aster-browser-flatpak-kit
-./packaging/flatpak/build-flatpak.sh
-```
-## Windows
-```
-powershell -ExecutionPolicy Bypass -File .\packaging\windows\install_aster_windows.ps1 -UseWinget
-```
-## To build a Windows executable:
-```
-powershell -ExecutionPolicy Bypass -File .\packaging\windows\build_windows_exe.ps1
-```
-## Then use:
-
-```
-packaging/windows/AsterBrowser.nsi
-```
-
-## with NSIS to make:
-
-```
-Aster-Browser-Setup.exe
-```
-## Useful environment variables
-
-```bash
-export ASTER_PORTABLE=1
-export ASTER_OPENAI_API_KEY="your_key_here"
-export ASTER_AI_PROVIDER="openai"
-export ASTER_AI_MODEL="gpt-5.4-mini"
-export ASTER_AI_BASE_URL="https://api.openai.com/v1"
-export ASTER_MAX_LIVE_TABS="4"
-export ASTER_SOFT_MEMORY_BUDGET_MB="900"
-export QTWEBENGINE_CHROMIUM_FLAGS="--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist"
-```
-
-## Keyboard shortcuts
-
-- `Ctrl+L` focus address bar
-- `Ctrl+T` new tab
-- `Ctrl+W` close current tab
-- `Ctrl+Shift+L` open current page in Lite mode
-- `Ctrl+Shift+P` park background tabs
-- `Ctrl+,` open settings
-
-## AI side panel commands
-
-- `/help`
-- `/open https://example.com`
-- `/search linux network engineer`
-- `/park`
-- `/lite`
-- `/container media`
-- `/stats`
-- `/wg`
-
-## Project layout
-
-```text
-aster_browser/        Main application code
-plugins/              Bundled example plugins
-rules/                Built-in block rules
-tests/                Non-GUI tests
-packaging/            Flatpak and desktop files
-docs/                 Install and setup docs
-tools/                Portable install and helper scripts
-validation/           Validation notes from generated build artifacts
-```
-
-## Run tests
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-## Documentation
-
-- [`docs/INSTALL-ARCH.md`](docs/INSTALL-ARCH.md)
-- [`docs/INSTALL-STEAMDECK.md`](docs/INSTALL-STEAMDECK.md)
-- [`docs/AI-SETUP.md`](docs/AI-SETUP.md)
-- [`docs/ROADMAP.md`](docs/ROADMAP.md)
-- [`docs/LICENSING-NOTES.md`](docs/LICENSING-NOTES.md)
-- [`docs/GITHUB-SETUP.md`](docs/GITHUB-SETUP.md)
-
-## Contributing
-
-Contributions are welcome. Bug reports, UI improvements, memory tuning, plugin ideas, packaging help, and engine experiments are especially useful right now.
-
-Start here:
-
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-- issue templates in [`.github/ISSUE_TEMPLATE`](.github/ISSUE_TEMPLATE)
-
-## Roadmap summary
-
-Near term:
-
-- improve GUI polish
-- improve parked-tab restore behavior
-- make memory rules more adaptive
-- add a proper settings screen for AI and profile options
-- improve Steam Deck packaging
-
-Long term:
-
-- deepen the independent engine path beyond Aster Lite
-- improve media handling and Linux packaging quality
-- sandbox plugins more aggressively
-- explore stronger site isolation and process splitting
-
-## License
-
-This project is licensed under the **MIT License**. That means people can use it, copy it, modify it, publish it, and share it.
-
-See [`LICENSE`](LICENSE).
-
-> Important: this repository's source code is MIT-licensed, but some dependencies and optional runtime components have their own licenses and distribution rules. See [`docs/LICENSING-NOTES.md`](docs/LICENSING-NOTES.md).
+Aster source is covered by the repository's MIT license. Its engine and other dependencies retain their own licenses.
