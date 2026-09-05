@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action https://duckduckgo.com; base-uri 'none'">
+<title>New tab</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f8fc; color: #263149; }
+  main { width: min(90%, 660px); padding: 48px 12px; text-align: center; }
+  .mark { margin: auto; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 21px; background: #146e58; color: white; font-size: 38px; }
+  h1 { font-size: clamp(36px, 7vw, 52px); letter-spacing: -2px; margin: 20px 0 8px; font-weight: 650; }
+  p { color: #647087; line-height: 1.6; }
+  form { display: flex; gap: 8px; padding: 8px; margin: 32px 0 24px; background: white; border: 1px solid #dae0eb; border-radius: 28px; box-shadow: 0 4px 24px #2436500a; }
+  input { flex: 1; width: 0; min-width: 80px; background: transparent; border: 0; padding: 10px 16px; font: inherit; color: inherit; outline: none; }
+  form:focus-within { outline: 2px solid #168365; outline-offset: 3px; }
+  button { padding: 10px 20px; border: 0; border-radius: 22px; background: #146e58; color: white; font: inherit; cursor: pointer; }
+  nav { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  a { padding: 12px 18px; border: 1px solid #dae0eb; border-radius: 14px; color: inherit; text-decoration: none; }
+  a:hover { background: #e8f1ee; }
+  footer { font-size: 13px; color: #6b778c; margin-top: 40px; }
+  kbd { font: inherit; background: #e6ebf2; padding: 3px 6px; border-radius: 5px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #171c26; color: #e4e9f2; }
+    p, footer { color: #a6b1c4; }
+    form { background: #242c3a; border-color: #3a465a; }
+    a { border-color: #3a465a; } a:hover { background: #293c39; }
+    kbd { background: #2e394b; }
+  }
+</style>
+<main>
+  <div class="mark" aria-hidden="true">A</div>
+  <h1>Aster</h1>
+  <p>A fresh space for your next idea.</p>
+  <form action="https://duckduckgo.com/" method="get">
+    <input name="q" type="search" aria-label="Search DuckDuckGo" placeholder="Search DuckDuckGo" required>
+    <button type="submit">Search</button>
+  </form>
+  <nav aria-label="Shortcuts">
+    <a href="https://github.com/">GitHub</a>
+    <a href="https://en.wikipedia.org/">Wikipedia</a>
+    <a href="https://www.youtube.com/">YouTube</a>
+  </nav>
+  <footer><kbd>Ctrl L</kbd> Address bar &nbsp; · &nbsp; <kbd>Ctrl T</kbd> New tab</footer>
+</main>
+</html>
