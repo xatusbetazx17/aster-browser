@@ -120,9 +120,11 @@ For a headless Ubuntu runner, install `xvfb` and `dbus-x11`, then:
 xvfb-run -a dbus-run-session -- /usr/bin/python3 experiments/webkit/tests/smoke_webkit.py
 ```
 
-This opens the actual application with an isolated temporary profile and a localhost HTTP fixture, checks JavaScript execution, page navigation, tab lifecycle, cookies, bookmark persistence, zoom, and find controls. It fails if GTK/WebKit are absent or a GTK callback raises an exception. It does not visit public websites or disable the WebKit sandbox.
+This opens the actual application with an isolated temporary profile and a localhost HTTP fixture, checks JavaScript execution, page navigation, tab lifecycle, cookies, bookmark persistence, zoom, and find controls. It fails if GTK/WebKit are absent or a GTK callback raises an exception. It does not visit public websites. The commands above use WebKit's default sandbox settings.
 
-The [GitHub Actions workflow](../../.github/workflows/webkit-prototype.yml) runs both sets of checks. Manual checks still needed: visual layout on a desktop and Steam Deck resolution, links opening new tabs, download save/cancel/error dialogs, persistent login across restarts, TLS error pages, and representative websites/media.
+The [GitHub Actions workflow](../../.github/workflows/webkit-prototype.yml) runs both sets of checks and captures a desktop screenshot. The hosted runner rejects WebKit's nested UID namespace, so that one CI smoke-test step sets `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` for the trusted localhost fixture. This is not set by the app or launcher. **The CI result does not validate the WebKit sandbox.** A real desktop check with normal sandboxing is still required.
+
+Manual checks still needed: visual layout on a desktop and Steam Deck resolution, links opening new tabs, download save/cancel/error dialogs, persistent login across restarts, TLS error pages, and representative websites/media.
 
 Authoring-environment result: **12 unit tests passed and Python syntax compiled**. The native GUI test could not run locally because the desktop libraries were absent and the environment could not install them. Check the pull request's Actions results for independent native-runtime validation; this note is not a claim that the desktop smoke test passed.
 

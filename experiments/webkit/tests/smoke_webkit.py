@@ -96,6 +96,17 @@ def main():
             wait_for(lambda: window.tabs.get_n_pages() == 1, "Close tab failed")
             window.reopen_tab()
             wait_for(lambda: window.tabs.get_n_pages() == 2 and window.current.view.get_title() == "Script ran", "Reopen tab failed")
+            screenshot_path = os.environ.get("ASTER_SMOKE_SCREENSHOT")
+            if screenshot_path:
+                from PIL import ImageGrab
+
+                home = window.new_tab()
+                wait_for(lambda: home.view.get_title() == "New tab" and not home.view.is_loading(), "New-tab page failed")
+                paint_time = time.monotonic() + 0.5
+                wait_for(lambda: time.monotonic() >= paint_time, "Compositing did not complete")
+                destination = Path(screenshot_path)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                ImageGrab.grab().save(destination)
             assert not callback_errors
             print("PASS: real WebKit HTML/JS, navigation, tabs, bookmarks, shared cookies, zoom, and find controls")
         finally:

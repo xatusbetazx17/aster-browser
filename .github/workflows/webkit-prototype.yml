@@ -5,12 +5,6 @@ on:
     paths:
       - 'experiments/webkit/**'
       - '.github/workflows/webkit-prototype.yml'
-  push:
-    branches:
-      - 'codex/aster-webkit-*'
-    paths:
-      - 'experiments/webkit/**'
-      - '.github/workflows/webkit-prototype.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Test navigation and bookmark storage
@@ -31,11 +25,21 @@ jobs:
       - name: Install native WebKit runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-webkit-6.0 xvfb dbus-x11
+          sudo apt-get install -y python3-gi python3-pil gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-webkit-6.0 xvfb dbus-x11
       - name: Check native dependencies
         run: /usr/bin/python3 experiments/webkit/run_aster_webkit.py --check-dependencies
       - name: Exercise the real browser engine
         env:
           GSK_RENDERER: cairo
           LIBGL_ALWAYS_SOFTWARE: '1'
+          # Hosted runners deny WebKit's nested uid map. This setting belongs
+          # only to this trusted localhost fixture, never to the app launcher.
+          # This check validates rendering and UI behavior, not sandboxing.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
+          ASTER_SMOKE_SCREENSHOT: artifacts/aster-webkit.png
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 experiments/webkit/tests/smoke_webkit.py
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: aster-webkit-desktop-preview
+          path: artifacts/aster-webkit.png
+          retention-days: 7
