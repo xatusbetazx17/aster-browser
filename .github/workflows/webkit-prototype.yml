@@ -30,8 +30,9 @@ jobs:
         run: /usr/bin/python3 experiments/webkit/run_aster_webkit.py --check-dependencies
       - name: Exercise the real browser engine
         env:
-          GSK_RENDERER: cairo
+          GSK_RENDERER: gl
           LIBGL_ALWAYS_SOFTWARE: '1'
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
           # Hosted runners deny WebKit's nested uid map. This setting belongs
           # only to this trusted localhost fixture, never to the app launcher.
           # This check validates rendering and UI behavior, not sandboxing.

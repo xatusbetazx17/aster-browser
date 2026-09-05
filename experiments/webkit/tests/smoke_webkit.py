@@ -102,11 +102,24 @@ def main():
 
                 home = window.new_tab()
                 wait_for(lambda: home.view.get_title() == "New tab" and not home.view.is_loading(), "New-tab page failed")
-                paint_time = time.monotonic() + 0.5
-                wait_for(lambda: time.monotonic() >= paint_time, "Compositing did not complete")
+                frames = []
+
+                def content_painted():
+                    frame = ImageGrab.grab()
+                    # Inspect only the web content, excluding native controls,
+                    # window borders and the toast area. A blank renderer must
+                    # not pass merely because the DOM and page title loaded.
+                    colors = frame.crop((160, 160, window.get_width() - 160,
+                                         window.get_height() - 160)).getcolors(128)
+                    if colors is None or len(colors) > 20:
+                        frames.append(frame)
+                        return True
+                    return False
+
+                wait_for(content_painted, "WebKit loaded HTML but did not paint the page")
                 destination = Path(screenshot_path)
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                ImageGrab.grab().save(destination)
+                frames[-1].save(destination)
             assert not callback_errors
             print("PASS: real WebKit HTML/JS, navigation, tabs, bookmarks, shared cookies, zoom, and find controls")
         finally:
