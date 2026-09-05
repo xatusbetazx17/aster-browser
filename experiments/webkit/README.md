@@ -1,5 +1,7 @@
 # Aster WebKit
 
+For repeatable installation and updates, use the new [platform setup guides](../../docs/setup/README.md). They include managed desktop installs, rollback, and the remaining Android signing requirements.
+
 A separate **Linux desktop prototype** with a Chrome-like layout and a non-Chromium engine. The interface belongs to Aster; HTML/CSS rendering comes from **WebKitGTK**, and JavaScript runs in **JavaScriptCore**. This is an existing alternative engine, not a newly written Aster engine.
 
 The original Aster full browser uses Qt WebEngine, which is built on Chromium. This experiment has its own launcher and imports only GTK 4, libadwaita, and WebKitGTK 6.0. It does not fall back to Qt, Electron, CEF, Blink, or V8. Existing installers still run the original app.
@@ -136,3 +138,4 @@ Authoring-environment result: **12 unit tests passed and Python syntax compiled*
 - [WebKitGTK Python API](https://api.pygobject.gnome.org/WebKit-6.0/class-WebView.html)
 
 Aster's source remains under the repository's MIT license. GTK, libadwaita, WebKitGTK, and their dependencies retain their own licenses.
+

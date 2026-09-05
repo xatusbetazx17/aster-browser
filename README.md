@@ -6,6 +6,10 @@ It combines a full website mode powered by **Qt WebEngine** with a custom low-me
 
 > **Status:** Alpha / test build. Aster is real and testable, but it is not yet a drop-in replacement for Firefox, Brave, or Chromium on every site.
 
+## Install or update the new experiments
+
+Use the dedicated [Linux](docs/setup/linux.md), [Windows](docs/setup/windows.md), or [Android](docs/setup/android.md) guide. The desktop setup scripts install missing Aster test code or update their existing managed installation when run again, with verified downloads and rollback. They keep the original Qt browser separate. Android still requires a future signed companion release. See the [setup overview](docs/setup/README.md).
+
 ## Non-Chromium desktop prototype
 
 The new [Aster WebKit experiment](experiments/webkit/README.md) uses **GTK 4, WebKitGTK 6.0, and JavaScriptCore**. It provides a familiar horizontal tab bar, rounded address/search field, bookmarks, navigation controls, page search, zoom, and download save dialogs, without loading Qt WebEngine or Chromium.

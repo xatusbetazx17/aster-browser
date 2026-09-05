@@ -1,5 +1,7 @@
 # Aster Companion for Firefox
 
+For repeatable installation and updates, use the new [platform setup guides](../../docs/setup/README.md). They include managed desktop installs, rollback, and the remaining Android signing requirements.
+
 An **experimental Firefox add-on**, not a standalone Aster executable or a complete v15 port. It adds Aster-style workflows to official Firefox, whose **Gecko and SpiderMonkey engines are not Chromium**. Firefox retains its own browser interface, updates, permissions, password manager, downloads and extension system.
 
 This is the broad-platform companion to the [Linux WebKit prototype](../webkit/README.md). It does not change the original Qt installers. It does not embed Firefox inside GTK or turn WebKitGTK into a Windows/Android engine.

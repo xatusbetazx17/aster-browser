@@ -1,0 +1,44 @@
+name: Aster install and update scripts
+
+on:
+  pull_request:
+    paths:
+      - 'installers/**'
+      - 'docs/setup/**'
+      - '.github/workflows/setup-installers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test install, update, failures and rollback
+        run: python -m unittest discover -s installers/tests -p 'test_*.py' -v
+      - name: Validate Python syntax
+        run: python -m compileall -q installers
+      - name: Validate Linux bootstrap
+        if: runner.os == 'Linux'
+        run: |
+          bash -n installers/install-linux.sh
+          bash installers/install-linux.sh --help
+          bash installers/install-linux.sh --edition firefox --check --install-dir "$RUNNER_TEMP/aster-check"
+      - name: Validate Windows bootstrap without installing software
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ./installers/install-windows.ps1 -Check -InstallDir (Join-Path $env:RUNNER_TEMP 'Aster check with spaces')
+          if ($LASTEXITCODE -ne 0) { throw 'Setup check failed' }
+      - name: Verify real downloads from this repository branch
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        run: python installers/tests/live_download.py
