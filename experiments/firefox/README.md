@@ -104,7 +104,7 @@ No subscription video has been validated by the automated tests. A shortcut, suc
 ## Validation
 
 ```bash
-node --test experiments/firefox/tests/core.test.cjs
+node --test experiments/firefox/tests/core.test.cjs experiments/firefox/tests/background.test.cjs
 npx --yes --package=web-ext@10.6.0 web-ext lint --source-dir experiments/firefox/extension --warnings-as-errors
 python -m pip install selenium==4.35.0
 python experiments/firefox/tests/smoke_firefox.py

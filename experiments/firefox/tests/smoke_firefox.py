@@ -14,6 +14,7 @@ import threading
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,7 +62,9 @@ def main():
     if os.environ.get("FIREFOX_BINARY"):
         opts.binary_location = os.environ["FIREFOX_BINARY"]
     opts.set_preference("extensions.webextensions.uuids", json.dumps({ID: UUID}))
-    driver = webdriver.Firefox(options=opts)
+    # Mozilla requires explicit browser-UI automation access for extension
+    # documents. Only the isolated test driver receives this flag.
+    driver = webdriver.Firefox(options=opts, service=Service(service_args=["--allow-system-access"]))
     driver.set_script_timeout(20)
     wait = WebDriverWait(driver, 20)
     try:

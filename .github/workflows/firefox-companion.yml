@@ -23,7 +23,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Test navigation, blocking, backups and local highlights
-        run: node --test experiments/firefox/tests/core.test.cjs
+        run: node --test experiments/firefox/tests/core.test.cjs experiments/firefox/tests/background.test.cjs
       - name: Validate add-on package
         run: npx --yes --package=web-ext@10.6.0 web-ext lint --source-dir experiments/firefox/extension --warnings-as-errors
       - name: Install test driver
