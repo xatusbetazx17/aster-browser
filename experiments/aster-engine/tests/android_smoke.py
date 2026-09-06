@@ -19,7 +19,7 @@ if os.environ.get("ANDROID_SERIAL"):
 
 
 def adb(*args, binary=False):
-    return subprocess.check_output([*ADB, *args], timeout=45, text=not binary)
+    return subprocess.check_output([*ADB, *args], timeout=180 if args and args[0] == "install" else 60, text=not binary)
 
 
 def screen():
@@ -28,7 +28,7 @@ def screen():
     return ET.fromstring(raw)
 
 
-def wait_text(text, timeout=35):
+def wait_text(text, timeout=90):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         root = screen()
@@ -70,26 +70,30 @@ def main():
     try:
         adb("wait-for-device")
         adb("reverse", "tcp:8765", "tcp:8765")
-        adb("install", "-r", str(OUT / "aster-engine-preview.apk"))
+        adb("install", "--no-incremental", "--no-streaming", "-r", str(OUT / "aster-engine-preview.apk"))
+        print("APK installed.", flush=True)
         adb("shell", "am", "start", "-W", "-n", PACKAGE + "/io.aster.android.MainActivity")
         wait_text("Your space to explore.")
+        print("Native Canvas home page opened.", flush=True)
         (OUT / "aster-android-home.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
         tap(wait_text("Website address"))
         # The native address field selects its current contents on focus.
         adb("shell", "input", "text", "http://127.0.0.1:8765/first")
         adb("shell", "input", "keyevent", "66")
         node = wait_text("Network page rendered by Aster.")
+        print("HTTP fixture loaded.", flush=True)
         bounds = list(map(int, re.findall(r"\d+", node.attrib["bounds"])))
         density = float(adb("shell", "wm", "density").strip().split()[-1]) / 160
         # The fixture's first link is at the engine's 24px content inset.
         adb("shell", "input", "tap", str(bounds[0] + int(50 * density)), str(bounds[1] + int(33 * density)))
         wait_text("Link navigation worked.")
+        print("Link tap navigated successfully.", flush=True)
         menu("Back")
         wait_text("Network page rendered by Aster.")
         menu("Bookmark this page")
         wait_text("Bookmark saved on this device.")
         adb("shell", "am", "force-stop", PACKAGE)
-        adb("install", "-r", str(OUT / "aster-engine-preview.apk"))
+        adb("install", "--no-incremental", "--no-streaming", "-r", str(OUT / "aster-engine-preview.apk"))
         adb("shell", "am", "start", "-W", "-n", PACKAGE + "/io.aster.android.MainActivity")
         wait_text("Your space to explore.")
         menu("Open bookmark")

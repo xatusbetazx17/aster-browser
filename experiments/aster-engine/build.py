@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -40,6 +41,8 @@ def make_jar(folder, target, main=None):
 
 
 def desktop(test=False, package=False):
+    if package and (sys.platform not in {"linux", "win32"} or platform.machine().lower() not in {"x86_64", "amd64"}):
+        raise SystemExit("Bundled previews currently target Linux/Windows x64. Omit --package to build the portable JAR.")
     classes = BUILD / "desktop-classes"
     if classes.exists():
         shutil.rmtree(classes)
@@ -115,7 +118,7 @@ def android():
 
 def hashes():
     files = list(BUILD.glob("*.zip")) + list(BUILD.glob("*.tar.gz")) + list((BUILD / "android").glob("aster-engine-preview.apk"))
-    (BUILD / "SHA256SUMS.txt").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in sorted(files)), encoding="utf-8")
+    (BUILD / "SHA256SUMS.txt").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(BUILD).as_posix()}\n" for path in sorted(files)), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@ license agreement is required and that Widevine itself assesses no product/servi
 fee. The agreement does not by itself supply Aster's web/media implementation or
 guarantee Amazon acceptance. No application/agreement has been submitted on the
 owner's behalf, and no proprietary CDM or credentials are present in this repository.
+The [integration brief and questions](../development/widevine-integration.md) are
+ready for the owner to use when contacting Google.
 
 ## What this revision actually changes
 
