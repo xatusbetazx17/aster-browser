@@ -5,43 +5,46 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action https://duckduckgo.com; base-uri 'none'">
 <title>New tab</title>
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-  * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f8fc; color: #263149; }
-  main { width: min(90%, 660px); padding: 48px 12px; text-align: center; }
-  .mark { margin: auto; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 21px; background: #146e58; color: white; font-size: 38px; }
-  h1 { font-size: clamp(36px, 7vw, 52px); letter-spacing: -2px; margin: 20px 0 8px; font-weight: 650; }
-  p { color: #647087; line-height: 1.6; }
-  form { display: flex; gap: 8px; padding: 8px; margin: 32px 0 24px; background: white; border: 1px solid #dae0eb; border-radius: 28px; box-shadow: 0 4px 24px #2436500a; }
-  input { flex: 1; width: 0; min-width: 80px; background: transparent; border: 0; padding: 10px 16px; font: inherit; color: inherit; outline: none; }
-  form:focus-within { outline: 2px solid #168365; outline-offset: 3px; }
-  button { padding: 10px 20px; border: 0; border-radius: 22px; background: #146e58; color: white; font: inherit; cursor: pointer; }
-  nav { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
-  a { padding: 12px 18px; border: 1px solid #dae0eb; border-radius: 14px; color: inherit; text-decoration: none; }
-  a:hover { background: #e8f1ee; }
-  footer { font-size: 13px; color: #6b778c; margin-top: 40px; }
-  kbd { font: inherit; background: #e6ebf2; padding: 3px 6px; border-radius: 5px; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #171c26; color: #e4e9f2; }
-    p, footer { color: #a6b1c4; }
-    form { background: #242c3a; border-color: #3a465a; }
-    a { border-color: #3a465a; } a:hover { background: #293c39; }
-    kbd { background: #2e394b; }
-  }
+ :root{color-scheme:light dark;font-family:system-ui,sans-serif;color:#15352d;background:#f5f7f3}
+ *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 90% 0%,#bbdfc94d,transparent 55%)}
+ main{max-width:1000px;margin:auto;padding:40px clamp(22px,5vw,70px)}
+ header{display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+ .brand{display:flex;align-items:center;gap:10px;font-weight:750;letter-spacing:.04em;font-size:19px}
+ .mark{width:34px;height:34px;display:grid;place-items:center;background:#145841;color:#e8f3b0;border-radius:12px;font-size:25px}
+ .label{color:#64776b;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+ h1{font-size:clamp(35px,5.8vw,62px);font-weight:550;letter-spacing:-.045em;line-height:1.1;margin:58px 0 18px;max-width:690px}
+ .intro{color:#62756b;font-size:17px;line-height:1.6;margin:0 0 32px}
+ form{display:flex;align-items:center;gap:8px;border:1px solid #d7e1d7;background:#fff;border-radius:18px;padding:9px;box-shadow:0 10px 30px #2c483309;margin-bottom:36px}
+ input{width:0;min-width:80px;flex:1;border:0;background:transparent;padding:12px;font:inherit;font-size:16px;color:inherit;outline:none}
+ form:focus-within{outline:2px solid #258663;outline-offset:3px}
+ button{border:0;border-radius:12px;background:#145841;color:white;font:inherit;padding:13px 24px;cursor:pointer}
+ nav{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0 35px}
+ a{color:inherit;text-decoration:none;background:#fff9;border:1px solid #d9e2d9;border-radius:14px;padding:17px 12px;font-size:14px;transition:background .15s}
+ a:hover{background:#dfeede}a:focus-visible{outline:2px solid #258663;outline-offset:3px}
+ .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{border-radius:18px;padding:22px;background:#e8eee3}.card:last-child{background:#e4ede8}
+ h2{font-size:19px;font-weight:650;margin:0 0 9px;letter-spacing:-.02em}.card p{font-size:14px;line-height:1.6;margin:0 0 16px;color:#566d5e}
+ kbd{display:inline-block;font:12px system-ui;border:1px solid #b8cabc;background:#ffffff60;border-radius:6px;padding:4px 7px}
+ footer{margin-top:26px;font-size:12px;color:#6b7c70;display:flex;justify-content:space-between;gap:15px}
+ @media(max-width:650px){main{padding-top:26px}h1{margin-top:38px}nav{grid-template-columns:1fr 1fr}.cards{grid-template-columns:1fr}header>.label{display:none}}
+ @media(prefers-color-scheme:dark){:root{background:#111d19;color:#e7eee3}body{background:radial-gradient(ellipse at 90% 0%,#28644340,transparent 55%)}.intro,.label,footer{color:#a2b5a6}form{background:#1b2b23;border-color:#35513d}a{background:#1d2e2380;border-color:#354c3a}a:hover{background:#2c4432}.card{background:#243526}.card:last-child{background:#203830}.card p{color:#afc3b2}kbd{border-color:#4c6951;background:#18271b70}}
 </style>
 <main>
-  <div class="mark" aria-hidden="true">A</div>
-  <h1>Aster</h1>
-  <p>A fresh space for your next idea.</p>
-  <form action="https://duckduckgo.com/" method="get">
-    <input name="q" type="search" aria-label="Search DuckDuckGo" placeholder="Search DuckDuckGo" required>
-    <button type="submit">Search</button>
-  </form>
-  <nav aria-label="Shortcuts">
-    <a href="https://github.com/">GitHub</a>
-    <a href="https://en.wikipedia.org/">Wikipedia</a>
-    <a href="https://www.youtube.com/">YouTube</a>
-  </nav>
-  <footer><kbd>Ctrl L</kbd> Address bar &nbsp; · &nbsp; <kbd>Ctrl T</kbd> New tab</footer>
+ <header><div class="brand"><span class="mark" aria-hidden="true">✦</span> Aster</div><span class="label">A space of your own</span></header>
+ <h1>Follow your curiosity.</h1>
+ <p class="intro">Explore the web. Settle into a good read. Make room for a new idea.</p>
+ <form action="https://duckduckgo.com/" method="get">
+  <input name="q" type="search" aria-label="Search DuckDuckGo" placeholder="Where would you like to go?" required>
+  <button type="submit">Search</button>
+ </form>
+ <div class="label">Your next stop</div>
+ <nav aria-label="Website shortcuts">
+  <a href="https://github.com/">GitHub ↗</a><a href="https://www.youtube.com/">YouTube ↗</a>
+  <a href="https://www.primevideo.com/">Prime Video ↗</a><a href="https://cloud.boosteroid.com/">Boosteroid ↗</a>
+ </nav>
+ <section class="cards" aria-label="Aster tools">
+  <article class="card"><h2>A little more focus.</h2><p>Bring a Word document, PDF or text file into your reading space. Listen in English or Spanish.</p><kbd>Ctrl O</kbd> Open document</article>
+  <article class="card"><h2>Meet your companion.</h2><p>Use offline browser commands, find passages in your reading, or connect a local AI model.</p><kbd>Ctrl J</kbd> Open Aster companion</article>
+ </section>
+ <footer><span><kbd>Ctrl L</kbd> Address bar &nbsp; <kbd>Ctrl T</kbd> New tab</span><span>Aster · Your browser, your space</span></footer>
 </main>
 </html>

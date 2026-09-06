@@ -279,7 +279,15 @@ def runtime_setup(edition: str, skip: bool, preferred: str | None = None) -> str
     if distro().get("ID") == "steamos" or Path("/run/ostree-booted").exists():
         raise SetupError("A standalone SteamOS/immutable-Linux package is not ready. The OS image was not changed.")
     if not skip:
-        linux_packages({"apt": ["python3-gi", "gir1.2-gtk-4.0", "gir1.2-adw-1", "gir1.2-webkit-6.0"], "pacman": ["python", "python-gobject", "gtk4", "libadwaita", "webkitgtk-6.0"], "dnf": ["python3-gobject", "gtk4", "libadwaita", "webkitgtk6.0"]})
+        linux_packages({
+            "apt": ["python3-gi", "gir1.2-gtk-4.0", "gir1.2-adw-1", "gir1.2-webkit-6.0",
+                    "gstreamer1.0-plugins-good", "gstreamer1.0-plugins-bad", "gstreamer1.0-libav",
+                    "espeak-ng", "poppler-utils", "antiword"],
+            "pacman": ["python", "python-gobject", "gtk4", "libadwaita", "webkitgtk-6.0",
+                       "gst-plugins-good", "gst-plugins-bad", "gst-libav", "espeak-ng", "poppler", "antiword"],
+            "dnf": ["python3-gobject", "gtk4", "libadwaita", "webkitgtk6.0", "gstreamer1-plugins-good",
+                    "gstreamer1-plugins-bad-free", "espeak-ng", "poppler-utils"],
+        })
     system(["/usr/bin/python3", "-c", "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1'); gi.require_version('WebKit','6.0'); from gi.repository import Gtk,Adw,WebKit"])
     return "webkit"
 

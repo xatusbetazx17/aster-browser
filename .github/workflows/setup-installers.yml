@@ -5,6 +5,9 @@ on:
     paths:
       - 'installers/**'
       - 'docs/setup/**'
+      - 'experiments/webkit/aster_webkit/documents.py'
+      - 'experiments/webkit/aster_webkit/assistant.py'
+      - 'experiments/webkit/tests/test_*.py'
       - '.github/workflows/setup-installers.yml'
   workflow_dispatch:
 
@@ -27,6 +30,8 @@ jobs:
         run: python -m unittest discover -s installers/tests -p 'test_*.py' -v
       - name: Validate Python syntax
         run: python -m compileall -q installers
+      - name: Test portable reading and assistant logic
+        run: python -m unittest discover -s experiments/webkit/tests -p 'test_*.py' -v
       - name: Validate Linux bootstrap
         if: runner.os == 'Linux'
         run: |

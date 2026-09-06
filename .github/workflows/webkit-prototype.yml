@@ -18,14 +18,14 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - name: Test navigation and bookmark storage
+      - name: Test navigation, documents, assistant, speech and media boundaries
         run: /usr/bin/python3 -m unittest discover -s experiments/webkit/tests -p 'test_*.py' -v
       - name: Check Python syntax
         run: /usr/bin/python3 -m compileall -q experiments/webkit
       - name: Install native WebKit runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi python3-pil gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-webkit-6.0 xvfb dbus-x11
+          sudo apt-get install -y python3-gi python3-pil gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-webkit-6.0 xvfb dbus-x11 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav espeak-ng poppler-utils antiword ffmpeg
       - name: Check native dependencies
         run: /usr/bin/python3 experiments/webkit/run_aster_webkit.py --check-dependencies
       - name: Exercise the real browser engine
@@ -42,5 +42,5 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: aster-webkit-desktop-preview
-          path: artifacts/aster-webkit.png
+          path: artifacts/*.png
           retention-days: 7

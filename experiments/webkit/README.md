@@ -57,6 +57,11 @@ Use your **system Python**, not the old Aster Qt virtual environment. Installing
 - User-initiated new-window links open as related WebKit tabs.
 - Native system theme and a local new-tab page that responds to the light/dark preference.
 - A separate persistent WebKit profile, cookies shared between tabs, and WebKit Intelligent Tracking Prevention.
+- Word/PDF/text reading, document search and offline read-aloud in the native reader panel.
+- Offline companion commands/excerpts, optional local GGUF model inference and push-to-talk Vosk input.
+- Native media/mouse-capture permission prompts, fullscreen controls and runtime streaming checks.
+
+See [document and local assistant setup](../../docs/setup/assistant.md) for helper packages and models, and [streaming compatibility](../../docs/setup/streaming.md) for the difference between API availability and a working paid service.
 
 The interface is inspired by familiar browser conventions and keeps Aster's own name and appearance.
 
@@ -76,6 +81,10 @@ The interface is inspired by familiar browser conventions and keeps Aster's own 
 | Find in page | Ctrl+F |
 | Zoom in / out / reset | Ctrl++ / Ctrl+- / Ctrl+0 |
 | Developer tools | Ctrl+Shift+I or F12 |
+| Open document | Ctrl+O |
+| Aster companion | Ctrl+J |
+| Read page / read aloud | Ctrl+Shift+E / Ctrl+Shift+S |
+| Fullscreen / exit fullscreen | F11 / Escape |
 
 ## Profile and navigation boundaries
 
@@ -89,13 +98,13 @@ ASTER_WEBKIT_PROFILE_DIR=/tmp/aster-webkit-test /usr/bin/python3 experiments/web
 
 The browser accepts HTTP/HTTPS web addresses. Local IP addresses, localhost, and explicit development-server ports default to HTTP; public domain names default to HTTPS. Other terms become a search when submitted. Script, data, local-file, and external-app navigation are unsupported. `about:blank` opens the local new-tab page when entered in the address bar.
 
-WebKit's certificate validation remains enabled. The shell does not disable engine sandboxing or enable a remote debugging listener. Site permission requests are currently denied because permission controls have not been implemented. Persistent HTTP-auth credential storage is disabled; this is not a password manager or a private-browsing mode.
+WebKit's certificate validation remains enabled. The shell does not disable engine sandboxing or enable a remote debugging listener. Camera/microphone, mouse-capture and protected-media requests have native one-request prompts; other permission types are denied. Background-tab requests and prompts made stale by navigation/tab switching are denied. Persistent HTTP-auth credential storage is disabled; this is not a password manager or a private-browsing mode.
 
 ## What still needs work
 
-This is an experimental engine path, **not full Chrome or existing Aster feature parity**. It has no Chrome Web Store extension support, Google account sync, password manager, browser-history UI, crash/session restore, private mode, or verified DRM streaming. Camera/microphone, location, notifications, and other permission-dependent features will not work until proper site permission controls are added.
+This is an experimental engine path, **not full Chrome or existing Aster feature parity**. It has no Chrome Web Store extension support, Google account sync, password manager, browser-history UI, crash/session restore, private mode, or verified DRM streaming. Location, notifications and other unimplemented permission types remain denied.
 
-The original Aster AI panel, ad-block rules, containers, tab parking, and Lite mode have not been ported. WebKit ITP is not a replacement for an ad blocker. Media/codec availability depends on distro packaging. Lower memory consumption and performance improvements have not been measured or claimed.
+The original ad-block rules, containers, tab parking and Lite mode have not been ported. The native companion is an initial local implementation, not complete assistant parity. WebKit ITP is not a replacement for an ad blocker. Media/codec availability depends on distro packaging. Lower memory consumption and performance improvements have not been measured or claimed.
 
 Next development work should validate the GUI on real Linux machines, add a maintained Flatpak build for Steam Deck, and port the existing Aster features one at a time. A from-scratch Aster rendering engine remains a separate, much larger project.
 
@@ -122,13 +131,13 @@ For a headless Ubuntu runner, install `xvfb` and `dbus-x11`, then:
 xvfb-run -a dbus-run-session -- /usr/bin/python3 experiments/webkit/tests/smoke_webkit.py
 ```
 
-This opens the actual application with an isolated temporary profile and a localhost HTTP fixture, checks JavaScript execution, page navigation, tab lifecycle, cookies, bookmark persistence, zoom, and find controls. It fails if GTK/WebKit are absent or a GTK callback raises an exception. It does not visit public websites. The commands above use WebKit's default sandbox settings.
+This opens the actual application with an isolated temporary profile and localhost HTTP fixture. It checks JavaScript, navigation, tabs, cookies, bookmarks, the native DOCX reader, offline assistant commands/excerpts, fullscreen UI, unencrypted VP8 playback and eSpeak speech synthesis. It requires `ffmpeg`, `espeak-ng` and the distro GStreamer plugins in addition to GTK/WebKit. It fails if required libraries are absent or a GTK callback raises an exception. It does not visit public websites. The commands above use WebKit's default sandbox settings.
 
 The [GitHub Actions workflow](../../.github/workflows/webkit-prototype.yml) runs both sets of checks and captures a desktop screenshot. The hosted runner rejects WebKit's nested UID namespace, so that one CI smoke-test step sets `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` for the trusted localhost fixture. This is not set by the app or launcher. **The CI result does not validate the WebKit sandbox.** A real desktop check with normal sandboxing is still required.
 
 Manual checks still needed: visual layout on a desktop and Steam Deck resolution, links opening new tabs, download save/cancel/error dialogs, persistent login across restarts, TLS error pages, and representative websites/media.
 
-Authoring-environment result: **12 unit tests passed and Python syntax compiled**. The native GUI test could not run locally because the desktop libraries were absent and the environment could not install them. Check the pull request's Actions results for independent native-runtime validation; this note is not a claim that the desktop smoke test passed.
+The dependency-free suite contains **27 tests** for navigation/storage, documents, local commands, speech invocation and media reporting. Native GUI checks run in GitHub Actions because the authoring environment cannot install the desktop runtime. See [validation notes](VALIDATION.md) for exact scope and the current pull request's Actions results. No paid-service, Android, native Windows or Steam Deck result is implied.
 
 ## References
 
@@ -138,4 +147,3 @@ Authoring-environment result: **12 unit tests passed and Python syntax compiled*
 - [WebKitGTK Python API](https://api.pygobject.gnome.org/WebKit-6.0/class-WebView.html)
 
 Aster's source remains under the repository's MIT license. GTK, libadwaita, WebKitGTK, and their dependencies retain their own licenses.
-

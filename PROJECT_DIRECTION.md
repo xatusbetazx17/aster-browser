@@ -22,7 +22,10 @@ A custom interface and browser features can be developed within this standalone 
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
 | Managed Linux code installation and updates | Implemented, with file verification and rollback |
-| Original v15 features inside the standalone app | Incomplete; assistant, parking, custom adblock and containers still need porting |
+| Word/PDF/text reading and read-aloud | Native reading panel; DOCX body/tables, PDF/DOC via local tools, English/Spanish speech |
+| Local companion | Offline commands/excerpts; optional local GGUF inference and Vosk voice input; not Siri parity |
+| Media and cloud-gaming prerequisites | WebRTC/media settings, permission prompts, fullscreen, runtime capability reporting; no service-level guarantee |
+| Original v15 features inside the standalone app | Incomplete; parking, custom adblock, containers, Lite renderer and plugins still need porting |
 | Standalone Windows app | Not yet built |
 | Standalone Android app | Not yet built |
 | SteamOS/Steam Deck package | Not yet validated or shipped |
@@ -30,3 +33,5 @@ A custom interface and browser features can be developed within this standalone 
 | Aster rendering engine written from scratch | Not implemented |
 
 Legacy Qt installers and the retired companion source remain available as historical development work. They are not substitutes for the standalone product described here.
+
+See [reading/assistant setup](docs/setup/assistant.md) and [the specific streaming, engine and native-port blockers](docs/setup/streaming.md). A strict requirement to use no third-party browser engine is not met by the existing WebKit prototype. This feature revision does not claim otherwise.

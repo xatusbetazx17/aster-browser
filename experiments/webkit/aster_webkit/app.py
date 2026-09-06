@@ -14,15 +14,19 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango, WebKit
 
 from . import __version__
 from .core import BookmarkStore, is_web_uri, navigation_target, profile_paths
+from .media import configure_media, origin_label
+from .tools_panel import ToolsPanel
 
 HOME_HTML = Path(__file__).with_name("home.html").read_text(encoding="utf-8")
 CSS = b"""
-.aster-tabstrip { padding: 4px 8px; background: @headerbar_bg_color; }
-.aster-brand { font-weight: 700; padding: 0 12px; }
-.aster-toolbar { padding: 8px; border-bottom: 1px solid alpha(@window_fg_color, 0.1); }
+.aster-tabstrip { padding: 6px 8px; background: @headerbar_bg_color; }
+.aster-brand { font-weight: 800; letter-spacing: 1px; padding: 0 16px; color: #16876c; }
+.aster-toolbar { padding: 8px 12px; border-bottom: 1px solid alpha(@window_fg_color, 0.1); }
 .aster-address { border-radius: 24px; padding: 5px 14px; min-height: 28px; }
 .aster-find { padding: 6px 12px; }
 .aster-toolbar button { border-radius: 50%; min-width: 28px; min-height: 28px; }
+.aster-tools { border-left: 1px solid alpha(@window_fg_color, 0.1); background: @window_bg_color; }
+.aster-reading { font-size: 16px; border-radius: 12px; }
 """
 
 
@@ -45,15 +49,22 @@ class BrowserTab(Gtk.Box):
         settings.set_enable_developer_extras(True)
         settings.set_enable_hyperlink_auditing(False)
         settings.set_javascript_can_open_windows_automatically(False)
+        configure_media(settings)
         self.append(self.view)
         for prop in ("title", "uri", "is-loading", "estimated-load-progress", "zoom-level"):
             self.view.connect(f"notify::{prop}", self._changed)
+        for prop in ("microphone-capture-state", "camera-capture-state", "display-capture-state"):
+            if self.view.find_property(prop):
+                self.view.connect(f"notify::{prop}", self._changed)
         self.view.get_back_forward_list().connect("changed", self._changed)
         self.view.connect("create", self._create)
         self.view.connect("decide-policy", self._policy)
         self.view.connect("permission-request", self._permission)
         self.view.connect("load-failed", self._load_failed)
         self.view.connect("web-process-terminated", self._terminated)
+        self.view.connect("load-changed", self._load_changed)
+        self.view.connect("enter-fullscreen", self._enter_fullscreen)
+        self.view.connect("leave-fullscreen", self._leave_fullscreen)
 
     @property
     def owner(self):
@@ -108,11 +119,30 @@ class BrowserTab(Gtk.Box):
         return False
 
     def _permission(self, _view, request):
-        # Site permission controls are not implemented in this first prototype.
-        request.deny()
         if self.owner:
-            self.owner.notify("This site requested a permission that this version does not support.")
+            return self.owner.request_permission(self, request)
+        request.deny()
         return True
+
+    def _load_changed(self, _view, event):
+        if self.owner and event == WebKit.LoadEvent.STARTED:
+            self.owner.cancel_permissions(self)
+            if self.owner.fullscreen_tab is self:
+                self.owner.exit_fullscreen()
+
+    def _enter_fullscreen(self, *_):
+        if not self.owner or self.owner.current is not self:
+            return True
+        self.owner.fullscreen_tab = self
+        self.owner.set_fullscreen_ui(True)
+        self.owner.notify("Fullscreen · press Escape or F11 to exit")
+        return False
+
+    def _leave_fullscreen(self, *_):
+        if self.owner:
+            self.owner.fullscreen_tab = None
+            self.owner.set_fullscreen_ui(False)
+        return False
 
     def _load_failed(self, _view, _event, _uri, error):
         if self.owner and not error.matches(WebKit.network_error_quark(), WebKit.NetworkError.CANCELLED):
@@ -132,6 +162,9 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.pending_tabs = set()
         self.last_tab = None
         self.closed_tabs = []
+        self.permission_dialogs = {}
+        self.fullscreen_tab = None
+        self._tools_before_fullscreen = False
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.overlay = Adw.ToastOverlay()
         self.overlay.set_child(root)
@@ -151,9 +184,11 @@ class BrowserWindow(Adw.ApplicationWindow):
         strip.append(icon_button("list-add-symbolic", "New tab (Ctrl+T)", lambda: self.new_tab()))
         strip.append(Gtk.WindowControls(side=Gtk.PackType.END))
         handle = Gtk.WindowHandle(child=strip)
+        self.header_handle = handle
         root.append(handle)
 
         toolbar = Gtk.Box(spacing=4)
+        self.toolbar = toolbar
         toolbar.add_css_class("aster-toolbar")
         self.back = icon_button("go-previous-symbolic", "Back (Alt+Left)", lambda: self.current.view.go_back())
         self.forward = icon_button("go-next-symbolic", "Forward (Alt+Right)", lambda: self.current.view.go_forward())
@@ -176,9 +211,19 @@ class BrowserWindow(Adw.ApplicationWindow):
         toolbar.append(self.bookmark_menu)
         self.zoom_label = Gtk.Label(label="100%")
         toolbar.append(self.zoom_label)
+        self.capture_stop = icon_button("media-record-symbolic", "Capture active — stop camera and microphone", self.stop_capture)
+        self.capture_stop.add_css_class("error")
+        self.capture_stop.set_visible(False)
+        toolbar.append(self.capture_stop)
+        toolbar.append(icon_button("audio-volume-high-symbolic", "Read aloud", lambda: self.tools.read_aloud()))
+        toolbar.append(icon_button("system-users-symbolic", "Aster companion (Ctrl+J)", lambda: self.tools.show()))
         menu = Gio.Menu()
         for label, action in (
             ("New tab", "new-tab"), ("Reopen closed tab", "reopen-tab"),
+            ("Open document", "open-document"), ("Aster companion", "companion"),
+            ("Read page", "read-page"), ("Read aloud", "read-aloud"), ("Stop reading", "stop-reading"),
+            ("Streaming and cloud gaming", "media-tools"), ("Check streaming support", "media-check"),
+            ("Fullscreen", "fullscreen"), ("Stop camera and microphone", "stop-capture"),
             ("Find in page", "find"), ("Zoom in", "zoom-in"),
             ("Zoom out", "zoom-out"), ("Reset zoom", "zoom-reset"),
             ("Developer tools", "inspect"), ("About Aster", "about"), ("Close window", "close-window"),
@@ -203,7 +248,15 @@ class BrowserWindow(Adw.ApplicationWindow):
         findbox.append(icon_button("window-close-symbolic", "Close find", self.close_find))
         self.find_revealer.set_child(findbox)
         root.append(self.find_revealer)
-        root.append(self.tabs)
+        content = Gtk.Box(vexpand=True)
+        self.tabs.set_hexpand(True)
+        content.append(self.tabs)
+        self.tools_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT)
+        self.tools_revealer.add_css_class("aster-tools")
+        self.tools = ToolsPanel(self)
+        self.tools_revealer.set_child(self.tools)
+        content.append(self.tools_revealer)
+        root.append(content)
         self._actions()
         self.refresh_bookmarks()
         self.connect("close-request", self._closing)
@@ -234,6 +287,15 @@ class BrowserWindow(Adw.ApplicationWindow):
             "zoom-reset": (lambda: self.current.view.set_zoom_level(1.0), ["<Control>0"]),
             "inspect": (lambda: self.current.view.get_inspector().show(), ["<Control><Shift>i", "F12"]),
             "about": (self.about, []),
+            "companion": (lambda: self.tools.show(), ["<Control>j"]),
+            "open-document": (self.tools.choose_document, ["<Control>o"]),
+            "read-page": (self.tools.read_page, ["<Control><Shift>e"]),
+            "read-aloud": (self.tools.read_aloud, ["<Control><Shift>s"]),
+            "stop-reading": (self.tools.speech.stop, []),
+            "media-tools": (lambda: self.tools.show("media"), []),
+            "media-check": (self.tools.check_media, []),
+            "fullscreen": (self.toggle_fullscreen, ["F11"]),
+            "stop-capture": (self.stop_capture, []),
             "close-window": (self.close, ["<Control><Shift>w"]),
         }
         for name, (callback, keys) in actions.items():
@@ -272,6 +334,9 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.tabs.close_page(page)
 
     def _close_page(self, _tabs, page):
+        self.cancel_permissions(page.get_child())
+        if self.fullscreen_tab is page.get_child():
+            self.exit_fullscreen()
         uri = page.get_child().uri
         if is_web_uri(uri):
             self.closed_tabs = (self.closed_tabs + [uri])[-20:]
@@ -294,18 +359,27 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _selected(self, *_):
         if self.last_tab:
+            self.cancel_permissions(self.last_tab)
             self.last_tab.view.get_find_controller().search_finish()
+        if self.fullscreen_tab and self.current is not self.fullscreen_tab:
+            self.exit_fullscreen()
         self.last_tab = self.current
         self.find_revealer.set_reveal_child(False)
         self.sync(force_address=True)
 
     def sync(self, force_address=False):
+        capturing = False
         for index in range(self.tabs.get_n_pages()):
             page = self.tabs.get_nth_page(index)
             view = page.get_child().view
             page.set_title(view.get_title() or "New tab")
             page.set_loading(view.is_loading())
             page.set_tooltip(GLib.markup_escape_text(view.get_uri() or "New tab"))
+            for name in ("get_camera_capture_state", "get_microphone_capture_state", "get_display_capture_state"):
+                getter = getattr(view, name, None)
+                if getter and getter() != WebKit.MediaCaptureState.NONE:
+                    capturing = True
+        self.capture_stop.set_visible(capturing)
         tab = self.current
         if not tab:
             return
@@ -346,7 +420,9 @@ class BrowserWindow(Adw.ApplicationWindow):
             view.stop_loading() if view.is_loading() else view.reload()
 
     def escape(self):
-        if self.find_revealer.get_reveal_child():
+        if self.get_property("fullscreened") or self.fullscreen_tab:
+            self.exit_fullscreen()
+        elif self.find_revealer.get_reveal_child():
             self.close_find()
         elif self.current:
             self.current.view.stop_loading()
@@ -456,6 +532,8 @@ class BrowserWindow(Adw.ApplicationWindow):
                 self.notify("Download saved")
 
     def _closing(self, *_):
+        self.cancel_permissions()
+        self.tools.close()
         for tab in self.pending_tabs:
             tab.view.stop_loading()
         self.pending_tabs.clear()
@@ -463,6 +541,87 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.downloads[download]["failed"] = True
             download.cancel()
         return False
+
+    def request_permission(self, tab, request):
+        origin = origin_label(tab.uri)
+        if tab is not self.current or not origin or len(self.permission_dialogs) >= 1:
+            request.deny()
+            return True
+        if isinstance(request, WebKit.UserMediaPermissionRequest):
+            resources = []
+            if request.get_property("is-for-audio-device"):
+                resources.append("microphone")
+            if request.get_property("is-for-video-device"):
+                resources.append("camera")
+            description = "Access your " + " and ".join(resources or ["media devices"]) + ". Use the Aster menu to stop capture."
+        elif isinstance(request, WebKit.MediaKeySystemPermissionRequest):
+            description = "Use an installed content decryption module for protected video. This does not install a module or guarantee playback."
+        elif isinstance(request, WebKit.PointerLockPermissionRequest):
+            description = "Capture your mouse for a game. Press Escape to release it."
+        else:
+            request.deny()
+            self.notify("This permission is not supported yet.")
+            return True
+        uri = tab.uri
+        dialog = Adw.MessageDialog(transient_for=self, modal=True, heading="Allow this request?",
+                                  body=f"Page: {origin}\n\n{description}\n\nThis request may come from content embedded in that page.")
+        dialog.add_response("deny", "Deny")
+        dialog.add_response("allow", "Allow this request")
+        dialog.set_default_response("deny")
+        dialog.set_close_response("deny")
+        self.permission_dialogs[dialog] = (tab, request)
+        def response(widget, choice):
+            pending = self.permission_dialogs.pop(widget, None)
+            if pending:
+                if choice == "allow" and self.current is tab and tab.uri == uri:
+                    request.allow()
+                else:
+                    request.deny()
+        dialog.connect("response", response)
+        dialog.present()
+        return True
+
+    def cancel_permissions(self, tab=None):
+        for dialog, (owner, request) in list(self.permission_dialogs.items()):
+            if tab is None or tab is owner:
+                self.permission_dialogs.pop(dialog, None)
+                request.deny()
+                dialog.close()
+
+    def stop_capture(self):
+        for index in range(self.tabs.get_n_pages()):
+            view = self.tabs.get_nth_page(index).get_child().view
+            for name in ("set_camera_capture_state", "set_microphone_capture_state", "set_display_capture_state"):
+                setter = getattr(view, name, None)
+                if setter:
+                    setter(WebKit.MediaCaptureState.NONE)
+        self.notify("Camera, microphone and display capture stopped in Aster tabs.")
+
+    def set_fullscreen_ui(self, enabled):
+        self.header_handle.set_visible(not enabled)
+        self.toolbar.set_visible(not enabled)
+        if enabled:
+            self._tools_before_fullscreen = self.tools_revealer.get_reveal_child()
+            self.tools_revealer.set_reveal_child(False)
+            self.find_revealer.set_reveal_child(False)
+        else:
+            self.tools_revealer.set_reveal_child(self._tools_before_fullscreen)
+
+    def toggle_fullscreen(self):
+        if self.get_property("fullscreened") or self.fullscreen_tab:
+            self.exit_fullscreen()
+        else:
+            self.set_fullscreen_ui(True)
+            self.fullscreen()
+            self.notify("Fullscreen · press Escape or F11 to exit")
+
+    def exit_fullscreen(self):
+        if self.fullscreen_tab:
+            self.fullscreen_tab.view.evaluate_javascript("if (document.fullscreenElement) document.exitFullscreen(); document.exitPointerLock?.();",
+                                                         -1, None, None, None, None, None)
+        self.fullscreen_tab = None
+        self.unfullscreen()
+        self.set_fullscreen_ui(False)
 
     def about(self):
         dialog = Gtk.AboutDialog(transient_for=self, modal=True, program_name="Aster",
@@ -529,4 +688,3 @@ class BrowserApplication(Adw.Application):
             window.download_started(session, download)
         else:
             download.cancel()
-

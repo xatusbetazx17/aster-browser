@@ -30,7 +30,9 @@ Launch the standalone browser:
 /usr/bin/python3 "$HOME/.local/share/aster-testing-webkit/start-aster.py"
 ```
 
-Try two tabs, bookmarks, Ctrl+F, zoom and a download. This is the original non-Chromium Linux prototype, not full v15 parity. Camera/microphone permission controls and verified premium DRM remain absent.
+Try two tabs, bookmarks, Ctrl+F, zoom and a download. Press Ctrl+O to read Word/PDF/text documents and Ctrl+J for the companion. Camera/microphone and mouse-capture requests now have native prompts. This remains a WebKit prototype, not full v15 parity or verified premium DRM support. See [reader/assistant setup](assistant.md) and [streaming tests and limits](streaming.md).
+
+Setup also adds distro media plugins, speech synthesis and PDF extraction tools. Optional generative-AI and speech-recognition models are not bundled. If updating an older install, download and run the latest setup script so new native dependencies are installed too.
 
 ## Update an existing managed installation
 

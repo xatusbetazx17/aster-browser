@@ -23,12 +23,18 @@ On supported desktop Linux, run the same setup command again to update Aster's m
 - Find in page and developer tools.
 - Native download save/cancel dialogs.
 - A separate persistent profile and shared cookies between Aster tabs.
+- A native Word/PDF/text reader with document search and English/Spanish offline read-aloud.
+- An in-browser companion with offline commands/excerpts, optional local GGUF inference and Vosk voice input.
+- Fullscreen controls, camera/microphone and mouse-capture prompts, and a media capability check.
+- A refreshed Aster new-tab page and a docked Read / Ask / Play panel.
+
+Read the [document and local assistant setup](docs/setup/assistant.md) and the [streaming compatibility details](docs/setup/streaming.md). Optional AI/voice models are separate downloads. The streaming controls do not supply Widevine or prove Prime Video/Boosteroid playback.
 
 See the [standalone application's instructions and test details](experiments/webkit/README.md).
 
 ## Work needed to reach the original goal
 
-The original parking, adblock customization, containers, reading/Lite tools, full assistant and plugin features must be integrated into the standalone application. Native Windows and Android applications, maintained SteamOS packaging and legitimate protected-video support require additional work. These are requirements, not completed features.
+The original parking, adblock customization, containers, Lite renderer and plugin features still need integration into the standalone application. Native Windows and Android applications, maintained SteamOS packaging and legitimate protected-video support require additional work. These are requirements, not completed features.
 
 ## Historical experiments
 
