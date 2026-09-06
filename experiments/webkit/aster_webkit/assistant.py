@@ -77,11 +77,12 @@ def generate_local(model: Path, question: str, context: str = "", *, python: str
             raise ValueError("Choose a GGUF model file downloaded from a publisher you trust.")
     interpreter = python or os.environ.get("ASTER_ASSISTANT_PYTHON") or sys.executable
     worker = Path(__file__).with_name("local_model_worker.py")
-    payload = json.dumps({"model": str(model), "question": question[:4000], "context": context[:10000]})
+    payload = json.dumps({"model": str(model), "question": question[:4000], "context": context[:10000]}, ensure_ascii=False)
     if cancel and cancel.is_set():
         raise ValueError("Local inference cancelled.")
     process = subprocess.Popen([interpreter, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True)
+                               stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                               env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     deadline = time.monotonic() + 180
     pending_input = payload
     try:

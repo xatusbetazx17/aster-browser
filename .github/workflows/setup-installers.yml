@@ -46,4 +46,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Setup check failed' }
       - name: Verify real downloads from this repository branch
         if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          ASTER_GITHUB_TOKEN: ${{ github.token }}
         run: python installers/tests/live_download.py

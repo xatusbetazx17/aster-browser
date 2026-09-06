@@ -17,8 +17,10 @@ import re
 import subprocess
 import sys
 import tempfile
-from urllib.parse import quote
-from urllib.request import Request, urlopen
+import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 REPOSITORY = "xatusbetazx17/aster-browser"
 BRANCH = "codex/aster-webkit-desktop"
@@ -69,18 +71,42 @@ def git_hash(data: bytes) -> str:
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 
+class HTTPSRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, newurl):
+        if urlsplit(newurl).scheme != "https":
+            raise SetupError("An update download redirected away from HTTPS.")
+        redirected = super().redirect_request(request, response, code, message, headers, newurl)
+        if redirected and urlsplit(newurl).netloc != urlsplit(request.full_url).netloc:
+            redirected.remove_header("Authorization")
+        return redirected
+
+
 def download(url: str, limit: int = MAX_FILE) -> bytes:
-    request = Request(url, headers={"User-Agent": "Aster-Setup/1", "Accept": "application/vnd.github+json"})
-    try:
-        with urlopen(request, timeout=45) as response:
-            if not response.url.startswith("https://"):
-                raise SetupError("An update download redirected away from HTTPS.")
-            data = response.read(limit + 1)
-    except OSError as error:
-        raise SetupError("Download failed. Check the connection or GitHub rate limit and retry. " + str(error)) from error
-    if len(data) > limit:
-        raise SetupError("Update file exceeded the size limit.")
-    return data
+    if urlsplit(url).scheme != "https":
+        raise SetupError("Update downloads require HTTPS.")
+    headers = {"User-Agent": "Aster-Setup/1", "Accept": "application/vnd.github+json"}
+    # CI may supply its existing read-only repository token, avoiding shared-runner
+    # anonymous API limits. Never send it to raw content or another origin.
+    token = os.environ.get("ASTER_GITHUB_TOKEN")
+    if token and url.startswith(API + "/"):
+        headers["Authorization"] = "Bearer " + token
+    request = Request(url, headers=headers)
+    opener = build_opener(HTTPSRedirect())
+    for attempt in range(3):
+        try:
+            with opener.open(request, timeout=45) as response:
+                data = response.read(limit + 1)
+            if len(data) > limit:
+                raise SetupError("Update file exceeded the size limit.")
+            return data
+        except OSError as error:
+            reason = error.reason if isinstance(error, URLError) else error
+            transient = isinstance(reason, (ConnectionResetError, TimeoutError))
+            if isinstance(error, HTTPError):
+                transient = error.code in (502, 503, 504)
+            if not transient or attempt == 2:
+                raise SetupError("Download failed. Check the connection or GitHub rate limit and retry. " + str(error)) from error
+            time.sleep((0.3, 0.8)[attempt])
 
 
 class Source:
