@@ -26,12 +26,16 @@ A custom interface and browser features can be developed within this standalone 
 | Local companion | Offline commands/excerpts; optional local GGUF inference and Vosk voice input; not Siri parity |
 | Media and cloud-gaming prerequisites | WebRTC/media settings, permission prompts, fullscreen, runtime capability reporting; no service-level guarantee |
 | Original v15 features inside the standalone app | Incomplete; parking, custom adblock, containers, Lite renderer and plugins still need porting |
-| Standalone Windows app | Not yet built |
-| Standalone Android app | Not yet built |
+| Standalone Windows app | Original-engine text preview and native EXE packaging added; full browser port incomplete |
+| Standalone Android app | Original-engine Canvas app and APK packaging added; full browser port incomplete |
 | SteamOS/Steam Deck package | Not yet validated or shipped |
 | Prime Video and other protected streams inside Aster | Not verified; licensing, codecs and service approval remain unresolved |
-| Aster rendering engine written from scratch | Not implemented |
+| Aster rendering engine written from scratch | Initial basic HTML/text parser, layout and link renderer implemented; modern web platform absent |
 
 Legacy Qt installers and the retired companion source remain available as historical development work. They are not substitutes for the standalone product described here.
 
-See [reading/assistant setup](docs/setup/assistant.md) and [the specific streaming, engine and native-port blockers](docs/setup/streaming.md). A strict requirement to use no third-party browser engine is not met by the existing WebKit prototype. This feature revision does not claim otherwise.
+See [reading/assistant setup](docs/setup/assistant.md), [the original-engine preview](experiments/aster-engine/README.md)
+and [the specific streaming, engine and native-port blockers](docs/setup/streaming.md).
+The existing WebKit prototype does not meet strict engine independence. The new,
+separate original engine meets that dependency constraint but implements only a
+small HTML/text subset, not the requested full browser or streaming capabilities.

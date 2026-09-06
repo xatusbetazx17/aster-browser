@@ -6,6 +6,19 @@ Aster is being developed as a **standalone browser with its own interface and fe
 
 Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 
+## Original engine development preview
+
+[`experiments/aster-engine`](experiments/aster-engine/README.md) now contains Aster's
+own basic HTML/text parser, layout and link renderer, shared by Windows/Linux
+desktop and native Android preview applications. It embeds no other browser engine.
+Its build workflow produces a Windows EXE bundle, Linux bundle and Android APK and
+tests the actual applications. Use only artifacts from a successful run.
+
+**This is an early engine foundation, not the completed browser:** no JavaScript,
+images, video, WebRTC, EME or Prime Video/Boosteroid playback. It runs alongside the
+existing WebKit prototype; the reader/companion have not been ported into this core.
+See [preview installation and update limitations](experiments/aster-engine/README.md#try-the-actual-packages).
+
 ## Install or update standalone Aster
 
 - [Linux installation, updates and rollback](docs/setup/linux.md)

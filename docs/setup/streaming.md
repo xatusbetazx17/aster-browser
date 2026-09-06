@@ -1,5 +1,33 @@
 # Streaming, cloud gaming and engine constraints
 
+## Original engine development update
+
+The new [original-engine preview](../../experiments/aster-engine/README.md) implements
+Aster's own small HTML/text parser, layout and link renderer. It has Windows/Linux
+desktop and native Android hosts and actual package/test workflows. This is a
+separate engine foundation; it does not replace the WebKit prototype described below.
+
+The preview has no JavaScript, video, WebRTC, MSE or EME. Its Android menu uses
+the platform's [MediaDrm API](https://developer.android.com/reference/android/media/MediaDrm)
+to report whether the device exposes Widevine. That is a real local API query,
+but it does not request a license, provision a device, play encrypted media or
+bridge Android DRM into website JavaScript. It makes no Prime Video claim.
+
+To finish the original-engine path requires, in order: a standards-capable
+DOM/CSS implementation and renderer isolation; JavaScript/DOM/event integration;
+network/storage/origin/permission APIs; graphics/media/codec playback and MSE;
+WebRTC with ICE/DTLS/SRTP and real audio/video/controller tests; then EME plus
+an authorized platform CDM integration, license exchange and service tests.
+The parser tests and native packages are evidence for the first small step only.
+
+For Widevine, the repository owner must obtain the necessary integration agreement
+and access from [Google's official contact route](https://developers.google.com/widevine/contact/support).
+The [overview](https://developers.google.com/widevine/drm/overview) states that a
+license agreement is required and that Widevine itself assesses no product/service
+fee. The agreement does not by itself supply Aster's web/media implementation or
+guarantee Amazon acceptance. No application/agreement has been submitted on the
+owner's behalf, and no proprietary CDM or credentials are present in this repository.
+
 ## What this revision actually changes
 
 The Linux prototype enables WebKit's available WebRTC, Media Source, encrypted-media, WebGL and fullscreen settings. Camera/microphone, mouse capture and protected-media requests now have native **Allow this request / Deny** dialogs. Requests from background tabs are denied; pending prompts are cancelled when you switch tabs or navigate. Other permission types remain unsupported. No permanent permission grants are written by Aster.
@@ -28,6 +56,14 @@ The actual Ubuntu CI package (WebKitGTK 2.52.6) did **not** expose WebRTC or enc
 
 Aster's interface, reader, local assistant and browser controls are its own application code. The current full webpage renderer is still **WebKitGTK/JavaScriptCore**, a third-party engine. Nothing in this revision implements or renames that engine as an original Aster engine.
 
-The requirement to use no engine from any other browser would require an original HTML/CSS/DOM/JavaScript engine, isolation/networking, graphics, media, WebRTC and DRM implementation. The current GTK/WebKit application is a Linux prototype. A Windows EXE or Android APK containing an empty interface or a different installed browser would not satisfy the requested native product. Native Windows/Android builds remain blocked on a compatible engine/port implementation; they have not been produced by this change.
+The requirement to use no engine from any other browser requires an original
+HTML/CSS/DOM/JavaScript engine, isolation/networking, graphics, media, WebRTC and
+DRM implementation. The GTK/WebKit application remains a Linux prototype. The
+new Windows/Android original-engine preview implements actual text rendering and
+navigation, but it is not the completed native port of that browser.
 
-The portable document/assistant logic is tested on Windows as well as Linux, but those tests are not a Windows browser build. Android and Steam Deck need their own packages and device validation. The original Qt/Chromium Windows and Android WebView packages remain historical artifacts, not the new engine-independent browser.
+The document/assistant Python tests still do not establish a Windows port of those
+features. The original-engine workflow separately builds and launches its desktop
+app and tests its Android APK in an emulator. Physical Android devices, Steam Deck,
+stable signing/update distribution and full-browser features still need validation
+and development. Legacy Qt/Chromium and WebView packages remain historical artifacts.

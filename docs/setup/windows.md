@@ -1,8 +1,15 @@
-# Windows: standalone Aster build status
+# Windows: Aster previews and full-browser status
 
-**A standalone Windows Aster build is not available yet.** The new browser must run as Aster itself. Installing Firefox and an extension does not satisfy this requirement, and that previous installation path has been retired.
+**A Windows preview using Aster's original basic text engine is now implemented.**
+Follow [its package, launch and update instructions](../../experiments/aster-engine/README.md#windows-x64).
+Use the EXE bundle from a successful original-engine CI run. It includes Java and
+does not use another browser engine. It has no JavaScript/video/DRM and is not the
+completed port of Aster's reader/assistant/WebKit browser.
 
-The Linux GTK/WebKit prototype cannot simply be installed as a Windows program. No native Aster EXE/MSI is supplied by this branch. The old Qt installer in the repository still belongs to the legacy Chromium-based edition.
+The Linux GTK/WebKit prototype cannot simply be installed as a Windows program.
+The original-engine preview is a separate portable EXE application, not an MSI
+installer or a conversion of an existing Aster installation. The old Qt installer
+still belongs to the legacy Chromium-based edition.
 
 ## What the setup file does now
 
@@ -16,6 +23,8 @@ The Linux GTK/WebKit prototype cannot simply be installed as a Windows program. 
 - Validate clean installation, upgrades, rollback, downloads, media, permissions and accessibility on supported Windows versions.
 - Verify legitimate protected-video playback inside Aster separately from ordinary video rendering.
 
-These steps remain development work. There is no automatic Windows application update until an actual native build and maintained distribution channel exist.
+Most of these steps remain development work. The portable engine preview updates
+by extracting a newer bundle into a new directory, preserving its per-user
+bookmarks. There is no automatic Windows full-browser update or stable release channel.
 
 See [the project direction](../../PROJECT_DIRECTION.md), or test the available [standalone Linux prototype](linux.md).
