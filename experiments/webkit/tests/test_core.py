@@ -73,7 +73,8 @@ class BookmarkTests(unittest.TestCase):
         self.assertEqual(restarted.items, store.items)
         self.assertFalse(restarted.toggle("https://example.com", "Renamed"))
         self.assertEqual(BookmarkStore(self.path).items, [])
-        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        if os.name == "posix":
+            self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
 
     def test_invalid_bookmark_cannot_be_written(self):
         store = BookmarkStore(self.path)
@@ -117,14 +118,19 @@ class ProfileTests(unittest.TestCase):
                 self.assertEqual(cache, data / "cache")
 
     def test_xdg_directories(self):
-        with patch.dict(os.environ, {"XDG_DATA_HOME": "/tmp/aster-test-data", "XDG_CACHE_HOME": "/tmp/aster-test-cache"}, clear=True):
-            self.assertEqual(profile_paths(), (Path("/tmp/aster-test-data/aster-webkit"), Path("/tmp/aster-test-cache/aster-webkit")))
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            with patch.dict(os.environ, {"XDG_DATA_HOME": str(base / "data"), "XDG_CACHE_HOME": str(base / "cache")}, clear=True):
+                self.assertEqual(profile_paths(), (base / "data/aster-webkit", base / "cache/aster-webkit"))
 
     def test_relative_xdg_paths_fall_back_to_home(self):
-        with patch.dict(os.environ, {"XDG_DATA_HOME": "relative", "XDG_CACHE_HOME": ""}, clear=True):
-            data, cache = profile_paths()
-            self.assertEqual(data, Path.home() / ".local/share/aster-webkit")
-            self.assertEqual(cache, Path.home() / ".cache/aster-webkit")
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory).resolve()
+            with patch.dict(os.environ, {"XDG_DATA_HOME": "relative", "XDG_CACHE_HOME": ""}, clear=True), \
+                 patch("aster_webkit.core.Path.home", return_value=home):
+                data, cache = profile_paths()
+                self.assertEqual(data, home / ".local/share/aster-webkit")
+                self.assertEqual(cache, home / ".cache/aster-webkit")
 
 
 if __name__ == "__main__":

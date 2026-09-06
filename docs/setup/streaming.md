@@ -22,6 +22,8 @@ The [Boosteroid requirements](https://help.boosteroid.com/en/content/general-req
 
 The CI fixture decodes and plays an authored, unencrypted VP8 clip. It uses no paid account or public service. Prime Video, Boosteroid, GeForce NOW and Xbox Cloud Gaming have **not** passed an Aster service-level test. A subscribed test account, supported physical hardware/controller and the actual target package are still required for those checks.
 
+The actual Ubuntu CI package (WebKitGTK 2.52.6) did **not** expose WebRTC or encrypted-media APIs. Enabling settings cannot add features compiled out of that engine. A maintained engine build with these features and its required integration must come before a cloud-game/DRM trial. WebKit's [GTK build options](https://github.com/WebKit/WebKit/blob/main/Source/cmake/OptionsGTK.cmake) put WebRTC and encrypted media behind experimental build options by default; this repository does not ship such a rebuilt engine.
+
 ## Independence and native ports
 
 Aster's interface, reader, local assistant and browser controls are its own application code. The current full webpage renderer is still **WebKitGTK/JavaScriptCore**, a third-party engine. Nothing in this revision implements or renames that engine as an original Aster engine.

@@ -12,6 +12,8 @@
 
 The updated GitHub Actions smoke test opens the actual GTK/WebKit app, reads a real DOCX through the native panel, finds document text, runs offline assistant excerpts/commands, exercises fullscreen UI, probes media support, generates and plays an unencrypted VP8 clip and synthesizes real speech audio. It captures home and reader screenshots.
 
+That gate [passed on the initial feature revision](https://github.com/xatusbetazx17/aster-browser/actions/runs/34004393116) with GTK 4.14, libadwaita 1.5 and WebKitGTK **2.52.6**. The runtime reported MSE, Gamepad, pointer lock and fullscreen, and H.264/AAC/VP8/VP9/Opus codec support. **It did not expose WebRTC or the encrypted-media API**, despite enabling the available settings. This distro build cannot currently support the requested WebRTC cloud gaming or Widevine playback. Video success applies to the unencrypted VP8 fixture only.
+
 Check the pull request's Actions for the result corresponding to its current commit. Hosted-runner nested sandboxing is disabled **only for the trusted localhost smoke fixture**, as documented in the workflow. No desktop-sandbox claim follows from that check.
 
 ## Not verified or not implemented
