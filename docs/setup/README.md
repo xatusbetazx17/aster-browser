@@ -5,9 +5,14 @@ Aster must run as its own browser. The active setup path installs the standalone
 | Device | Guide | Current deliverable |
 | --- | --- | --- |
 | Supported desktop Linux | [Install, update and roll back](linux.md) | Standalone Aster using WebKitGTK |
-| Windows | [Build status](windows.md) | Native Aster app not built yet |
-| Android | [Build status](android.md) | Native Aster app not built yet |
+| Windows | [Preview and full-browser status](windows.md) | Original-engine text preview with EXE bundle; full browser unfinished |
+| Android | [Preview and full-browser status](android.md) | Original-engine Canvas APK; full browser and release signing unfinished |
 | Steam Deck / immutable Linux | [Linux platform limits](linux.md#steam-deck-and-immutable-linux) | Standalone package not ready yet |
+
+The [original-engine preview](../../experiments/aster-engine/README.md) also has a
+Linux runtime bundle. Its manual update path is separate from the WebKit source
+updater below. It is a basic text browser, without the reader/companion, JavaScript
+or media platform, and does not convert an existing Aster installation.
 
 ## Reusing the Linux installer
 

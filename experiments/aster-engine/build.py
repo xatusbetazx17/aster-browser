@@ -32,6 +32,7 @@ def compile_java(sources, output, classpath=None):
 def make_jar(folder, target, main=None):
     target.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(ROOT.parents[1] / "LICENSE", "META-INF/LICENSE")
         if main:
             archive.writestr("META-INF/MANIFEST.MF", f"Manifest-Version: 1.0\nMain-Class: {main}\n\n")
         for path in sorted(folder.rglob("*.class")):
@@ -60,6 +61,8 @@ def desktop(test=False, package=False):
         run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.1.0",
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
             "--add-modules", "java.desktop,java.prefs,jdk.crypto.ec", "--dest", image.parent)
+        shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")
+        shutil.copyfile(ROOT / "README.md", image / "README.md")
         if sys.platform == "win32":
             shutil.make_archive(str(BUILD / "aster-engine-windows-x64"), "zip", image.parent, image.name)
         else:
@@ -92,6 +95,7 @@ def android():
     unsigned = out / "unsigned.apk"
     run(tools / ("aapt2" + exe), "link", "-o", unsigned, "-I", platform, "--manifest", ROOT / "android/AndroidManifest.xml")
     with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(ROOT.parents[1] / "LICENSE", "assets/LICENSE")
         for path in sorted(dex.glob("*.dex")):
             archive.write(path, path.name)
     aligned = out / "aligned.apk"

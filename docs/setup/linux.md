@@ -1,5 +1,11 @@
 # Linux: install or update Aster
 
+For the new **Aster original-engine text preview**, use its
+[Linux bundle instructions](../../experiments/aster-engine/README.md#linux-x64-and-steam-deck-desktop-mode).
+It does not embed WebKit or another browser engine, but it does not yet support
+JavaScript, images, video or the full reader/companion. The commands below remain
+the separate, more capable WebKit prototype's setup path.
+
 The same command performs first installation or updates an installation previously created by this setup tool. Use your normal desktop account. Setup calls `sudo` only for supported system packages.
 
 ## Standalone Aster WebKit
