@@ -1,0 +1,91 @@
+name: Aster original engine preview
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/aster-engine/**'
+      - '.github/workflows/aster-engine-preview.yml'
+  workflow_dispatch:
+    inputs:
+      android_api:
+        description: 'Emulator API: 26 supports lightweight software testing; 35 needs suitable virtualization'
+        type: choice
+        options: ['26', '35']
+        default: '26'
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test original parser, layout, HTTP and Java2D; build native package
+        run: python experiments/aster-engine/build.py desktop --test --package
+      - name: Open the Linux native application
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --smoke experiments/aster-engine/build/aster-window.png
+      - name: Open the Windows EXE
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $asterOutput = Join-Path $PWD 'experiments/aster-engine/build/aster-window.png'
+          $asterProcess = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--smoke', $asterOutput) -PassThru
+          if (-not $asterProcess.WaitForExit(30000)) { $asterProcess.Kill(); throw 'Aster window did not finish its smoke check' }
+          if ($asterProcess.ExitCode -ne 0 -or -not (Test-Path $asterOutput)) { throw 'Aster EXE smoke check failed' }
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: aster-engine-${{ runner.os }}
+          path: |
+            experiments/aster-engine/build/*.zip
+            experiments/aster-engine/build/*.tar.gz
+            experiments/aster-engine/build/*.png
+            experiments/aster-engine/build/SHA256SUMS.txt
+          retention-days: 14
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ASTER_EMULATOR_API: ${{ inputs.android_api || '26' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build and verify the actual Android APK
+        run: python experiments/aster-engine/build.py android
+      - name: Boot Android
+        run: python experiments/aster-engine/tests/start_android_emulator.py
+      - name: Exercise navigation and a data-preserving APK replacement
+        env:
+          ANDROID_SERIAL: emulator-5554
+        run: python experiments/aster-engine/tests/android_smoke.py
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: aster-engine-Android
+          path: |
+            experiments/aster-engine/build/android/aster-engine-preview.apk
+            experiments/aster-engine/build/android/*.png
+            experiments/aster-engine/build/android/*.log
+            experiments/aster-engine/build/android/drm-device-report.xml
+            experiments/aster-engine/build/SHA256SUMS.txt
+          retention-days: 14

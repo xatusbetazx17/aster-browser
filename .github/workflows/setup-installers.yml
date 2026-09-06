@@ -1,0 +1,51 @@
+name: Aster install and update scripts
+
+on:
+  pull_request:
+    paths:
+      - 'installers/**'
+      - 'docs/setup/**'
+      - 'experiments/webkit/aster_webkit/documents.py'
+      - 'experiments/webkit/aster_webkit/assistant.py'
+      - 'experiments/webkit/tests/test_*.py'
+      - '.github/workflows/setup-installers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test install, update, failures and rollback
+        run: python -m unittest discover -s installers/tests -p 'test_*.py' -v
+      - name: Validate Python syntax
+        run: python -m compileall -q installers
+      - name: Test portable reading and assistant logic
+        run: python -m unittest discover -s experiments/webkit/tests -p 'test_*.py' -v
+      - name: Validate Linux bootstrap
+        if: runner.os == 'Linux'
+        run: |
+          bash -n installers/install-linux.sh
+          bash installers/install-linux.sh --help
+          bash installers/install-linux.sh --edition webkit --check --install-dir "$RUNNER_TEMP/aster-check"
+      - name: Check Windows availability without installing another browser
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ./installers/install-windows.ps1 -Check
+          if ($LASTEXITCODE -ne 0) { throw 'Setup check failed' }
+      - name: Verify real downloads from this repository branch
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          ASTER_GITHUB_TOKEN: ${{ github.token }}
+        run: python installers/tests/live_download.py
