@@ -18,7 +18,7 @@ if api not in {"26", "35"}:
     raise SystemExit("ASTER_EMULATOR_API must be 26 or 35")
 abi = "x86" if api == "26" else "x86_64"
 image = f"system-images;android-{api};default;{abi}"
-subprocess.run([str(sdk / "cmdline-tools/latest/bin/sdkmanager"), image], check=True, timeout=360)
+subprocess.run([str(sdk / "cmdline-tools/latest/bin/sdkmanager"), "emulator", "platform-tools", image], check=True, timeout=360)
 subprocess.run([str(sdk / "cmdline-tools/latest/bin/avdmanager"), "create", "avd", "--force", "--name", "aster-ci", "--package", image, "--device", "pixel_2"], input="no\n", text=True, check=True, timeout=60, env=environment)
 config = Path(environment["ANDROID_AVD_HOME"]) / "aster-ci.avd/config.ini"
 values = dict(line.split("=", 1) for line in config.read_text().splitlines() if "=" in line)
