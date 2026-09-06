@@ -13,7 +13,11 @@ environment = os.environ.copy()
 environment["ANDROID_USER_HOME"] = str(out / "emulator-user")
 environment["ANDROID_AVD_HOME"] = str(out / "emulator-user/avd")
 Path(environment["ANDROID_AVD_HOME"]).mkdir(parents=True, exist_ok=True)
-image = "system-images;android-35;default;x86_64"
+api = os.environ.get("ASTER_EMULATOR_API", "26")
+if api not in {"26", "35"}:
+    raise SystemExit("ASTER_EMULATOR_API must be 26 or 35")
+abi = "x86" if api == "26" else "x86_64"
+image = f"system-images;android-{api};default;{abi}"
 subprocess.run([str(sdk / "cmdline-tools/latest/bin/sdkmanager"), image], check=True, timeout=360)
 subprocess.run([str(sdk / "cmdline-tools/latest/bin/avdmanager"), "create", "avd", "--force", "--name", "aster-ci", "--package", image, "--device", "pixel_2"], input="no\n", text=True, check=True, timeout=60, env=environment)
 config = Path(environment["ANDROID_AVD_HOME"]) / "aster-ci.avd/config.ini"
@@ -21,7 +25,7 @@ values = dict(line.split("=", 1) for line in config.read_text().splitlines() if 
 # A compact display makes the software-only emulator practical on hosted runners.
 values.update({"hw.lcd.width": "480", "hw.lcd.height": "800", "hw.lcd.density": "160", "showDeviceFrame": "no"})
 config.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
-command = [str(sdk / "emulator/emulator"), "-avd", "aster-ci", "-port", "5554", "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-gpu", "swiftshader_indirect", "-memory", "2048", "-cores", "2"]
+command = [str(sdk / "emulator/emulator"), "-avd", "aster-ci", "-port", "5554", "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-no-metrics", "-gpu", "swiftshader_indirect", "-memory", "2048", "-cores", "2"]
 if not os.access("/dev/kvm", os.R_OK | os.W_OK):
     command += ["-accel", "off"]
 with (out / "emulator.log").open("w") as log:
@@ -39,7 +43,7 @@ with (out / "emulator.log").open("w") as log:
             subprocess.run([adb, "-s", "emulator-5554", "shell", "input", "keyevent", "82"], check=True)
             for setting in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
                 subprocess.run([adb, "-s", "emulator-5554", "shell", "settings", "put", "global", setting, "0"], check=True, timeout=45)
-            print("Android API 35 emulator booted.")
+            print(f"Android API {api} ({abi}) emulator booted.")
             break
         time.sleep(3)
     else:

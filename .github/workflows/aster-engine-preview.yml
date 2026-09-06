@@ -6,6 +6,12 @@ on:
       - 'experiments/aster-engine/**'
       - '.github/workflows/aster-engine-preview.yml'
   workflow_dispatch:
+    inputs:
+      android_api:
+        description: 'Emulator API: 26 supports lightweight software testing; 35 needs suitable virtualization'
+        type: choice
+        options: ['26', '35']
+        default: '26'
 
 permissions:
   contents: read
@@ -54,6 +60,8 @@ jobs:
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      ASTER_EMULATOR_API: ${{ inputs.android_api || '26' }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:

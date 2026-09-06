@@ -128,10 +128,16 @@ a deterministic malformed-markup corpus and Java2D pixel rendering. The new CI
 workflow packages and launches the Linux and Windows applications. Its Android
 job builds/verifies the APK and tests native Canvas rendering, a real HTTP page,
 a tapped link, Back, a bookmark-preserving same-key APK replacement and the actual
-device DRM query in an API 35 emulator. A green job is required before citing its
+device DRM query in an API 26 emulator. A green job is required before citing its
 platform result. Artifact creation alone is not a passed device test.
 
-These tests do not establish Android API 26 coverage, physical-device graphics,
+The API 35 attempts reached boot/installation timeouts on the hosted runner,
+which denies this job access to KVM. That runtime validation remains unfinished.
+CI now uses the smaller API 26/x86 image in software mode; API 35 remains selectable
+for manual workflow runs on a suitably configured runner. The APK still compiles
+against SDK 35, targets SDK 35 and declares API 26 as its minimum.
+
+These tests do not establish Android API 35 or physical-device graphics,
 screen-reader accessibility, all Linux distributions, Steam Deck controls,
 production signing, modern-web compatibility or streaming service support.
 
