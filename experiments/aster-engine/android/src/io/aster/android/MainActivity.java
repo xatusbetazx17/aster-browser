@@ -38,7 +38,9 @@ public final class MainActivity extends Activity {
         address.setContentDescription("Website address"); address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
         address.setOnEditorActionListener((v, action, event) -> {
-            if (action == EditorInfo.IME_ACTION_GO || event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_UP) {
+            if (action == EditorInfo.IME_ACTION_GO || event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
+                // Consume the down event so TextView does not move focus before key-up.
+                if (event != null && event.getAction() == KeyEvent.ACTION_UP) return true;
                 try {
                     load(PageLoader.address(address.getText().toString()), -1);
                     ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(address.getWindowToken(), 0);

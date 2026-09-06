@@ -30,13 +30,15 @@ def screen():
 
 def wait_text(text, timeout=90):
     deadline = time.monotonic() + timeout
+    observed = []
     while time.monotonic() < deadline:
         root = screen()
+        observed = [(n.attrib.get("text", "")[:300], n.attrib.get("content-desc", "")[:300]) for n in root.iter("node") if n.attrib.get("text") or n.attrib.get("content-desc")]
         for node in root.iter("node"):
             if text in node.attrib.get("text", "") or text in node.attrib.get("content-desc", ""):
                 return node
         time.sleep(1)
-    raise AssertionError(f"Android UI did not show {text!r}")
+    raise AssertionError(f"Android UI did not show {text!r}; observed: {observed!r}")
 
 
 def tap(node):
@@ -76,9 +78,15 @@ def main():
         wait_text("Your space to explore.")
         print("Native Canvas home page opened.", flush=True)
         (OUT / "aster-android-home.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
-        tap(wait_text("Website address"))
-        # The native address field selects its current contents on focus.
+        field = wait_text("Website address")
+        tap(field)
+        # Explicitly replace the address, regardless of keyboard selection behavior.
+        adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+        adb("shell", "input", "keyevent", *(["KEYCODE_DEL"] * (len(field.attrib.get("text", "")) + 1)))
         adb("shell", "input", "text", "http://127.0.0.1:8765/first")
+        entered = wait_text("Website address").attrib.get("text", "")
+        if entered != "http://127.0.0.1:8765/first":
+            raise AssertionError(f"Address entry did not replace previous URL: {entered!r}")
         adb("shell", "input", "keyevent", "66")
         node = wait_text("Network page rendered by Aster.")
         print("HTTP fixture loaded.", flush=True)
@@ -109,6 +117,8 @@ def main():
         server.shutdown()
         logs = adb("logcat", "-d", "-s", "AndroidRuntime:E")
         OUT.joinpath("android-runtime.log").write_text(logs, encoding="utf-8")
+        if "FATAL EXCEPTION" in logs:
+            print(logs[-8000:], flush=True)
 
 
 if __name__ == "__main__":
