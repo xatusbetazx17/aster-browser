@@ -12,7 +12,8 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/android"
 PACKAGE = "io.aster.browser.enginepreview"
-ADB = ["adb"]
+sdk = Path(os.environ.get("ANDROID_SDK_ROOT") or os.environ["ANDROID_HOME"])
+ADB = [str(sdk / "platform-tools/adb")]
 if os.environ.get("ANDROID_SERIAL"):
     ADB += ["-s", os.environ["ANDROID_SERIAL"]]
 
@@ -74,9 +75,7 @@ def main():
         wait_text("Your space to explore.")
         (OUT / "aster-android-home.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
         tap(wait_text("Website address"))
-        adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
-        # Select all without clipboard or accessibility services.
-        adb("shell", "input", "keycombination", "113", "29")
+        # The native address field selects its current contents on focus.
         adb("shell", "input", "text", "http://127.0.0.1:8765/first")
         adb("shell", "input", "keyevent", "66")
         node = wait_text("Network page rendered by Aster.")

@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         LinearLayout nav = new LinearLayout(this); nav.setGravity(Gravity.CENTER_VERTICAL); nav.setPadding(dp(8), dp(8), dp(8), dp(8));
         Button home = new Button(this); home.setText("A"); home.setContentDescription("Aster home"); home.setMinWidth(0); home.setMinimumWidth(0);
         home.setOnClickListener(v -> load(PageLoader.HOME, -1)); nav.addView(home, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        address = new EditText(this); address.setSingleLine(true); address.setTextSize(16); address.setHint("Website address");
+        address = new EditText(this); address.setSingleLine(true); address.setSelectAllOnFocus(true); address.setTextSize(16); address.setHint("Website address");
         address.setContentDescription("Website address"); address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
         address.setOnEditorActionListener((v, action, event) -> {
@@ -54,6 +54,7 @@ public final class MainActivity extends Activity {
         root.addView(status);
         scroll = new ScrollView(this); scroll.setFillViewport(true); page = new PageView(); scroll.addView(page);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
+        root.setFocusableInTouchMode(true); root.requestFocus();
         URI start = PageLoader.HOME;
         if (savedState != null) try { start = PageLoader.address(savedState.getString("address", PageLoader.HOME.toString())); } catch (IllegalArgumentException ignored) { }
         load(start, -1);

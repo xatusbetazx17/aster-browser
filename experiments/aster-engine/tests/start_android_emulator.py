@@ -6,6 +6,7 @@ import subprocess
 import time
 
 sdk = Path(os.environ.get("ANDROID_SDK_ROOT") or os.environ["ANDROID_HOME"])
+adb = str(sdk / "platform-tools/adb")
 image = "system-images;android-35;default;x86_64"
 subprocess.run([str(sdk / "cmdline-tools/latest/bin/sdkmanager"), image], check=True, timeout=360)
 subprocess.run([str(sdk / "cmdline-tools/latest/bin/avdmanager"), "create", "avd", "--force", "--name", "aster-ci", "--package", image, "--device", "pixel_2"], input="no\n", text=True, check=True, timeout=60)
@@ -19,13 +20,18 @@ with (out / "emulator.log").open("w") as log:
     deadline = time.monotonic() + 420
     while time.monotonic() < deadline:
         if process.poll() is not None:
+            print((out / "emulator.log").read_text(errors="replace")[-12000:])
             raise SystemExit("Android emulator exited; inspect emulator.log")
-        result = subprocess.run(["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"], capture_output=True, text=True, timeout=15)
+        try:
+            result = subprocess.run([adb, "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"], capture_output=True, text=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            continue
         if result.stdout.strip() == "1":
-            subprocess.run(["adb", "-s", "emulator-5554", "shell", "input", "keyevent", "82"], check=True)
+            subprocess.run([adb, "-s", "emulator-5554", "shell", "input", "keyevent", "82"], check=True)
             print("Android API 35 emulator booted.")
             break
         time.sleep(3)
     else:
         process.terminate()
+        print((out / "emulator.log").read_text(errors="replace")[-12000:])
         raise SystemExit("Android emulator boot timed out; inspect emulator.log")

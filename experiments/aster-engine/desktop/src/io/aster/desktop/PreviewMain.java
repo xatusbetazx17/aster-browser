@@ -98,7 +98,7 @@ public final class PreviewMain {
                         if (tab.history.size() > 100) tab.history.remove(0);
                         tab.index = tab.history.size() - 1;
                     }
-                    tabs.setTitleAt(tabs.indexOfComponent(tab), document.title.length() > 26 ? document.title.substring(0, 26) + "…" : document.title);
+                    tabs.setTitleAt(tabs.indexOfComponent(tab), plainLabel(document.title.length() > 26 ? document.title.substring(0, 26) + "…" : document.title));
                     tab.message = "Basic HTML/text · No JavaScript, video or DRM"; sync();
                     tab.getVerticalScrollBar().setValue(0);
                 });
@@ -124,7 +124,7 @@ public final class PreviewMain {
         }); menu.add(save); menu.addSeparator();
         for (int i = 0; i < Math.min(30, preferences.getInt("count", 0)); i++) {
             final String url = preferences.get("url" + i, "");
-            JMenuItem item = new JMenuItem(preferences.get("title" + i, url)); item.setToolTipText(url);
+            JMenuItem item = new JMenuItem(plainLabel(preferences.get("title" + i, url))); item.setToolTipText(url);
             item.addActionListener(event -> { try { load(current(), PageLoader.address(url), -1); } catch (IllegalArgumentException e) { status.setText(e.getMessage()); } });
             menu.add(item);
         }
@@ -134,6 +134,11 @@ public final class PreviewMain {
                 try { preferences.clear(); } catch (Exception e) { status.setText("Could not clear bookmarks: " + e.getMessage()); }
             }
         }); menu.add(clear); menu.show(window.getRootPane(), window.getWidth() - 310, 65);
+    }
+    private static String plainLabel(String text) {
+        // Swing interprets labels beginning <html> as rich HTML, including image URLs.
+        // Page-controlled titles must remain literal text in the application's controls.
+        return "\u200b" + text;
     }
     static final class PageCanvas extends JPanel implements Scrollable {
         Engine.Document document; Engine.Layout layout; int layoutWidth = -1;
@@ -180,6 +185,8 @@ public final class PreviewMain {
         public boolean getScrollableTracksViewportHeight() { return false; }
     }
     private static void renderTest(String output) throws Exception {
+        JMenuItem hostileTitle = new JMenuItem(plainLabel("<html><img src='https://example.invalid/track'>"));
+        if (hostileTitle.getClientProperty("html") != null) throw new AssertionError("Page title became a Swing HTML document");
         PageCanvas canvas = new PageCanvas(); canvas.setSize(1000, 720); canvas.setDocument(Engine.parse(PageLoader.HOME, PageLoader.WELCOME));
         BufferedImage image = new BufferedImage(1000, 720, BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = image.createGraphics(); canvas.paint(graphics); graphics.dispose();
