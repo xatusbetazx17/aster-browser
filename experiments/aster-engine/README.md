@@ -89,7 +89,7 @@ Open **Menu → Playground**, or enter `aster:playground`.
    buttons. Windows uses XInput standard mapping; Linux uses `/dev/input/js0`–`js3`
    with raw device mapping. No permissions are changed and inaccessible devices
    remain unavailable. Physical controllers and Steam Deck controls still need testing.
-5. Select **Play sample** to play the bundled two-second blue/red video inside Aster.
+5. Select **Play sample** to play the bundled four-second blue/red video inside Aster.
    Close the player to return. This is unencrypted H.264 video, not a DRM test.
 
 Website pages have the same **Run JavaScript** control. Scripts are off initially
