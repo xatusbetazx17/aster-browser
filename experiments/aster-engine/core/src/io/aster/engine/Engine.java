@@ -3,7 +3,7 @@ package io.aster.engine;
 import java.net.URI;
 import java.util.*;
 
-/** Aster's deliberately small HTML text/layout engine. No embedded browser or JS VM. */
+/** Aster's deliberately small HTML text/layout engine. No embedded browser engine. */
 public final class Engine {
     public static final int MAX_SOURCE = 1_000_000, MAX_RUNS = 20_000, MAX_DEPTH = 64;
     private static final Set<String> BLOCKS = set("p div article section main header footer nav aside h1 h2 h3 h4 h5 h6 ul ol li blockquote pre table tr hr");
@@ -23,18 +23,24 @@ public final class Engine {
         public final String text;
         public final Style style;
         public final URI link;
+        public final int action;
         public final boolean newline;
-        Run(String text, Style style, URI link, boolean newline) {
-            this.text = text; this.style = style; this.link = link; this.newline = newline;
+        Run(String text, Style style, URI link, int action, boolean newline) {
+            this.text = text; this.style = style; this.link = link; this.action = action; this.newline = newline;
         }
     }
     public static final class Document {
         public final URI uri;
         public final String title;
         public final List<Run> runs;
-        Document(URI uri, String title, List<Run> runs) {
+        public final String source;
+        public final boolean scriptsBlocked;
+        public final List<URI> media;
+        Document(URI uri, String title, List<Run> runs, String source, boolean scriptsBlocked, List<URI> media) {
             this.uri = uri; this.title = title; this.runs = Collections.unmodifiableList(runs);
+            this.source = source; this.scriptsBlocked = scriptsBlocked; this.media = Collections.unmodifiableList(media);
         }
+        public Document blockScripts() { return new Document(uri,title,runs,source,true,media); }
         public String text() {
             StringBuilder out = new StringBuilder();
             for (Run run : runs) out.append(run.newline ? "\n" : run.text);
@@ -42,15 +48,21 @@ public final class Engine {
         }
     }
     private static final class Frame {
-        final String tag; final Style style; final URI link;
-        Frame(String tag, Style style, URI link) { this.tag = tag; this.style = style; this.link = link; }
+        final String tag; final Style style; final URI link; final int action;
+        Frame(String tag, Style style, URI link, int action) { this.tag = tag; this.style = style; this.link = link; this.action = action; }
     }
 
     public static Document parse(URI uri, String source) {
+        return parse(uri,source,false);
+    }
+    /** Only snapshots from a running script session attach click targets. */
+    public static Document parseInteractive(URI uri, String source) { return parse(uri,source,true); }
+    private static Document parse(URI uri, String source, boolean interactive) {
         if (source.length() > MAX_SOURCE) throw new IllegalArgumentException("Page exceeds the preview's 1 MB text limit.");
         List<Run> runs = new ArrayList<>();
         List<Frame> stack = new ArrayList<>();
-        stack.add(new Frame("root", DEFAULT, null));
+        stack.add(new Frame("root", DEFAULT, null, -1));
+        List<URI> media = new ArrayList<>();
         // ASCII folding keeps source offsets intact (Unicode case folding can change length).
         StringBuilder folded = new StringBuilder(source.length());
         for (int i = 0; i < source.length(); i++) { char c = source.charAt(i); folded.append(c >= 'A' && c <= 'Z' ? (char) (c + 32) : c); }
@@ -103,7 +115,13 @@ public final class Engine {
             URI link = current.link;
             if (tag.equals("a")) link = PageLoader.link(uri, attrs.get("href"));
             if (link != null) style = new Style(style.size, 0xff2469ad, style.bold, style.italic, style.pre);
-            Frame frame = new Frame(tag, style, link);
+            int action=current.action;
+            if(interactive) try { action=Integer.parseInt(attrs.getOrDefault("data-aster-action","-1")); } catch(NumberFormatException ignored) { action=-1; }
+            if(tag.equals("button")) style=new Style(style.size,0xff176b59,true,style.italic,style.pre);
+            Frame frame = new Frame(tag, style, link, action);
+            if((tag.equals("video") || tag.equals("audio") || tag.equals("source")) && media.size()<4) {
+                URI resource=PageLoader.link(uri,attrs.get("src")); if(resource!=null && !media.contains(resource))media.add(resource);
+            }
             if (tag.equals("li")) add(runs, "• ", frame);
             if (tag.equals("img")) add(runs, "[Image: " + attrs.getOrDefault("alt", "no description") + "]", frame);
             if (!VOID.contains(tag) && !inside.endsWith("/")) {
@@ -112,7 +130,7 @@ public final class Engine {
             }
         }
         if (title.length() > 160) title = title.substring(0, 160);
-        return new Document(uri, title.isEmpty() ? "Untitled page" : title, runs);
+        return new Document(uri, title.isEmpty() ? "Untitled page" : title, runs, source, false, media);
     }
     private static int rawClose(String lower, String tag, int from) {
         int p = from;
@@ -178,12 +196,12 @@ public final class Engine {
         if (text.isEmpty()) return;
         if (!frame.style.pre) text = text.replaceAll("[\\t\\n\\r\\f ]+", " ");
         if (runs.size() >= MAX_RUNS) throw new IllegalArgumentException("Page has too many text runs.");
-        runs.add(new Run(text, frame.style, frame.link, false));
+        runs.add(new Run(text, frame.style, frame.link, frame.action, false));
     }
     private static void newline(List<Run> runs, Frame frame) {
         if (!runs.isEmpty() && !runs.get(runs.size() - 1).newline) {
             if (runs.size() >= MAX_RUNS) throw new IllegalArgumentException("Page has too many text runs.");
-            runs.add(new Run("", frame.style, null, true));
+            runs.add(new Run("", frame.style, null, -1, true));
         }
     }
     public static String entities(String text) {
@@ -213,10 +231,12 @@ public final class Engine {
     public interface Measure { float width(String text, Style style); }
     public static final class Draw {
         public final String text; public final Style style; public final URI link;
+        public final int action;
         public final float x, y, width, height;
-        Draw(String text, Style style, URI link, float x, float y, float width) {
+        Draw(String text, Style style, URI link, int action, float x, float y, float width) {
             this.text = text; this.style = style; this.link = link; this.x = x; this.y = y;
             this.width = width; this.height = style.size * 1.45f;
+            this.action = action;
         }
     }
     public static final class Layout {
@@ -226,6 +246,7 @@ public final class Engine {
             for (Draw d : items) if (d.link != null && x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height) return d.link;
             return null;
         }
+        public int actionAt(float x,float y) { for(Draw d:items) if(d.action>0 && x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height)return d.action; return -1; }
     }
     public static Layout layout(Document doc, float viewportWidth, Measure measure) {
         float right = Math.max(100, Math.min(10_000, viewportWidth)) - 24, x = 24, y = 24, line = 25;
@@ -258,10 +279,10 @@ public final class Engine {
                         float w = measure.width(unit, run.style);
                         if (x > 24 && x + w > right) { y += line; x = 24; line = 25; }
                         if (items.size() >= 100_000) throw new IllegalArgumentException("Page layout exceeds the preview limit.");
-                        items.add(new Draw(unit, run.style, run.link, x, y, w)); x += w; line = Math.max(line, run.style.size * 1.45f);
+                        items.add(new Draw(unit, run.style, run.link, run.action, x, y, w)); x += w; line = Math.max(line, run.style.size * 1.45f);
                     }
                 } else {
-                    items.add(new Draw(word, run.style, run.link, x, y, width)); x += width; line = Math.max(line, run.style.size * 1.45f);
+                    items.add(new Draw(word, run.style, run.link, run.action, x, y, width)); x += width; line = Math.max(line, run.style.size * 1.45f);
                 }
                 at = end;
             }

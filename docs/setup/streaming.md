@@ -9,7 +9,15 @@ separate engine foundation; it does not replace the WebKit prototype described b
 
 The original-engine desktop now has [working direct file downloads](../../experiments/aster-engine/README.md#download-files-on-windowslinux). Saving bytes from an HTTP response does not require a JavaScript interpreter, a media decoder or a DRM module. It does not supply streaming playback.
 
-The preview has no JavaScript, video, WebRTC, MSE or EME. Its Android menu uses
+The desktop now includes standalone QuickJS-NG, a small Aster DOM/event bridge,
+opt-in native gamepad input and direct unencrypted file playback through JavaFX
+media (without JavaFX WebView). Try **Menu → Playground**. Files are fetched in full
+before playback; this is not low-latency streaming. The new APIs are a limited
+desktop foundation, not full website compatibility.
+
+WebRTC, MSE/adaptive streaming and EME are still absent. There are no placeholder
+`RTCPeerConnection`, `MediaSource` or key-system APIs reporting false support.
+The Android preview has not received the desktop scripting/media components. Its Android menu uses
 the platform's [MediaDrm API](https://developer.android.com/reference/android/media/MediaDrm)
 to report whether the device exposes Widevine. That is a real local API query,
 but it does not request a license, provision a device, play encrypted media or
@@ -20,7 +28,9 @@ DOM/CSS implementation and renderer isolation; JavaScript/DOM/event integration;
 network/storage/origin/permission APIs; graphics/media/codec playback and MSE;
 WebRTC with ICE/DTLS/SRTP and real audio/video/controller tests; then EME plus
 an authorized platform CDM integration, license exchange and service tests.
-The parser tests and native packages are evidence for the first small step only.
+Parser, real QuickJS/DOM, input permission, resource-fetch and native decoder
+tests cover the implemented subset. They do not prove a cloud game or protected
+service session. See the [exact desktop scope and test instructions](../../experiments/aster-engine/README.md#try-scripting-media-and-controller-input).
 
 For Widevine, the repository owner must obtain the necessary integration agreement
 and access from [Google's official contact route](https://developers.google.com/widevine/contact/support).

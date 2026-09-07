@@ -15,8 +15,9 @@ public final class PageLoader {
         + "<a href='https://example.com'>Example Domain</a>. Basic text pages and links work here.</p>"
         + "<h2>Built for a different direction</h2><p>This preview paints pages with Aster code. "
         + "It does not embed Chrome, Chromium, Firefox, WebKit or Android WebView.</p>"
-        + "<h2>Still growing</h2><p>JavaScript apps, images, forms, video, cloud gaming and Prime Video "
-        + "are not supported yet. This is an engine development preview, not the full Aster browser.</p>"
+        + "<h2>Still growing</h2><p>Full web apps, images, forms, cloud gaming and Prime Video "
+        + "are not supported yet. The desktop Playground offers limited scripts and direct media playback. "
+        + "This is an engine development preview, not the full Aster browser.</p>"
         + "<p><b>Tip:</b> use Back, Forward, Home and bookmarks to explore text websites.</p></body></html>";
 
     public static URI address(String input) {
@@ -95,7 +96,8 @@ public final class PageLoader {
                 }
                 String source = new String(data, charset);
                 if (mime.equals("text/plain")) source = "<pre>" + escape(source) + "</pre>";
-                return Engine.parse(uri, source);
+                Engine.Document document=Engine.parse(uri, source);
+                return connection.getHeaderField("Content-Security-Policy")!=null ? document.blockScripts() : document;
             } finally { connection.disconnect(); }
         }
         throw new IOException("Website redirected more than five times.");

@@ -22,7 +22,7 @@ public final class DesktopTests {
     private static void edt(Runnable task) throws Exception { SwingUtilities.invokeAndWait(task); }
     private static void layout(Container c) { c.doLayout(); for(Component child:c.getComponents()) if(child instanceof Container) layout((Container)child); }
     private static void render(String path, int width) {
-        app.surface.setSize(width,780); for(int i=0;i<3;i++) layout(app.surface);
+        app.surface.setSize(width,780); for(int i=0;i<3;i++){layout(app.surface);if(app.current().getViewport().getView()==app.current().canvas)app.current().canvas.ensureLayout();}
         BufferedImage image=new BufferedImage(width,780,BufferedImage.TYPE_INT_RGB);
         Graphics2D g=image.createGraphics(); app.surface.printAll(g); g.dispose();
         try { ImageIO.write(image,"png",new File(path)); } catch(Exception e) { throw new RuntimeException(e); }
@@ -100,8 +100,19 @@ public final class DesktopTests {
             long deadline=System.nanoTime()+10_000_000_000L;
             while(!app.downloads.snapshot().get(0).finished()){if(System.nanoTime()>deadline)throw new AssertionError("UI download timed out");Thread.sleep(20);}
             check(Arrays.equals(downloadBytes,Files.readAllBytes(downloadFolder.resolve("aster-test.txt"))),"UI download saved wrong bytes");
+            edt(()->{app.load(app.current(),URI.create("aster:playground"),-1);app.current().runScripts.doClick();});
+            long scriptDeadline=System.nanoTime()+8_000_000_000L;
+            while(true){boolean[] ready={false};edt(()->ready[0]=app.current().canvas.document.text().contains("JavaScript is running"));if(ready[0])break;if(System.nanoTime()>scriptDeadline)throw new AssertionError("Playground JavaScript did not start");Thread.sleep(20);}
             edt(()->{
-                render(output+"/aster-ui-downloads-complete.png",1100);
+                render(output+"/aster-ui-playground.png",1100);
+                PreviewMain.PageCanvas c=app.current().canvas;c.ensureLayout();Engine.Draw draw=c.layout.items.stream().filter(d->d.text.equals("Add")).findFirst().get();
+                c.dispatchEvent(new MouseEvent(c,MouseEvent.MOUSE_CLICKED,System.currentTimeMillis(),0,(int)((draw.x+2)*c.scale),(int)((draw.y+4)*c.scale),1,false,MouseEvent.BUTTON1));
+            });
+            while(true){boolean[] ready={false};edt(()->ready[0]=app.current().canvas.document.text().contains("Click count: 1"));if(ready[0])break;if(System.nanoTime()>scriptDeadline)throw new AssertionError("Rendered button did not dispatch JavaScript click");Thread.sleep(20);}
+            final ScriptSession[] previous={null};
+            edt(()->{previous[0]=app.current().script;app.current().controllerButton.doClick();check(app.current().controllerAllowed,"Controller toggle did not grant page access");app.newTab();check(!((PreviewMain.Tab)app.tabs.getComponentAt(0)).controllerAllowed,"Background page kept controller permission");app.tabs.setSelectedIndex(0);app.load(app.current(),PageLoader.HOME,-1);check(!previous[0].alive(),"Navigation left script process alive");});
+            edt(()->{
+                app.load(app.current(),URI.create("aster:downloads"),-1);render(output+"/aster-ui-downloads-complete.png",1100);
                 app.dispose(); app=new PreviewMain(prefs);
                 check(app.pageScale==1.5 && app.reducedMotion && prefs.getInt("count",0)==1,"Settings/bookmarks did not survive restart");
                 check(app.visits.isEmpty(),"Session history persisted unexpectedly");

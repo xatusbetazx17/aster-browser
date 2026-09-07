@@ -8,10 +8,15 @@ not a fork or a renamed distribution of any of those engines.
 The same Java core runs in a Windows/Linux desktop application (Swing window,
 Java2D drawing, a bundled OpenJDK runtime) and a native Android application
 (Android widgets, Canvas and ART). Java is the implementation language/runtime;
-there is **no JavaScript interpreter** in this preview.
+the desktop adds standalone **QuickJS-NG 0.16.2** for JavaScript and **JavaFX
+21.0.12 media/graphics/Swing** for unencrypted playback. These are components,
+not browser engines; the interpreter and decoders are third-party code.
+Aster owns its small page renderer, DOM bridge and browser controls. Android
+remains a text preview without these new desktop components.
 
 **This is not the full browser Marcelo requested.** It opens basic HTML/text
-websites. It cannot run Prime Video, Boosteroid or other JavaScript/video sites.
+websites. It can run limited scripts and direct media files, but cannot run Prime Video,
+Boosteroid or full modern web applications.
 It does not replace the more capable [Linux WebKit prototype](../webkit/README.md)
 or silently remove that prototype's reader and local companion.
 
@@ -25,10 +30,12 @@ or silently remove that prototype's reader and local companion.
 | Images | Alternative text only; image bytes are not fetched or decoded |
 | Desktop UI | Rectangular tabs with individual close buttons, hover/close animations, adjacent new-tab button, rounded controls, flat internal pages, up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Single page, navigation menu, persisted bookmarks, restored address after rotation |
-| Network | Platform TLS validation; no certificate bypass, cookies, embedded URL credentials or subresource fetches |
+| Network | Platform TLS validation; no certificate bypass, cookies or embedded URL credentials; desktop adds bounded same-origin scripts and explicitly requested direct media |
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
-| Not implemented | Modern HTML recovery, full DOM/CSS, selectors/stylesheets, images, forms, JavaScript, storage/cookies, process sandbox, Android downloads, video, MSE/EME, WebRTC, the companion/reader feature set |
+| Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
+| Desktop media | Explicitly requested direct unencrypted file playback using JavaFX Media, without JavaFX WebView |
+| Not implemented | Modern HTML recovery, full DOM/CSS, complex selectors/stylesheets, images, forms, storage/cookies, OS process sandbox, Android downloads/scripts/media, MSE/EME, WebRTC, the companion/reader feature set |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
@@ -70,6 +77,65 @@ Internal-page navigation is handled only by the desktop shell's address bar and
 native controls. Webpage links and redirects cannot invoke internal settings.
 These changes target the original-engine **desktop** app; the Android app and
 separate Linux WebKit prototype retain their existing interfaces.
+
+## Try scripting, media and controller input
+
+Open **Menu → Playground**, or enter `aster:playground`.
+
+1. Select **Run JavaScript**. The heading changes to “JavaScript is running”.
+2. Click **Add one** on the rendered page; the counter increases.
+3. Click the page and press an arrow key; the page reports the key.
+4. Optionally select **Enable controller**. A readable gamepad reports its axes and
+   buttons. Windows uses XInput standard mapping; Linux uses `/dev/input/js0`–`js3`
+   with raw device mapping. No permissions are changed and inaccessible devices
+   remain unavailable. Physical controllers and Steam Deck controls still need testing.
+5. Select **Play sample** to play the bundled two-second blue/red video inside Aster.
+   Close the player to return. This is unencrypted H.264 video, not a DRM test.
+
+Website pages have the same **Run JavaScript** control. Scripts are off initially
+and permission lasts only for that visit. Stop, navigation, tab close and browser
+close terminate that page's script process. Background tabs pause timer dispatch;
+switching away from a page with controller access **stops its scripts** to revoke
+input access. Run scripts again when returning. Up to four script pages may exist.
+
+Implemented script APIs: classic inline scripts and same-origin external JavaScript
+responses; basic DOM text/attribute changes, `getElementById`, tag/ID/class selectors,
+node creation/appending/removal, click listeners, keydown/keyup, title changes,
+DOMContentLoaded/load, Promises, timers, requestAnimationFrame and gamepad snapshots.
+Aster reparses text snapshots for its own renderer. This is not a complete DOM,
+HTML parser, CSS engine or event model. Scripts execute after initial parsing;
+modules, inline HTML event attributes, fetch/XHR, WebSocket, cookies/storage,
+forms, canvas/WebGL and HTMLMediaElement bindings are not implemented. Keyboard
+code/repeat and default-action behavior are preliminary; there is no pointer lock.
+Pages with a CSP header or meta policy refuse scripts until policy support exists.
+
+QuickJS runs in a separate process with a 32 MiB allocation limit, 1 MiB C stack,
+500 ms per command, a two-second parent watchdog, bounded Promise jobs and 2 MiB
+protocol frames. A page has at most 10,000 DOM nodes, depth 64, 64 timers and 32
+classic scripts totalling 1 MB. The process exposes no filesystem, shell, Java
+objects, socket, standard-library modules or module loader. **This is not an OS
+sandbox**: protection against a native runtime exploit still requires platform
+process isolation. This remains an opt-in development preview for controlled pages.
+
+### Play direct media
+
+Open a direct `.mp4`, `.m4a`, `.mp3` or `.wav` HTTP/HTTPS URL and choose **Play in
+Aster** on the file offer. A basic page containing `<video src>`, `<audio src>` or
+`<source src>` has **Play media** for its first detected source. The native player
+has play/pause, restart, volume and close controls. Nothing plays automatically on
+page navigation. JavaScript cannot yet call the player's controls.
+
+The entire file is fetched to a temporary file before playback, at most **64 MiB**,
+five redirects and a 60-second transfer deadline, with validated TLS, no HTTPS
+redirect downgrade, no mixed HTTP media on an HTTPS page and no login cookies.
+Temporary media is removed when playback closes; forced termination can leave a
+file in the system temporary directory. Cancellation during a silent server read
+waits up to eight seconds. Native codec failures are reported in the player.
+
+This is file playback, **not live WebRTC, MSE/DASH/HLS adaptive streaming, EME or
+Widevine**. Prime Video, Boosteroid, GeForce NOW and Xbox Cloud Gaming remain
+unverified and unsupported. The [streaming development status](../../docs/setup/streaming.md)
+explains the remaining engine work and authorized DRM requirements.
 
 ## Download files on Windows/Linux
 
@@ -142,8 +208,11 @@ tar -xzf aster-engine-linux-x64.tar.gz
 The bundle contains Java. It still needs the operating system's desktop graphics
 libraries/X11 or XWayland and compatible glibc. CI builds on Ubuntu 24.04. This is
 not an all-distribution binary, Flatpak, ARM package or a validated Steam Deck release.
-The source/JAR can run with a suitable system Java runtime on other distributions;
-test that platform before claiming support. SteamOS requires no read-only filesystem
+The desktop source currently builds for Linux/Windows x64 with Java 17+, a C
+compiler, the pinned native script host and matching JavaFX libraries. Keep the
+whole `build/jar` directory together when launching its JAR. Linux media also needs
+compatible GTK3, ALSA and libavcodec/libavformat system libraries; CI tests Ubuntu
+24.04, not every distribution. SteamOS requires no read-only filesystem
 unlock for extracting the archive into your home directory.
 
 Close the preview and extract a newer archive into a new directory to update;
@@ -171,13 +240,17 @@ you need to retain just to work around a signature mismatch.
 
 ## Build from source
 
-Use JDK 17 and Python 3 on the target desktop platform:
+Use JDK 17, Python 3 and a C compiler on the target Linux/Windows x64 platform.
+Windows additionally uses CMake and the Visual Studio C build tools. The builder
+downloads SHA-256-pinned QuickJS source and JavaFX jars/notices over HTTPS; it builds
+the narrow script host from source. No browser engine or JavaFX WebView is included.
 
 ```sh
 python experiments/aster-engine/build.py desktop --test --package
 ```
 
-For a portable JAR without bundling Java, omit `--package`, then run:
+To use your system Java 17 runtime, omit `--package`, keep the **whole `build/jar`
+directory** together (including `native` and `lib`), then run:
 
 ```sh
 java -jar experiments/aster-engine/build/jar/aster-engine-preview.jar
@@ -196,7 +269,8 @@ the SDK's AAPT2, D8, zipalign and apksigner directly. The output is
 
 ## Validation scope
 
-`build.py desktop --test` runs 13 tests, including actual localhost HTTP exchanges,
+`build.py desktop --test` runs 13 core tests plus download, script and desktop
+integration suites, including actual localhost HTTP exchanges,
 a deterministic malformed-markup corpus and Java2D pixel rendering. The new CI
 workflow packages and launches the Linux and Windows applications. The desktop
 integration tests exercise actual controls, a real local HTTP page, scaled link
@@ -215,6 +289,17 @@ a tapped link, Back, a bookmark-preserving same-key APK replacement and the actu
 device DRM query in an API 26 emulator. A green job is required before citing its
 platform result. Artifact creation alone is not a passed device test.
 
+The scripting suite launches real QuickJS processes and verifies same-origin
+script loading, DOM/title/click/key updates, timer/Promise execution, controller
+permission/revocation, CSP refusal and CPU/memory/stack/Promise-job bounds. Desktop
+tests activate Run JavaScript and click the actual rendered playground button,
+then check tab-switch input revocation and process termination on navigation.
+The separate native media CI check requires advancing playback time, 160 × 90
+H.264 decode and two actual blue/red video frames. Local display startup was
+unavailable in the coding workspace; require successful native CI checks for
+platform playback evidence. Neither speaker output nor a physical controller
+has been tested, and none of these fixtures exercises WebRTC or DRM.
+
 The API 35 attempts reached boot/installation timeouts on the hosted runner,
 which denies this job access to KVM. That runtime validation remains unfinished.
 CI now uses the smaller API 26/x86 image in software mode; API 35 remains selectable
@@ -227,4 +312,7 @@ production signing, modern-web compatibility or streaming service support.
 
 See [the remaining engine and streaming work](../../docs/setup/streaming.md).
 Aster code is MIT-licensed; bundled OpenJDK keeps its own licenses under the
-runtime's `legal` directory. Platform drawing/TLS libraries are not Aster-authored.
+runtime's `legal` directory. QuickJS's MIT notice is beside the script executable;
+JavaFX and its third-party notices/source links are in the app's `legal/javafx`
+directory. Dependency pins are in `desktop/native/*.lock.json`.
+Platform drawing/TLS/media libraries are not Aster-authored.

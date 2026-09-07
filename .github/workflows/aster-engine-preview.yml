@@ -40,6 +40,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb
           xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --smoke experiments/aster-engine/build/aster-window.png
+      - name: Decode and display actual Linux video frames
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y libgtk-3-0t64 libavcodec60 libavformat60 libavutil58 libasound2t64
+          xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --media-smoke experiments/aster-engine/build/aster-media-frame.png
       - name: Open the Windows EXE
         if: runner.os == 'Windows'
         shell: pwsh
@@ -48,6 +53,14 @@ jobs:
           $asterProcess = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--smoke', $asterOutput) -PassThru
           if (-not $asterProcess.WaitForExit(30000)) { $asterProcess.Kill(); throw 'Aster window did not finish its smoke check' }
           if ($asterProcess.ExitCode -ne 0 -or -not (Test-Path $asterOutput)) { throw 'Aster EXE smoke check failed' }
+      - name: Decode and display actual Windows video frames
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-media-frame.png'
+          $asterVideo = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--media-smoke', $asterFrame) -PassThru
+          if (-not $asterVideo.WaitForExit(40000)) { $asterVideo.Kill(); throw 'Aster video did not finish its playback check' }
+          if ($asterVideo.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) { throw 'Aster EXE did not decode the test video' }
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: aster-engine-${{ runner.os }}

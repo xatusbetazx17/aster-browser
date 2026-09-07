@@ -21,6 +21,8 @@ A custom interface and browser features can be developed within this standalone 
 | Deliverable | Current status |
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
+| Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts; opt-in, not a complete web platform |
+| Original-engine desktop media/input | Direct unencrypted file playback through JavaFX media; XInput/Linux joystick provider with per-visit consent; no WebRTC/MSE/EME |
 | Original-engine desktop file downloads | Implemented: direct HTTP/HTTPS Save As, progress/cancel/retry; two transfers and 2 GiB/file; no login/JavaScript downloads |
 | Managed Linux code installation and updates | Implemented, with file verification and rollback |
 | Word/PDF/text reading and read-aloud | Native reading panel; DOCX body/tables, PDF/DOC via local tools, English/Spanish speech |
@@ -38,5 +40,5 @@ Legacy Qt installers and the retired companion source remain available as histor
 See [reading/assistant setup](docs/setup/assistant.md), [the original-engine preview](experiments/aster-engine/README.md)
 and [the specific streaming, engine and native-port blockers](docs/setup/streaming.md).
 The existing WebKit prototype does not meet strict engine independence. The new,
-separate original engine meets that dependency constraint but implements only a
+separate original engine meets that dependency constraint but implements a limited
 small HTML/text subset, not the requested full browser or streaming capabilities.

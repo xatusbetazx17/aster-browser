@@ -30,6 +30,7 @@ public final class PreviewMain {
     private final JButton forward = button("→", "Forward", () -> move(1));
     private final JButton add = button("+", "New tab (Ctrl+T)", this::newTab);
     private boolean disposed;
+    private final ExecutorService scripts = Executors.newFixedThreadPool(2,r->{Thread t=new Thread(r,"aster-page-scripts");t.setDaemon(true);return t;});
     final DownloadManager downloads = new DownloadManager(transfer -> SwingUtilities.invokeLater(this::updateDownloads));
     java.util.function.Function<String, Path> destinationChooser = this::chooseDestination;
     boolean reducedMotion;
@@ -62,7 +63,7 @@ public final class PreviewMain {
             protected Insets getContentBorderInsets(int placement) { return new Insets(0,0,0,0); }
         });
         tabs.setBorder(BorderFactory.createEmptyBorder()); tabs.setFocusable(false);
-        tabs.addChangeListener(event -> { refreshInternal(current()); sync(); });
+        tabs.addChangeListener(event -> { for(int i=0;i<tabs.getTabCount();i++){ Tab t=(Tab)tabs.getComponentAt(i); if(t!=current()&&t.controllerAllowed)stopScripts(t); } refreshInternal(current()); sync(); });
         JPanel header = new JPanel(new BorderLayout()); header.setBackground(PAPER);
         strip.setBackground(new Color(0xe6efeb)); strip.setBorder(BorderFactory.createEmptyBorder(5, 8, 0, 8));
         add.setText(""); add.setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
@@ -102,7 +103,7 @@ public final class PreviewMain {
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
     }
-    void dispose() { disposed = true; downloads.close(); network.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop(); }
+    void dispose() { disposed = true; downloads.close(); network.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
     private static final class RoundButton extends JButton {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {
@@ -125,7 +126,15 @@ public final class PreviewMain {
         final TabChip chip = new TabChip(this);
         final java.util.List<DownloadRow> downloadRows = new ArrayList<>();
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
-        Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); canvas.save = uri -> chooseDownload(uri, DownloadManager.filename(uri, null)); }
+        volatile ScriptSession script;
+        javax.swing.Timer scriptTimer; boolean scriptBusy,controllerAllowed,scriptStarting;
+        final ArrayDeque<String> inputCommands=new ArrayDeque<>();
+        JToggleButton controllerButton; JButton runScripts; Engine.Document original;
+        MediaPanel media;
+        Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); canvas.save = uri -> chooseDownload(uri, DownloadManager.filename(uri, null));
+            canvas.action=id->scriptCommand(this,"__aster.click("+id+")",true);
+            canvas.keys=(type,key)->scriptCommand(this,"__aster.key("+Json.quote(type)+","+Json.quote(key)+","+Json.quote(key)+",false)",false);
+        }
     }
     final class TabChip extends JPanel {
         final Tab tab; final JButton select; final JButton close;
@@ -176,6 +185,8 @@ public final class PreviewMain {
     private void closeTab() { closeTab(current()); }
     private void closeTab(Tab tab) {
         if(tab == null || tab.closed) return;
+        stopScripts(tab);
+        if(tab.media!=null){tab.media.close();tab.media=null;}
         tab.closed = true; tab.generation++; tab.chip.closing = true; tab.chip.select.setEnabled(false); tab.chip.close.setEnabled(false);
         if(tab.pending != null) tab.pending.cancel(true);
         tabs.remove(tab); if(tabs.getTabCount()==0) newTab(); refreshInternal(current());
@@ -186,15 +197,18 @@ public final class PreviewMain {
     }
     static String internal(URI uri) {
         String s = uri.toString(); if(s.equals(PageLoader.HOME.toString()) || s.equals("aster:newtab") || s.equals("aster:home")) return "home";
-        for(String page : new String[]{"settings","bookmarks","history","downloads"}) if(s.equals("aster:"+page)) return page;
+        for(String page : new String[]{"settings","bookmarks","history","downloads","playground"}) if(s.equals("aster:"+page)) return page;
         return null;
     }
     static URI target(String input) { URI uri; try { uri = URI.create(input.trim()); } catch(IllegalArgumentException e) { return PageLoader.address(input); } return internal(uri) != null ? uri : PageLoader.address(input); }
     void move(int delta) { Tab tab = current(); if(tab == null) return; int next = tab.index+delta; if(next>=0 && next<tab.history.size()) load(tab,tab.history.get(next),next); }
     void load(Tab tab, URI uri, int historyIndex) {
         if(tab == null || tab.closed) return; if(tab.pending != null) tab.pending.cancel(true);
+        stopScripts(tab); tab.setColumnHeaderView(null); tab.original=null;
+        if(tab.media!=null){tab.media.close();tab.media=null;}
         int generation = ++tab.generation; tab.downloadRows.clear();
         if(internal(uri) != null) {
+            if("playground".equals(internal(uri))) { Engine.Document doc=Engine.parse(uri,resourceText("/playground.html")); tab.canvas.setDocument(doc);tab.setViewportView(tab.canvas);completed(tab,doc,historyIndex);scriptControls(tab,doc);return; }
             String page = internal(uri); Engine.Document doc = Engine.parse(uri,"<title>Aster · "+page+"</title><h1>"+page+"</h1>");
             tab.canvas.setDocument(doc); tab.setViewportView(internalPage(tab,page)); completed(tab,doc,historyIndex); return;
         }
@@ -205,6 +219,7 @@ public final class PreviewMain {
                 tab.canvas.setDocument(document); tab.setViewportView(tab.canvas);
                 visits.add(0,new Visit(document.uri,document.title)); if(visits.size()>200) visits.remove(visits.size()-1);
                 completed(tab,document,historyIndex); refreshInternal(current());
+                scriptControls(tab,document);
             });
         } catch(PageLoader.DownloadRequired file) { SwingUtilities.invokeLater(() -> {
             if(!tab.closed && tab.generation == generation && !disposed) showDownloadOffer(tab, file, historyIndex);
@@ -235,6 +250,7 @@ public final class PreviewMain {
         paragraph(panel,"From "+file.uri.getHost()+" · "+(file.length<0 ? "Size not provided" : DownloadManager.bytes(file.length)));
         paragraph(panel,"Choose where to save this file. Aster will not open it automatically.");
         panel.add(button("Save as…","Choose destination for "+filename,()->chooseDownload(file.uri,filename)));
+        if(file.uri.getPath().toLowerCase(Locale.ROOT).matches(".*\\.(mp4|m4a|mp3|wav)"))panel.add(button("Play in Aster","Play this unencrypted file inside Aster",()->openMedia(tab,()->ResourceLoader.media(file.uri,file.uri))));
         panel.add(Box.createVerticalGlue()); tab.setViewportView(panel); completed(tab,doc,historyIndex);
     }
     private void updateDownloads() {
@@ -268,7 +284,75 @@ public final class PreviewMain {
         }
     }
     private void refreshInternal(Tab tab) {
-        if(tab != null && tab.canvas.document != null) { String page=internal(tab.canvas.document.uri); if(page != null) tab.setViewportView(internalPage(tab,page)); }
+        if(tab != null && tab.canvas.document != null) { String page=internal(tab.canvas.document.uri); if(page != null && !page.equals("playground")) tab.setViewportView(internalPage(tab,page)); }
+    }
+    static String resourceText(String name) {
+        try(java.io.InputStream input=PreviewMain.class.getResourceAsStream(name); java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()) {
+            if(input==null)throw new java.io.IOException("Missing bundled page"); byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1)out.write(buffer,0,n);return new String(out.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+        } catch(Exception e) { throw new IllegalStateException(e); }
+    }
+    private void scriptControls(Tab tab,Engine.Document document) {
+        tab.original=document;
+        JPanel bar=new JPanel(new FlowLayout(FlowLayout.LEFT,8,4)); bar.setBackground(PAPER);
+        tab.runScripts=button("Run JavaScript","Run this page's scripts for this visit",()->{if(tab.script==null)startScripts(tab);else{stopScripts(tab);tab.canvas.setDocument(tab.original);tab.runScripts.setText("Run JavaScript");}});
+        tab.runScripts.setEnabled(!document.scriptsBlocked);bar.add(tab.runScripts);
+        tab.controllerButton=new JToggleButton("Enable controller");tab.controllerButton.setEnabled(false);tab.controllerButton.addActionListener(e->{tab.controllerAllowed=tab.controllerButton.isSelected();tab.canvas.requestFocusInWindow();});bar.add(tab.controllerButton);
+        tab.controllerButton.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));tab.controllerButton.setBackground(PAPER);tab.controllerButton.setFocusPainted(false);
+        if("playground".equals(internal(document.uri)))bar.add(button("Play sample","Play Aster's bundled sample video",()->openMedia(tab,MediaPanel::sample)));
+        else if(!document.media.isEmpty())bar.add(button("Play media","Play this page's first direct media source",()->openMedia(tab,()->ResourceLoader.media(document.uri,document.media.get(0)))));
+        JLabel label=new JLabel(document.scriptsBlocked ? "Scripts disabled: CSP support pending" : "Experimental · permission resets on navigation");label.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,12));bar.add(label);
+        tab.setColumnHeaderView(bar);
+    }
+    private void openMedia(Tab tab,MediaPanel.Source source) {
+        stopScripts(tab);if(tab.runScripts!=null)tab.runScripts.setText("Run JavaScript");
+        if(tab.media!=null)tab.media.close();
+        try{tab.media=new MediaPanel(source,()->{tab.media=null;tab.setViewportView(tab.canvas);});tab.setViewportView(tab.media);}
+        catch(Throwable e){tab.message="Media could not start: "+e.getMessage();sync();}
+    }
+    void startScripts(Tab tab) {
+        if(tab.original==null || tab.script!=null)return;
+        int running=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).script!=null||((Tab)tabs.getComponentAt(i)).scriptStarting)running++;
+        if(running>=4){message("Up to four script pages can run at once. Stop one first.");return;}
+        final int generation=tab.generation;final Engine.Document original=tab.original;tab.scriptStarting=true;tab.runScripts.setEnabled(false);tab.message="Starting page scripts…";sync();
+        scripts.submit(()->{
+            ScriptSession session=null;
+            try {
+                session=new ScriptSession();final ScriptSession created=session;
+                SwingUtilities.invokeAndWait(()->{if(disposed||tab.closed||tab.generation!=generation||!tab.scriptStarting)created.close();else tab.script=created;});
+                if(!session.alive())return;
+                Map<String,Object> snapshot=session.start(original); final ScriptSession started=session;
+                SwingUtilities.invokeLater(()->{if(disposed||tab.closed||tab.generation!=generation||tab.script!=started){started.close();return;}
+                    tab.scriptStarting=false;applySnapshot(tab,snapshot,false);tab.runScripts.setEnabled(true);tab.runScripts.setText("Stop JavaScript");tab.controllerButton.setEnabled(true);tab.canvas.requestFocusInWindow();
+                    final long began=System.nanoTime(); tab.scriptTimer=new javax.swing.Timer(50,e->{if(current()==tab&&!tab.scriptBusy)scriptCommand(tab,"__aster.tick("+((System.nanoTime()-began)/1_000_000L)+")",false);});tab.scriptTimer.start();
+                });
+            }catch(Exception e){if(session!=null)session.close();SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation){stopScripts(tab);tab.runScripts.setEnabled(true);tab.message="Could not run scripts: "+e.getMessage();sync();}});}
+        });
+    }
+    private void stopScripts(Tab tab) {
+        if(tab.scriptTimer!=null){tab.scriptTimer.stop();tab.scriptTimer=null;}
+        ScriptSession session=tab.script;tab.script=null;if(session!=null)session.close();tab.scriptBusy=false;tab.controllerAllowed=false;tab.scriptStarting=false;tab.inputCommands.clear();
+        if(tab.controllerButton!=null){tab.controllerButton.setSelected(false);tab.controllerButton.setEnabled(false);}
+        if(tab.runScripts!=null){tab.runScripts.setText("Run JavaScript");tab.runScripts.setEnabled(tab.original!=null&&!tab.original.scriptsBlocked);}
+        if(session!=null&&tab.canvas.document!=null)tab.canvas.setDocument(Engine.parse(tab.canvas.document.uri,tab.canvas.document.source));
+    }
+    @SuppressWarnings("unchecked") private void scriptCommand(Tab tab,String command,boolean click) {
+        ScriptSession session=tab.script;if(session==null||current()!=tab)return;
+        if(tab.scriptBusy){if(!command.startsWith("__aster.tick(")&&tab.inputCommands.size()<32)tab.inputCommands.addLast(command);return;}
+        tab.scriptBusy=true;int generation=tab.generation;boolean allow=tab.controllerAllowed;
+        scripts.submit(()->{try{
+            session.controller(allow);Map<String,Object> snapshot=(Map<String,Object>)session.eval(command);
+            SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation&&tab.script==session){tab.scriptBusy=false;applySnapshot(tab,snapshot,click);if(!tab.inputCommands.isEmpty()){String next=tab.inputCommands.removeFirst();scriptCommand(tab,next,next.startsWith("__aster.click("));}}});
+        }catch(Exception e){SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation&&tab.script==session){stopScripts(tab);tab.runScripts.setText("Run JavaScript");tab.message="JavaScript stopped: "+e.getMessage();sync();}});}});
+    }
+    private void applySnapshot(Tab tab,Map<String,Object> snapshot,boolean click) {
+        try {
+            String html=String.valueOf(snapshot.get("html")); if(html.length()>Engine.MAX_SOURCE)throw new IllegalArgumentException("Page snapshot exceeds limit");
+            if(!html.equals(tab.canvas.document.source))tab.canvas.setDocument(Engine.parseInteractive(tab.original.uri,html));
+            tab.chip.title(tab.canvas.document.title);tabs.setTitleAt(tabs.indexOfComponent(tab),plainLabel(tab.canvas.document.title));
+            Object errors=snapshot.get("errors");tab.message=errors instanceof java.util.List&&!((java.util.List<?>)errors).isEmpty()?"Page script: "+((java.util.List<?>)errors).get(0):"";
+            if(click && snapshot.get("navigation") instanceof String) { URI next=PageLoader.link(tab.original.uri,(String)snapshot.get("navigation"));if(next!=null){load(tab,next,-1);return;} }
+            sync();
+        }catch(Exception e){stopScripts(tab);tab.message="Could not display script changes: "+e.getMessage();sync();}
     }
     private void completed(Tab tab, Engine.Document document, int historyIndex) {
         if(historyIndex>=0) tab.index=historyIndex;
@@ -279,7 +363,7 @@ public final class PreviewMain {
     private void message(String text) { if(current()!=null) current().message=text; status.setText(plainLabel(text)); status.setVisible(!text.isEmpty()); }
     private void sync() {
         Tab tab = current(); if(tab == null) return;
-        if(tab.canvas.document != null) address.setText(tab.canvas.document.uri.toString());
+        if(tab.canvas.document != null && !address.hasFocus()) address.setText(tab.canvas.document.uri.toString());
         message(tab.message); back.setEnabled(tab.index>0); forward.setEnabled(tab.index+1<tab.history.size());
         for(Component c:strip.getComponents()) if(c instanceof TabChip) ((TabChip)c).update();
     }
@@ -292,8 +376,8 @@ public final class PreviewMain {
         preferences.put("url"+count,url); preferences.put("title"+count,tab.canvas.document.title); preferences.putInt("count",count+1); refreshInternal(tab); message("Bookmark saved.");
     }
     private void menu() {
-        JPopupMenu popup=new JPopupMenu(); JPanel grid=new JPanel(new GridLayout(2,2,8,8)); grid.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        for(String page:new String[]{"bookmarks","history","downloads","settings"}) { JButton b=button(capitalize(page),"Open "+page,()->{ popup.setVisible(false); load(current(),URI.create("aster:"+page),-1); }); b.setPreferredSize(new Dimension(112,76)); grid.add(b); }
+        JPopupMenu popup=new JPopupMenu(); JPanel grid=new JPanel(new GridLayout(0,2,8,8)); grid.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+        for(String page:new String[]{"bookmarks","history","downloads","settings","playground"}) { JButton b=button(capitalize(page),"Open "+page,()->{ popup.setVisible(false); load(current(),URI.create("aster:"+page),-1); }); b.setPreferredSize(new Dimension(112,76)); grid.add(b); }
         popup.add(grid); popup.show(surface,Math.max(0,surface.getWidth()-260),88);
     }
     private static String capitalize(String s) { return s.substring(0,1).toUpperCase(Locale.ROOT)+s.substring(1); }
@@ -320,7 +404,7 @@ public final class PreviewMain {
             JPanel awareness=new JPanel(new FlowLayout(FlowLayout.LEFT,16,0)); awareness.setOpaque(false); awareness.setAlignmentX(Component.LEFT_ALIGNMENT); awareness.setMaximumSize(new Dimension(Integer.MAX_VALUE,120));
             final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(new Color(0xdbe7df)); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
             ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel("Open tabs · "+bookmarkCount()+" bookmarks · "+visits.size()+" recent visits")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
-            paragraph(panel,"Preview limits: basic HTML and text only. JavaScript, images, video, Prime Video and cloud gaming are not supported yet.");
+            paragraph(panel,"Try Menu → Playground for page scripts, keyboard/controller input and a sample video. Full web apps, live cloud gaming and Prime Video are still unfinished.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -358,9 +442,12 @@ public final class PreviewMain {
         Engine.Document document; Engine.Layout layout; int layoutWidth = -1; double scale = 1;
         java.util.function.Consumer<URI> navigate = uri -> { };
         java.util.function.Consumer<URI> save = uri -> { };
+        java.util.function.IntConsumer action = id -> { };
+        java.util.function.BiConsumer<String,String> keys = (type,key) -> { };
         PageCanvas() {
             setBackground(Color.WHITE); setFocusable(true);
             getAccessibleContext().setAccessibleName("Aster page");
+            addKeyListener(new KeyAdapter(){public void keyPressed(KeyEvent e){keys.accept("keydown",key(e));}public void keyReleased(KeyEvent e){keys.accept("keyup",key(e));}private String key(KeyEvent e){switch(e.getKeyCode()){case KeyEvent.VK_LEFT:return "ArrowLeft";case KeyEvent.VK_RIGHT:return "ArrowRight";case KeyEvent.VK_UP:return "ArrowUp";case KeyEvent.VK_DOWN:return "ArrowDown";case KeyEvent.VK_ENTER:return "Enter";case KeyEvent.VK_ESCAPE:return "Escape";default:return e.getKeyChar()==KeyEvent.CHAR_UNDEFINED?KeyEvent.getKeyText(e.getKeyCode()):String.valueOf(e.getKeyChar());}}});
             addMouseListener(new MouseAdapter() {
                 public void mousePressed(MouseEvent e) { popup(e); }
                 public void mouseReleased(MouseEvent e) { popup(e); }
@@ -371,7 +458,7 @@ public final class PreviewMain {
                     JMenuItem download=new JMenuItem("Save link as…"); download.addActionListener(event->save.accept(uri)); menu.add(download); menu.show(PageCanvas.this,e.getX(),e.getY());
                 }
                 public void mouseClicked(MouseEvent e) {
-                    if (SwingUtilities.isLeftMouseButton(e) && layout != null) { URI uri = layout.hit((float)(e.getX()/scale), (float)(e.getY()/scale)); if (uri != null) navigate.accept(uri); }
+                    if (SwingUtilities.isLeftMouseButton(e) && layout != null) { requestFocusInWindow();int id=layout.actionAt((float)(e.getX()/scale),(float)(e.getY()/scale));if(id>0){action.accept(id);return;}URI uri = layout.hit((float)(e.getX()/scale), (float)(e.getY()/scale)); if (uri != null) navigate.accept(uri); }
                 }
             });
             addMouseMotionListener(new MouseMotionAdapter() { public void mouseMoved(MouseEvent e) {
@@ -380,7 +467,7 @@ public final class PreviewMain {
                 setToolTipText(uri == null ? null : uri.toString());
             }});
         }
-        void setDocument(Engine.Document doc) { document = doc; layoutWidth = -1; getAccessibleContext().setAccessibleDescription(doc.text()); revalidate(); repaint(); }
+        void setDocument(Engine.Document doc) { document = doc; layout = null; layoutWidth = -1; getAccessibleContext().setAccessibleDescription(doc.text()); revalidate(); repaint(); }
         static Font font(Engine.Style s) { return new Font(s.pre ? Font.MONOSPACED : Font.SANS_SERIF, (s.bold ? Font.BOLD : 0) | (s.italic ? Font.ITALIC : 0), Math.round(s.size)); }
         void ensureLayout() {
             if (document != null && (layout == null || layoutWidth != getWidth())) {
@@ -455,10 +542,16 @@ public final class PreviewMain {
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && args[0].equals("--render-test")) { renderTest(args.length > 1 ? args[1] : "aster-engine.png"); return; }
         SwingUtilities.invokeLater(() -> {
-            boolean smoke = args.length > 0 && args[0].equals("--smoke");
+            boolean mediaSmoke = args.length > 0 && args[0].equals("--media-smoke");
+            boolean smoke = args.length > 0 && (args[0].equals("--smoke")||mediaSmoke);
             PreviewMain app = smoke ? new PreviewMain(Preferences.userRoot().node("io/aster/ui-smoke-" + UUID.randomUUID())) : new PreviewMain();
             app.window.setVisible(true);
-            if (smoke) app.nativeSmoke(args[1]);
+            if(mediaSmoke){app.load(app.current(),URI.create("aster:playground"),-1);app.openMedia(app.current(),MediaPanel::sample);
+                if(app.current().media==null){app.window.dispose();System.exit(1);return;}
+                final javax.swing.Timer deadline=new javax.swing.Timer(25000,e->{System.err.println("Media smoke timed out");app.window.dispose();System.exit(1);});deadline.setRepeats(false);deadline.start();
+                app.current().media.evidence(Paths.get(args[1]),()->{deadline.stop();try{preferencesRemove(app.preferences);}catch(Exception ignored){}app.window.dispose();},error->{deadline.stop();System.err.println(error);app.window.dispose();System.exit(1);});
+            } else if (smoke) app.nativeSmoke(args[1]);
         });
     }
+    private static void preferencesRemove(Preferences preferences) throws Exception { preferences.removeNode(); }
 }

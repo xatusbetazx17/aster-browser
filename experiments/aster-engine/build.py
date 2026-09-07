@@ -35,18 +35,27 @@ def make_jar(folder, target, main=None):
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(ROOT.parents[1] / "LICENSE", "META-INF/LICENSE")
         if main:
-            archive.writestr("META-INF/MANIFEST.MF", f"Manifest-Version: 1.0\nMain-Class: {main}\n\n")
-        for path in sorted(folder.rglob("*.class")):
-            archive.write(path, path.relative_to(folder).as_posix())
+            cp='Class-Path: '+' '.join('lib/javafx-'+name+'.jar' for name in ['base','graphics','media','swing'])
+            wrapped=cp[:70]+'\n '+cp[70:] if len(cp)>70 else cp
+            archive.writestr("META-INF/MANIFEST.MF", f"Manifest-Version: 1.0\nMain-Class: {main}\n{wrapped}\n\n")
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(folder).as_posix())
 
 
 def desktop(test=False, package=False):
     if package and (sys.platform not in {"linux", "win32"} or platform.machine().lower() not in {"x86_64", "amd64"}):
         raise SystemExit("Bundled previews currently target Linux/Windows x64. Omit --package to build the portable JAR.")
+    from desktop_deps import script_host, javafx
+    host = script_host()
+    libraries = javafx()
     classes = BUILD / "desktop-classes"
     if classes.exists():
         shutil.rmtree(classes)
-    compile_java(list((ROOT / "core/src").rglob("*.java")) + list((ROOT / "desktop/src").rglob("*.java")), classes)
+    compile_java(list((ROOT / "core/src").rglob("*.java")) + list((ROOT / "desktop/src").rglob("*.java")), classes, libraries)
+    for resource in (ROOT / 'desktop/resources').iterdir():
+        if resource.is_file():
+            shutil.copyfile(resource, classes / resource.name)
     jar = BUILD / "jar/aster-engine-preview.jar"
     make_jar(classes, jar, "io.aster.desktop.PreviewMain")
     if test:
@@ -54,18 +63,19 @@ def desktop(test=False, package=False):
         # The localhost HTTP fixture uses the JDK's test server (not shipped in the application).
         tests.mkdir(parents=True, exist_ok=True)
         javac = [shutil.which("javac")] if shutil.which("javac") else ["java", "com.sun.tools.javac.Main"]
-        run(*javac, "-encoding", "UTF-8", "-cp", classes, "-d", tests, *sorted((ROOT / "tests").rglob("*.java")))
+        run(*javac, "-encoding", "UTF-8", "-cp", str(classes)+os.pathsep+libraries, "-d", tests, *sorted((ROOT / "tests").rglob("*.java")))
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.tests.EngineTests")
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.DownloadTests")
+        run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.ScriptTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
-        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.DesktopTests", BUILD)
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.DesktopTests", BUILD)
     if package:
         image = BUILD / "native/AsterEnginePreview"
         if image.exists():
             shutil.rmtree(image)
         run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.1.0",
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
-            "--add-modules", "java.desktop,java.prefs,jdk.crypto.ec", "--dest", image.parent)
+            "--add-modules", "java.desktop,java.prefs,jdk.crypto.ec,jdk.unsupported,java.xml,java.logging", "--dest", image.parent)
         shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")
         shutil.copyfile(ROOT / "README.md", image / "README.md")
         if sys.platform == "win32":
