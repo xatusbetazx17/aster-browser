@@ -23,7 +23,7 @@ or silently remove that prototype's reader and local companion.
 | Layout | Text, headings, paragraphs, lists, basic table text, preformatted lines, Unicode, word wrapping |
 | Typography | Bold, italic, inherited size/color; inline `font-size` in px, six-digit hex `color`, bold/italic declarations |
 | Images | Alternative text only; image bytes are not fetched or decoded |
-| Desktop UI | Native window, up to 20 tabs, up to 30 persisted bookmarks, keyboard shortcuts |
+| Desktop UI | Rectangular tabs with individual close buttons, hover/close animations, adjacent new-tab button, rounded controls, flat internal pages, up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Single page, navigation menu, persisted bookmarks, restored address after rotation |
 | Network | Platform TLS validation; no certificate bypass, cookies, credentials or subresource fetches |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
@@ -33,6 +33,41 @@ Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
 Explicit HTTP navigation remains supported and unencrypted. Unsupported CSS is
 ignored. There is no standards-compliance, daily-driver security or all-sites claim.
+
+## Desktop interface update
+
+The Windows/Linux original-engine application now includes:
+
+- Rectangular tabs with an individual vector close button. Selected and hovered tabs
+  reveal the close button; keyboard focus reveals it too. Hover fades take 120 ms;
+  closed tabs shrink away over 160 ms. Closing a background tab preserves the active
+  tab; closing the final tab opens a fresh home page.
+- A compact new-tab button immediately after the tabs, a horizontally scrollable
+  tab strip for many tabs, rounded toolbar controls and a 2-by-2 tools menu.
+- A native, flat home dashboard with six shortcuts, readable typography and a
+  110 px open-tab capacity ring. Counts reflect this application session; they do
+  not claim CPU/memory measurements or streaming readiness.
+- `aster:bookmarks` with saved links and explicit clearing; `aster:history` with
+  the last 200 successful visits from this session; `aster:settings` with persisted
+  reading size and reduced motion. Clearing bookmarks preserves settings.
+- `aster:downloads` is an honest unavailable-feature page: file downloading is
+  still unimplemented, not an empty working download manager.
+- No permanent bottom status bar. Pending navigation, confirmation and errors
+  appear below the address bar and clear on successful navigation.
+- Wheel scrolling over the closed reading-size dropdown scrolls the page instead
+  of changing the setting. Choose a size deliberately from the dropdown.
+- The native home page is prepared synchronously before the window is first
+  shown. This avoids an initially empty page; it does not certify every platform's
+  compositor or graphics driver as flicker-free.
+
+Use Ctrl+T / Ctrl+W for new/close tab, Ctrl+Tab / Ctrl+Shift+Tab to switch,
+Ctrl+L for the address, Ctrl+D to bookmark, and Alt+Left/Right to navigate.
+Reading sizes 100%, 125%, 150% and 200% preserve link hit testing.
+
+Internal-page navigation is handled only by the desktop shell's address bar and
+native controls. Webpage links and redirects cannot invoke internal settings.
+These changes target the original-engine **desktop** app; the Android app and
+separate Linux WebKit prototype retain their existing interfaces.
 
 ## Try the actual packages
 
@@ -125,7 +160,13 @@ the SDK's AAPT2, D8, zipalign and apksigner directly. The output is
 
 `build.py desktop --test` runs 13 tests, including actual localhost HTTP exchanges,
 a deterministic malformed-markup corpus and Java2D pixel rendering. The new CI
-workflow packages and launches the Linux and Windows applications. Its Android
+workflow packages and launches the Linux and Windows applications. The desktop
+integration tests exercise actual controls, a real local HTTP page, scaled link
+clicking, Back, background/final-tab closing, settings wheel protection and
+bookmark/settings persistence with isolated test profiles. They render home,
+settings, history, bookmarks and downloads pages, including a 720 px wide home.
+The native launch checks additionally exercise hover fade and animated close
+cleanup. Tests do not overwrite a user's normal preview profile. Its Android
 job builds/verifies the APK and tests native Canvas rendering, a real HTTP page,
 a tapped link, Back, a bookmark-preserving same-key APK replacement and the actual
 device DRM query in an API 26 emulator. A green job is required before citing its

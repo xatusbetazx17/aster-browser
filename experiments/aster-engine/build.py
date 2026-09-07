@@ -57,6 +57,7 @@ def desktop(test=False, package=False):
         run(*javac, "-encoding", "UTF-8", "-cp", classes, "-d", tests, *sorted((ROOT / "tests").rglob("*.java")))
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.tests.EngineTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.DesktopTests", BUILD)
     if package:
         image = BUILD / "native/AsterEnginePreview"
         if image.exists():
