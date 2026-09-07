@@ -13,6 +13,8 @@ own basic HTML/text parser, layout and link renderer, shared by Windows/Linux
 desktop and native Android preview applications. It embeds no other browser engine.
 Its build workflow produces a Windows EXE bundle, Linux bundle and Android APK and
 tests the actual applications. Use only artifacts from a successful run.
+The original-engine Windows/Linux desktop preview includes animated tabs, flat
+internal pages and [working direct file downloads](experiments/aster-engine/README.md#download-files-on-windowslinux) with Save As, progress and cancellation.
 
 **This is an early engine foundation, not the completed browser:** no JavaScript,
 images, video, WebRTC, EME or Prime Video/Boosteroid playback. It runs alongside the

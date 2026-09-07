@@ -56,6 +56,7 @@ def desktop(test=False, package=False):
         javac = [shutil.which("javac")] if shutil.which("javac") else ["java", "com.sun.tools.javac.Main"]
         run(*javac, "-encoding", "UTF-8", "-cp", classes, "-d", tests, *sorted((ROOT / "tests").rglob("*.java")))
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.tests.EngineTests")
+        run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.DownloadTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.DesktopTests", BUILD)
     if package:

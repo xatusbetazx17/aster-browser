@@ -21,6 +21,7 @@ A custom interface and browser features can be developed within this standalone 
 | Deliverable | Current status |
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
+| Original-engine desktop file downloads | Implemented: direct HTTP/HTTPS Save As, progress/cancel/retry; two transfers and 2 GiB/file; no login/JavaScript downloads |
 | Managed Linux code installation and updates | Implemented, with file verification and rollback |
 | Word/PDF/text reading and read-aloud | Native reading panel; DOCX body/tables, PDF/DOC via local tools, English/Spanish speech |
 | Local companion | Offline commands/excerpts; optional local GGUF inference and Vosk voice input; not Siri parity |

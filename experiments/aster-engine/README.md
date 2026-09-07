@@ -25,9 +25,10 @@ or silently remove that prototype's reader and local companion.
 | Images | Alternative text only; image bytes are not fetched or decoded |
 | Desktop UI | Rectangular tabs with individual close buttons, hover/close animations, adjacent new-tab button, rounded controls, flat internal pages, up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Single page, navigation menu, persisted bookmarks, restored address after rotation |
-| Network | Platform TLS validation; no certificate bypass, cookies, credentials or subresource fetches |
+| Network | Platform TLS validation; no certificate bypass, cookies, embedded URL credentials or subresource fetches |
+| Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
-| Not implemented | Modern HTML recovery, full DOM/CSS, selectors/stylesheets, images, forms, JavaScript, storage/cookies, process sandbox, downloads, video, MSE/EME, WebRTC, the companion/reader feature set |
+| Not implemented | Modern HTML recovery, full DOM/CSS, selectors/stylesheets, images, forms, JavaScript, storage/cookies, process sandbox, Android downloads, video, MSE/EME, WebRTC, the companion/reader feature set |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
@@ -50,8 +51,9 @@ The Windows/Linux original-engine application now includes:
 - `aster:bookmarks` with saved links and explicit clearing; `aster:history` with
   the last 200 successful visits from this session; `aster:settings` with persisted
   reading size and reduced motion. Clearing bookmarks preserves settings.
-- `aster:downloads` is an honest unavailable-feature page: file downloading is
-  still unimplemented, not an empty working download manager.
+- `aster:downloads` now manages real desktop file transfers: paste a direct URL,
+  choose a destination, see progress, cancel or retry. Clear finished entries
+  without deleting saved files.
 - No permanent bottom status bar. Pending navigation, confirmation and errors
   appear below the address bar and clear on successful navigation.
 - Wheel scrolling over the closed reading-size dropdown scrolls the page instead
@@ -68,6 +70,42 @@ Internal-page navigation is handled only by the desktop shell's address bar and
 native controls. Webpage links and redirects cannot invoke internal settings.
 These changes target the original-engine **desktop** app; the Android app and
 separate Linux WebKit prototype retain their existing interfaces.
+
+## Download files on Windows/Linux
+
+Open **Menu → Downloads** or press **Ctrl+J**. Paste a direct HTTP/HTTPS file URL,
+choose **Save link…**, and select a new destination filename. Aster never
+silently overwrites an existing file or automatically opens/executes a download.
+
+Other entry points:
+
+- Opening a file link or an attachment shows a native **Save as…** page with its
+  suggested filename, host and advertised size. Saving begins after choosing a path.
+- Right-click a rendered website link and choose **Save link as…**.
+- **Ctrl+S** saves the current website response (HTML/text source, not a complete
+  offline archive with images or other page resources).
+
+The Downloads page reports progress and errors, supports cancellation/retry, and
+keeps up to 30 entries for the current session. Files remain at the paths you
+selected after the list is cleared or the browser closes. Closing Aster with active
+transfers asks whether to cancel them; normal shutdown lets workers clean up their
+partial files. Cancellation during a silent network read waits for the read timeout.
+A forced process kill can leave a `.aster-*.part` file beside the destination.
+
+Limits: two concurrent transfers, 2 GiB per file, five redirects, a 30 minute
+transfer deadline, normal platform TLS validation, no HTTPS-to-HTTP redirects and
+no automatic HTTP content decoding. Incomplete responses and unsafe redirect
+schemes fail; existing destination files remain protected, including collisions
+that appear while a transfer is running. Server filenames are sanitized before
+being offered in the save dialog. Transferred bytes are staged beside the chosen
+destination; completion uses an exclusive new filename. Filesystems without hard
+links use an exclusive-copy fallback during finalization.
+
+This is direct GET downloading: there are no login cookies, authentication headers,
+POST-generated files, JavaScript/blob URLs, pause/resume or cross-restart transfer
+recovery. The Save As offer and the transfer use separate requests, so a one-use
+URL may fail when fetched again. The Android preview currently reports file links
+as unsupported for saving; its download UI has not been implemented.
 
 ## Try the actual packages
 
@@ -165,8 +203,13 @@ integration tests exercise actual controls, a real local HTTP page, scaled link
 clicking, Back, background/final-tab closing, settings wheel protection and
 bookmark/settings persistence with isolated test profiles. They render home,
 settings, history, bookmarks and downloads pages, including a 720 px wide home.
-The native launch checks additionally exercise hover fade and animated close
-cleanup. Tests do not overwrite a user's normal preview profile. Its Android
+Separate real-HTTP download tests verify byte-for-byte binary saving above 1 MB,
+attachment detection, filename safety, redirects, cancellation, declared/streamed
+size limits, HTTP failures/truncation, concurrent-transfer limits, destination
+collisions and normal-shutdown cleanup. A desktop control test opens a file link,
+activates Save As with an isolated test destination, verifies the saved bytes and
+renders the completed Downloads page. The native launch checks additionally
+exercise hover fade and animated close cleanup. Tests do not overwrite a user's normal preview profile. Its Android
 job builds/verifies the APK and tests native Canvas rendering, a real HTTP page,
 a tapped link, Back, a bookmark-preserving same-key APK replacement and the actual
 device DRM query in an API 26 emulator. A green job is required before citing its

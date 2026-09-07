@@ -7,6 +7,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.*;
 import java.net.URI;
 import java.util.*;
 import java.util.concurrent.*;
@@ -29,6 +30,8 @@ public final class PreviewMain {
     private final JButton forward = button("→", "Forward", () -> move(1));
     private final JButton add = button("+", "New tab (Ctrl+T)", this::newTab);
     private boolean disposed;
+    final DownloadManager downloads = new DownloadManager(transfer -> SwingUtilities.invokeLater(this::updateDownloads));
+    java.util.function.Function<String, Path> destinationChooser = this::chooseDestination;
     boolean reducedMotion;
     double pageScale;
     private static final class Visit {
@@ -43,7 +46,12 @@ public final class PreviewMain {
         pageScale = (percent == 125 || percent == 150 || percent == 200 ? percent : 100) / 100.0;
         surface.setBackground(PAPER);
         if (window != null) {
-            window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+            window.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+            window.addWindowListener(new WindowAdapter() { public void windowClosing(WindowEvent e) {
+                if(downloads.activeCount() == 0 || JOptionPane.showConfirmDialog(surface,
+                        "Cancel active downloads and close Aster?", "Downloads in progress", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION)
+                    window.dispose();
+            } });
             window.addWindowListener(new WindowAdapter() { public void windowClosed(WindowEvent e) { dispose(); } });
             window.setContentPane(surface);
         }
@@ -85,6 +93,7 @@ public final class PreviewMain {
         header.add(status, BorderLayout.SOUTH);
         surface.add(header, BorderLayout.NORTH); surface.add(tabs, BorderLayout.CENTER);
         bind("control L", () -> { address.requestFocusInWindow(); address.selectAll(); });
+        bind("control S", this::saveCurrentPage); bind("control J", () -> load(current(), URI.create("aster:downloads"), -1));
         bind("control T", this::newTab); bind("control W", this::closeTab); bind("control D", this::saveBookmark);
         bind("alt LEFT", () -> move(-1)); bind("alt RIGHT", () -> move(1));
         bind("control TAB", () -> cycle(1)); bind("control shift TAB", () -> cycle(-1));
@@ -93,7 +102,7 @@ public final class PreviewMain {
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
     }
-    void dispose() { disposed = true; network.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop(); }
+    void dispose() { disposed = true; downloads.close(); network.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop(); }
     private static final class RoundButton extends JButton {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {
@@ -114,8 +123,9 @@ public final class PreviewMain {
     final class Tab extends JScrollPane {
         final PageCanvas canvas = new PageCanvas(); final java.util.List<URI> history = new ArrayList<>();
         final TabChip chip = new TabChip(this);
+        final java.util.List<DownloadRow> downloadRows = new ArrayList<>();
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
-        Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); }
+        Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); canvas.save = uri -> chooseDownload(uri, DownloadManager.filename(uri, null)); }
     }
     final class TabChip extends JPanel {
         final Tab tab; final JButton select; final JButton close;
@@ -183,7 +193,7 @@ public final class PreviewMain {
     void move(int delta) { Tab tab = current(); if(tab == null) return; int next = tab.index+delta; if(next>=0 && next<tab.history.size()) load(tab,tab.history.get(next),next); }
     void load(Tab tab, URI uri, int historyIndex) {
         if(tab == null || tab.closed) return; if(tab.pending != null) tab.pending.cancel(true);
-        int generation = ++tab.generation;
+        int generation = ++tab.generation; tab.downloadRows.clear();
         if(internal(uri) != null) {
             String page = internal(uri); Engine.Document doc = Engine.parse(uri,"<title>Aster · "+page+"</title><h1>"+page+"</h1>");
             tab.canvas.setDocument(doc); tab.setViewportView(internalPage(tab,page)); completed(tab,doc,historyIndex); return;
@@ -196,7 +206,66 @@ public final class PreviewMain {
                 visits.add(0,new Visit(document.uri,document.title)); if(visits.size()>200) visits.remove(visits.size()-1);
                 completed(tab,document,historyIndex); refreshInternal(current());
             });
-        } catch(Exception e) { SwingUtilities.invokeLater(() -> { if(!tab.closed && tab.generation==generation && !disposed) { tab.message="Could not open page: "+e.getMessage(); sync(); } }); } });
+        } catch(PageLoader.DownloadRequired file) { SwingUtilities.invokeLater(() -> {
+            if(!tab.closed && tab.generation == generation && !disposed) showDownloadOffer(tab, file, historyIndex);
+        }); } catch(Exception e) { SwingUtilities.invokeLater(() -> { if(!tab.closed && tab.generation==generation && !disposed) { tab.message="Could not open page: "+e.getMessage(); sync(); } }); } });
+    }
+    private void saveCurrentPage() {
+        Tab tab=current();
+        if(tab==null || tab.canvas.document==null || internal(tab.canvas.document.uri)!=null) { message("Open a website first, or paste a direct link in Downloads."); return; }
+        chooseDownload(tab.canvas.document.uri,DownloadManager.filename(tab.canvas.document.uri,null));
+    }
+    private Path chooseDestination(String filename) {
+        JFileChooser chooser=new JFileChooser(); chooser.setDialogTitle("Save file as"); chooser.setSelectedFile(new File(filename));
+        return chooser.showSaveDialog(surface)==JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile().toPath() : null;
+    }
+    void chooseDownload(URI uri,String filename) {
+        try {
+            PageLoader.validate(uri);
+            Path selected=destinationChooser.apply(filename); if(selected==null) return;
+            downloads.start(uri,selected);
+            load(current(),URI.create("aster:downloads"),-1); message("Download started. You can keep browsing.");
+        } catch(Exception e) { message("Could not start download: "+e.getMessage()); }
+    }
+    private void showDownloadOffer(Tab tab,PageLoader.DownloadRequired file,int historyIndex) {
+        String filename=DownloadManager.filename(file.uri,file.disposition);
+        Engine.Document doc=Engine.parse(file.uri,"<title>Download · "+PageLoader.escape(filename)+"</title>");
+        tab.canvas.setDocument(doc);
+        JPanel panel=body("Save this file",filename);
+        paragraph(panel,"From "+file.uri.getHost()+" · "+(file.length<0 ? "Size not provided" : DownloadManager.bytes(file.length)));
+        paragraph(panel,"Choose where to save this file. Aster will not open it automatically.");
+        panel.add(button("Save as…","Choose destination for "+filename,()->chooseDownload(file.uri,filename)));
+        panel.add(Box.createVerticalGlue()); tab.setViewportView(panel); completed(tab,doc,historyIndex);
+    }
+    private void updateDownloads() {
+        if(disposed) return;
+        for(int i=0;i<tabs.getTabCount();i++) for(DownloadRow row:((Tab)tabs.getComponentAt(i)).downloadRows) row.refresh();
+        if(downloads.activeCount()==0 && current()!=null && current().message.equals("Download started. You can keep browsing.")) message("");
+    }
+    private final class DownloadRow extends JPanel {
+        final DownloadManager.Transfer transfer;
+        final JLabel detail=new JLabel(); final JProgressBar progress=new JProgressBar(0,100);
+        final JButton action;
+        DownloadRow(DownloadManager.Transfer transfer) {
+            this.transfer=transfer; setOpaque(false); setLayout(new BoxLayout(this,BoxLayout.Y_AXIS)); setAlignmentX(Component.LEFT_ALIGNMENT);
+            setMaximumSize(new Dimension(Integer.MAX_VALUE,170));
+            JLabel name=new JLabel(plainLabel(transfer.target.getFileName().toString())); name.setFont(new Font(Font.SANS_SERIF,Font.BOLD,15)); name.setForeground(INK); add(name);
+            JTextArea path=new JTextArea(transfer.target.toString()); path.setEditable(false); path.setLineWrap(true); path.setWrapStyleWord(true); path.setOpaque(false); path.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,13)); path.setMaximumSize(new Dimension(Integer.MAX_VALUE,36)); path.setAlignmentX(Component.LEFT_ALIGNMENT); add(path);
+            detail.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,13)); detail.setAlignmentX(Component.LEFT_ALIGNMENT); add(detail); add(Box.createVerticalStrut(6));
+            progress.setAlignmentX(Component.LEFT_ALIGNMENT); progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,10)); add(progress); add(Box.createVerticalStrut(6));
+            action=button("Cancel","Cancel this download",()->{ if(transfer.finished()) chooseDownload(transfer.source,transfer.target.getFileName().toString()); else transfer.cancel(); }); action.setAlignmentX(Component.LEFT_ALIGNMENT); add(action); refresh();
+        }
+        void refresh() {
+            String state=transfer.state.toString().toLowerCase(Locale.ROOT);
+            String info=capitalize(state)+" · "+DownloadManager.bytes(transfer.received)+(transfer.total<0 ? "" : " / "+DownloadManager.bytes(transfer.total));
+            if(!transfer.error.isEmpty()) info += " · "+transfer.error;
+            detail.setText(plainLabel(info)); detail.setToolTipText(plainLabel(info));
+            progress.setIndeterminate(transfer.total<0 && !transfer.finished());
+            progress.setValue(transfer.state==DownloadManager.State.COMPLETE ? 100 : transfer.total>0 ? (int)Math.min(100,100.0*transfer.received/transfer.total) : 0);
+            action.setVisible(transfer.state!=DownloadManager.State.COMPLETE);
+            action.setEnabled(transfer.state!=DownloadManager.State.CANCELLING);
+            action.setText(transfer.finished() ? "Try again…" : "Cancel");
+        }
     }
     private void refreshInternal(Tab tab) {
         if(tab != null && tab.canvas.document != null) { String page=internal(tab.canvas.document.uri); if(page != null) tab.setViewportView(internalPage(tab,page)); }
@@ -262,7 +331,16 @@ public final class PreviewMain {
             for(Visit visit:new ArrayList<>(visits)) { JButton item=button(plainLabel(visit.title),visit.uri.toString(),()->load(tab,visit.uri,-1)); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
             panel.add(button("Clear session history","Clear session history",()->{ visits.clear(); tab.setViewportView(internalPage(tab,page)); }));
         } else if(page.equals("downloads")) {
-            paragraph(panel,"File downloads are not implemented in this engine preview. There is no download queue yet; unsupported file types produce an error instead.");
+            paragraph(panel,"Save files from direct HTTP or HTTPS links. Choose a destination for each file. Up to two transfers at once, 2 GiB per file.");
+            JPanel entry = new JPanel(new BorderLayout(8, 0)); entry.setOpaque(false); entry.setAlignmentX(Component.LEFT_ALIGNMENT); entry.setMaximumSize(new Dimension(Integer.MAX_VALUE,36));
+            JTextField url = new JTextField(); url.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,15)); url.getAccessibleContext().setAccessibleName("File download URL"); url.setToolTipText("Paste a direct file URL"); entry.add(url, BorderLayout.CENTER);
+            Runnable submit = () -> { try { URI uri=PageLoader.address(url.getText()); chooseDownload(uri,DownloadManager.filename(uri,null)); } catch(IllegalArgumentException e) { message(e.getMessage()); } };
+            url.addActionListener(e -> submit.run()); entry.add(button("Save link…","Choose where to save this link",submit),BorderLayout.EAST); panel.add(entry); panel.add(Box.createVerticalStrut(18));
+            java.util.List<DownloadManager.Transfer> items = downloads.snapshot();
+            if(items.isEmpty()) paragraph(panel,"No downloads in this session. Paste a file link above, or right-click a website link and choose Save link as.");
+            tab.downloadRows.clear();
+            for(DownloadManager.Transfer transfer : items) { DownloadRow row=new DownloadRow(transfer); tab.downloadRows.add(row); panel.add(row); panel.add(Box.createVerticalStrut(12)); }
+            panel.add(button("Clear finished list","Clear finished entries; keep downloaded files",()->{ downloads.clearFinished(); tab.setViewportView(internalPage(tab,page)); }));
         } else if(page.equals("settings")) {
             paragraph(panel,"Reading size changes website text. Settings are saved without changing your bookmarks.");
             JComboBox<String> zoom = new JComboBox<String>(new String[]{"100%","125%","150%","200%"}) {
@@ -279,12 +357,23 @@ public final class PreviewMain {
     static final class PageCanvas extends JPanel implements Scrollable {
         Engine.Document document; Engine.Layout layout; int layoutWidth = -1; double scale = 1;
         java.util.function.Consumer<URI> navigate = uri -> { };
+        java.util.function.Consumer<URI> save = uri -> { };
         PageCanvas() {
             setBackground(Color.WHITE); setFocusable(true);
             getAccessibleContext().setAccessibleName("Aster page");
-            addMouseListener(new MouseAdapter() { public void mouseClicked(MouseEvent e) {
-                if (SwingUtilities.isLeftMouseButton(e) && layout != null) { URI uri = layout.hit((float)(e.getX()/scale), (float)(e.getY()/scale)); if (uri != null) navigate.accept(uri); }
-            }});
+            addMouseListener(new MouseAdapter() {
+                public void mousePressed(MouseEvent e) { popup(e); }
+                public void mouseReleased(MouseEvent e) { popup(e); }
+                private void popup(MouseEvent e) {
+                    if(!e.isPopupTrigger() || layout==null) return;
+                    URI uri=layout.hit((float)(e.getX()/scale),(float)(e.getY()/scale)); if(uri==null)return;
+                    JPopupMenu menu=new JPopupMenu(); JMenuItem open=new JMenuItem("Open link"); open.addActionListener(event->navigate.accept(uri)); menu.add(open);
+                    JMenuItem download=new JMenuItem("Save link as…"); download.addActionListener(event->save.accept(uri)); menu.add(download); menu.show(PageCanvas.this,e.getX(),e.getY());
+                }
+                public void mouseClicked(MouseEvent e) {
+                    if (SwingUtilities.isLeftMouseButton(e) && layout != null) { URI uri = layout.hit((float)(e.getX()/scale), (float)(e.getY()/scale)); if (uri != null) navigate.accept(uri); }
+                }
+            });
             addMouseMotionListener(new MouseMotionAdapter() { public void mouseMoved(MouseEvent e) {
                 URI uri = layout == null ? null : layout.hit((float)(e.getX()/scale), (float)(e.getY()/scale));
                 setCursor(Cursor.getPredefinedCursor(uri == null ? Cursor.DEFAULT_CURSOR : Cursor.HAND_CURSOR));

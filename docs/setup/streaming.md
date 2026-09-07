@@ -7,6 +7,8 @@ Aster's own small HTML/text parser, layout and link renderer. It has Windows/Lin
 desktop and native Android hosts and actual package/test workflows. This is a
 separate engine foundation; it does not replace the WebKit prototype described below.
 
+The original-engine desktop now has [working direct file downloads](../../experiments/aster-engine/README.md#download-files-on-windowslinux). Saving bytes from an HTTP response does not require a JavaScript interpreter, a media decoder or a DRM module. It does not supply streaming playback.
+
 The preview has no JavaScript, video, WebRTC, MSE or EME. Its Android menu uses
 the platform's [MediaDrm API](https://developer.android.com/reference/android/media/MediaDrm)
 to report whether the device exposes Widevine. That is a real local API query,

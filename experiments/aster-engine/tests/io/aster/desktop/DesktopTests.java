@@ -11,6 +11,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.*;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 
@@ -38,12 +39,19 @@ public final class DesktopTests {
     public static void main(String[] args) throws Exception {
         Preferences prefs=Preferences.userRoot().node("io/aster/ui-test-"+UUID.randomUUID());
         HttpServer server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        byte[] downloadBytes="Aster download from a real link".getBytes(StandardCharsets.UTF_8);
+        server.createContext("/download",exchange->{
+            exchange.getResponseHeaders().set("Content-Type","application/octet-stream");
+            exchange.getResponseHeaders().set("Content-Disposition","attachment; filename=aster-test.txt");
+            exchange.sendResponseHeaders(200,downloadBytes.length);exchange.getResponseBody().write(downloadBytes);exchange.close();
+        });
         server.createContext("/",exchange->{
             byte[] bytes=(exchange.getRequestURI().getPath().equals("/b") ? "<title>Second page</title><p>Arrived</p>" : "<title>First page</title><h1>Navigation fixture</h1><a href='/b'>Continue to second page</a>").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type","text/html"); exchange.sendResponseHeaders(200,bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
         }); server.start();
         URI first=URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/a"), second=first.resolve("/b");
         String output=args.length>0 ? args[0] : ".";
+        Path downloadFolder=Files.createTempDirectory("aster-desktop-download-");
         try {
             edt(()->{
                 app=new PreviewMain(prefs);
@@ -81,11 +89,26 @@ public final class DesktopTests {
                 render(output+"/aster-ui-history.png",1100);
                 app.load(app.current(),URI.create("aster:bookmarks"),-1); render(output+"/aster-ui-bookmarks.png",1100);
                 app.load(app.current(),URI.create("aster:downloads"),-1); render(output+"/aster-ui-downloads.png",1100);
+            });
+            edt(()->app.load(app.current(),first.resolve("/download"),-1)); await(first.resolve("/download"));
+            edt(()->{
+                check(app.current().getViewport().getView()!=app.current().canvas,"File response did not show Save As offer");
+                JButton save=find(app.current().getViewport(),JButton.class); check(save!=null && save.getText().equals("Save as…"),"Save As button missing");
+                app.destinationChooser=name->{check(name.equals("aster-test.txt"),"Server filename lost in Save As");return downloadFolder.resolve(name);};
+                save.doClick(); check(app.downloads.snapshot().size()==1,"Save As did not start a transfer");
+            });
+            long deadline=System.nanoTime()+10_000_000_000L;
+            while(!app.downloads.snapshot().get(0).finished()){if(System.nanoTime()>deadline)throw new AssertionError("UI download timed out");Thread.sleep(20);}
+            check(Arrays.equals(downloadBytes,Files.readAllBytes(downloadFolder.resolve("aster-test.txt"))),"UI download saved wrong bytes");
+            edt(()->{
+                render(output+"/aster-ui-downloads-complete.png",1100);
                 app.dispose(); app=new PreviewMain(prefs);
                 check(app.pageScale==1.5 && app.reducedMotion && prefs.getInt("count",0)==1,"Settings/bookmarks did not survive restart");
                 check(app.visits.isEmpty(),"Session history persisted unexpectedly");
-                System.out.println("Desktop UI passed: synchronous welcome, background/final-tab close, wheel protection, settings persistence, real HTTP navigation, scaled link click, Back, history and bookmarks.");
+                System.out.println("Desktop UI passed: synchronous welcome, background/final-tab close, wheel protection, settings persistence, real HTTP navigation, scaled link click, Back, history, bookmarks and an actual Save As file transfer.");
             });
-        } finally { server.stop(0); edt(()->{ if(app!=null)app.dispose(); }); prefs.removeNode(); }
+        } finally { server.stop(0); edt(()->{ if(app!=null)app.dispose(); }); prefs.removeNode();
+            try(java.util.stream.Stream<Path> files=Files.walk(downloadFolder)){files.sorted(Comparator.reverseOrder()).forEach(p->{try{Files.deleteIfExists(p);}catch(Exception ignored){}});}
+        }
     }
 }

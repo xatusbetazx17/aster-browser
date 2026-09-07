@@ -41,6 +41,16 @@ public final class PageLoader {
         try { URI uri = base.resolve(href.trim()).normalize(); validate(uri); return uri; }
         catch (IllegalArgumentException e) { return null; }
     }
+    /** A response intended for explicit saving, not HTML rendering. No file is written here. */
+    public static final class DownloadRequired extends IOException {
+        public final URI uri;
+        public final String contentType, disposition;
+        public final long length;
+        DownloadRequired(URI uri, String type, String disposition, long length) {
+            super("This response is a file download. Save it with the desktop download manager.");
+            this.uri = uri; this.contentType = type; this.disposition = disposition; this.length = length;
+        }
+    }
     public static Engine.Document load(URI initial) throws IOException {
         if (HOME.equals(initial)) return Engine.parse(HOME, WELCOME);
         validate(initial);
@@ -63,7 +73,10 @@ public final class PageLoader {
                 if (code < 200 || code >= 300) throw new IOException("Website returned HTTP " + code + ".");
                 String type = connection.getContentType(); if (type == null) type = "";
                 String mime = type.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-                if (!mime.equals("text/html") && !mime.equals("text/plain")) throw new IOException("This preview opens HTML/text pages only (received " + mime + ").");
+                String disposition = connection.getHeaderField("Content-Disposition");
+                if ((!mime.equals("text/html") && !mime.equals("text/plain")) ||
+                        (disposition != null && disposition.split(";", 2)[0].trim().equalsIgnoreCase("attachment")))
+                    throw new DownloadRequired(uri, mime, disposition, connection.getContentLengthLong());
                 if (connection.getContentLengthLong() > Engine.MAX_SOURCE) throw new IOException("Page exceeds the preview's 1 MB download limit.");
                 byte[] data;
                 try (InputStream input = connection.getInputStream(); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
