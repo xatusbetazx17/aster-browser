@@ -75,7 +75,7 @@ def desktop(test=False, package=False):
             shutil.rmtree(image)
         run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.1.0",
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
-            "--add-modules", "java.desktop,java.prefs,jdk.crypto.ec,jdk.unsupported,java.xml,java.logging", "--dest", image.parent)
+            "--add-modules", "java.desktop,java.prefs,jdk.crypto.ec,jdk.unsupported,jdk.unsupported.desktop,java.xml,java.logging", "--dest", image.parent)
         shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")
         shutil.copyfile(ROOT / "README.md", image / "README.md")
         if sys.platform == "win32":

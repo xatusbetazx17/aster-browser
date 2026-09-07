@@ -55,7 +55,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
                 if(evidence!=null && !verified && seconds>.25 && media.getWidth()>0 && media.getHeight()>0) verifyFrame(seconds,media);
             });
             player.setOnEndOfMedia(()->{if(evidence!=null&&!verified)error("Clip ended without two decoded video frames");});
-        }catch(Exception e){error(e.toString());}
+        }catch(Exception | LinkageError e){error(e.toString());}
     }
     private void verifyFrame(double seconds,Media media) {
         try {

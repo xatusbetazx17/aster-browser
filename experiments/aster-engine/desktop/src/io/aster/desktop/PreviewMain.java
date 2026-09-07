@@ -127,6 +127,7 @@ public final class PreviewMain {
         final java.util.List<DownloadRow> downloadRows = new ArrayList<>();
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
         volatile ScriptSession script;
+        Future<?> scriptTask;
         javax.swing.Timer scriptTimer; boolean scriptBusy,controllerAllowed,scriptStarting;
         final ArrayDeque<String> inputCommands=new ArrayDeque<>();
         JToggleButton controllerButton; JButton runScripts; Engine.Document original;
@@ -314,7 +315,7 @@ public final class PreviewMain {
         int running=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).script!=null||((Tab)tabs.getComponentAt(i)).scriptStarting)running++;
         if(running>=4){message("Up to four script pages can run at once. Stop one first.");return;}
         final int generation=tab.generation;final Engine.Document original=tab.original;tab.scriptStarting=true;tab.runScripts.setEnabled(false);tab.message="Starting page scripts…";sync();
-        scripts.submit(()->{
+        tab.scriptTask=scripts.submit(()->{
             ScriptSession session=null;
             try {
                 session=new ScriptSession();final ScriptSession created=session;
@@ -322,13 +323,14 @@ public final class PreviewMain {
                 if(!session.alive())return;
                 Map<String,Object> snapshot=session.start(original); final ScriptSession started=session;
                 SwingUtilities.invokeLater(()->{if(disposed||tab.closed||tab.generation!=generation||tab.script!=started){started.close();return;}
-                    tab.scriptStarting=false;applySnapshot(tab,snapshot,false);tab.runScripts.setEnabled(true);tab.runScripts.setText("Stop JavaScript");tab.controllerButton.setEnabled(true);tab.canvas.requestFocusInWindow();
+                    tab.scriptTask=null;tab.scriptStarting=false;applySnapshot(tab,snapshot,false);tab.runScripts.setEnabled(true);tab.runScripts.setText("Stop JavaScript");tab.controllerButton.setEnabled(true);tab.canvas.requestFocusInWindow();
                     final long began=System.nanoTime(); tab.scriptTimer=new javax.swing.Timer(50,e->{if(current()==tab&&!tab.scriptBusy)scriptCommand(tab,"__aster.tick("+((System.nanoTime()-began)/1_000_000L)+")",false);});tab.scriptTimer.start();
                 });
             }catch(Exception e){if(session!=null)session.close();SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation){stopScripts(tab);tab.runScripts.setEnabled(true);tab.message="Could not run scripts: "+e.getMessage();sync();}});}
         });
     }
     private void stopScripts(Tab tab) {
+        if(tab.scriptTask!=null){tab.scriptTask.cancel(true);tab.scriptTask=null;}
         if(tab.scriptTimer!=null){tab.scriptTimer.stop();tab.scriptTimer=null;}
         ScriptSession session=tab.script;tab.script=null;if(session!=null)session.close();tab.scriptBusy=false;tab.controllerAllowed=false;tab.scriptStarting=false;tab.inputCommands.clear();
         if(tab.controllerButton!=null){tab.controllerButton.setSelected(false);tab.controllerButton.setEnabled(false);}
@@ -513,6 +515,8 @@ public final class PreviewMain {
         }); timer.setRepeats(false); timer.start();
     }
     private void nativeSmoke(String output) {
+        try { Class.forName("jdk.swing.interop.SwingInterOpUtils"); }
+        catch(ClassNotFoundException e){throw new IllegalStateException("Bundled runtime lacks jdk.unsupported.desktop",e);}
         later(1800, () -> {
             if (current().getViewport().getView().getWidth() < 600 || current().canvas.document == null)
                 throw new AssertionError("No native home page in desktop window");
@@ -541,6 +545,10 @@ public final class PreviewMain {
     }
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && args[0].equals("--render-test")) { renderTest(args.length > 1 ? args[1] : "aster-engine.png"); return; }
+        if(args.length>0&&args[0].equals("--media-smoke")){
+            if(args.length<2)throw new IllegalArgumentException("--media-smoke requires an output image path");
+            Thread.setDefaultUncaughtExceptionHandler((thread,error)->{mediaFailure(args[1],error.toString());error.printStackTrace();System.exit(1);});
+        }
         SwingUtilities.invokeLater(() -> {
             boolean mediaSmoke = args.length > 0 && args[0].equals("--media-smoke");
             boolean smoke = args.length > 0 && (args[0].equals("--smoke")||mediaSmoke);
@@ -548,10 +556,11 @@ public final class PreviewMain {
             app.window.setVisible(true);
             if(mediaSmoke){app.load(app.current(),URI.create("aster:playground"),-1);app.openMedia(app.current(),MediaPanel::sample);
                 if(app.current().media==null){app.window.dispose();System.exit(1);return;}
-                final javax.swing.Timer deadline=new javax.swing.Timer(25000,e->{System.err.println("Media smoke timed out");app.window.dispose();System.exit(1);});deadline.setRepeats(false);deadline.start();
-                app.current().media.evidence(Paths.get(args[1]),()->{deadline.stop();try{preferencesRemove(app.preferences);}catch(Exception ignored){}app.window.dispose();},error->{deadline.stop();System.err.println(error);app.window.dispose();System.exit(1);});
+                final javax.swing.Timer deadline=new javax.swing.Timer(25000,e->{mediaFailure(args[1],"Media smoke timed out");app.window.dispose();System.exit(1);});deadline.setRepeats(false);deadline.start();
+                app.current().media.evidence(Paths.get(args[1]),()->{deadline.stop();try{preferencesRemove(app.preferences);}catch(Exception ignored){}app.window.dispose();},error->{deadline.stop();mediaFailure(args[1],error);app.window.dispose();System.exit(1);});
             } else if (smoke) app.nativeSmoke(args[1]);
         });
     }
     private static void preferencesRemove(Preferences preferences) throws Exception { preferences.removeNode(); }
+    private static void mediaFailure(String output,String error){System.err.println(error);try{Files.write(Paths.get(output+".log"),error.getBytes(java.nio.charset.StandardCharsets.UTF_8));}catch(Exception ignored){}}
 }

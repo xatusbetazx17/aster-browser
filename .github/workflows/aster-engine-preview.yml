@@ -60,7 +60,10 @@ jobs:
           $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-media-frame.png'
           $asterVideo = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--media-smoke', $asterFrame) -PassThru
           if (-not $asterVideo.WaitForExit(40000)) { $asterVideo.Kill(); throw 'Aster video did not finish its playback check' }
-          if ($asterVideo.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) { throw 'Aster EXE did not decode the test video' }
+          if ($asterVideo.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) {
+            if (Test-Path "$asterFrame.log") { Get-Content -LiteralPath "$asterFrame.log" }
+            throw 'Aster EXE did not decode the test video'
+          }
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: aster-engine-${{ runner.os }}
