@@ -32,10 +32,12 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     private boolean ended,wantPlay=true,desiredMuted;private double desiredVolume=.5,initialTime;
     private volatile Path evidence; private volatile Runnable passed; private int firstColor,lastColor,samples; private double firstTime,lastTime; private boolean gotFirst,verified;
     private AnimationTimer monitor;
+    private final javax.swing.Timer startupTimeout=new javax.swing.Timer(30000,e->error("The media decoder did not become ready within 30 seconds. Check this stream and the audio output device."));
     private volatile java.util.function.Consumer<String> failed;
     MediaPanel(Source source,Runnable back) {this(source,back,null);}
     MediaPanel(Source source,Runnable back,java.util.function.BiConsumer<String,java.util.Map<String,Object>> listener) {
         this.listener=listener;
+        startupTimeout.setRepeats(false);startupTimeout.start();
         initialized=true;Platform.setImplicitExit(false);setLayout(new BorderLayout(8,8));setBackground(new Color(0xf7faf8));
         setBorder(BorderFactory.createEmptyBorder(18,24,24,24));setPreferredSize(new Dimension(800,530));
         status.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));add(status,BorderLayout.NORTH);video.setPreferredSize(new Dimension(640,360));add(video,BorderLayout.CENTER);
@@ -55,7 +57,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
             monitor=new AnimationTimer(){private long last;public void handle(long now){if(evidence!=null&&!verified&&now-last>100_000_000L&&media.getWidth()>0&&media.getHeight()>0){last=now;verifyFrame(player.getCurrentTime().toSeconds(),media);}}};
             if(evidence!=null)monitor.start();
             media.setOnError(()->error(String.valueOf(media.getError())));player.setOnError(()->error(String.valueOf(player.getError())));player.setOnHalted(()->error("Media decoder halted"));player.setVolume(desiredVolume);player.setMute(desiredMuted);
-            player.setOnReady(()->{SwingUtilities.invokeLater(()->{pause.setEnabled(true);restart.setEnabled(true);});report("loadedmetadata");report("canplay");if(initialTime>0)player.seek(Duration.seconds(initialTime));if(wantPlay)player.play();});
+            player.setOnReady(()->{SwingUtilities.invokeLater(()->{startupTimeout.stop();pause.setEnabled(true);restart.setEnabled(true);});report("loadedmetadata");report("canplay");if(initialTime>0)player.seek(Duration.seconds(initialTime));if(wantPlay)player.play();});
             player.setOnPlaying(()->{ended=false;report("play");report("playing");});player.setOnPaused(()->report("pause"));player.setOnStalled(()->report("waiting"));
             player.volumeProperty().addListener((o,a,b)->report("volumechange"));player.muteProperty().addListener((o,a,b)->report("volumechange"));
             player.statusProperty().addListener((o,a,b)->SwingUtilities.invokeLater(()->pause.setText(b==MediaPlayer.Status.PLAYING?"Pause":"Play")));
@@ -69,7 +71,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     }
     private void report(String event){
         if(listener==null||closed||player==null)return;java.util.Map<String,Object> state=new java.util.LinkedHashMap<>();
-        state.put("currentTime",player.getCurrentTime().toSeconds());state.put("duration",player.getTotalDuration().toSeconds());state.put("paused",player.getStatus()!=MediaPlayer.Status.PLAYING||ended);state.put("ended",ended);state.put("readyState",player.getStatus()==MediaPlayer.Status.UNKNOWN?0:3);
+        state.put("currentTime",player.getCurrentTime().toSeconds());state.put("duration",player.getTotalDuration().toSeconds());state.put("paused",player.getStatus()!=MediaPlayer.Status.PLAYING||ended);state.put("ended",ended);state.put("readyState",player.getStatus()==null||player.getStatus()==MediaPlayer.Status.UNKNOWN?0:3);
         state.put("volume",player.getVolume());state.put("muted",player.isMute());state.put("videoWidth",player.getMedia().getWidth());state.put("videoHeight",player.getMedia().getHeight());listener.accept(event,state);
     }
     void control(String command,Object value){Platform.runLater(()->{
@@ -97,9 +99,10 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     }
     void evidence(Path image,Runnable done,java.util.function.Consumer<String> failure) { passed=done;failed=failure;evidence=image;Platform.runLater(()->{if(monitor!=null&&!closed)monitor.start();}); }
     String diagnostic()throws Exception{CompletableFuture<String> result=new CompletableFuture<>();Platform.runLater(()->result.complete("player="+(player==null?"null":player.getStatus()+", time="+player.getCurrentTime()+", duration="+player.getTotalDuration()+", dimensions="+player.getMedia().getWidth()+"x"+player.getMedia().getHeight())+", frames="+samples+", blue="+gotFirst+", color="+Integer.toHexString(lastColor)+", verified="+verified));return result.get(2,TimeUnit.SECONDS);}
-    private void error(String message) { SwingUtilities.invokeLater(()->{if(closed)return;status.setText("Could not play this media: "+message);pause.setEnabled(false);if(listener!=null)listener.accept("error",java.util.Map.of("message",message));if(failed!=null)failed.accept(message);}); }
+    private void error(String message) { SwingUtilities.invokeLater(()->{startupTimeout.stop();if(closed)return;status.setText("Could not play this media: "+message);pause.setEnabled(false);restart.setEnabled(false);if(listener!=null)listener.accept("error",java.util.Map.of("message",message));if(failed!=null)failed.accept(message);close();}); }
+    boolean usable(){return !closed;}
     static MediaResource sample() throws Exception { Path path=Files.createTempFile("aster-sample-",".mp4");try{Files.write(path,Base64.getMimeDecoder().decode(PreviewMain.resourceText("/sample.mp4.b64")));return MediaResource.file(path);}catch(Exception e){delete(path);throw e;} }
     private static void delete(Path path) { if(path!=null)try{Files.deleteIfExists(path);}catch(Exception e){path.toFile().deleteOnExit();} }
-    public void close() { if(closed)return;closed=true;worker.shutdownNow();MediaResource loaded=resource;if(loaded!=null)loaded.close();Platform.runLater(()->{if(monitor!=null)monitor.stop();if(player!=null){player.dispose();player=null;}video.setScene(null);if(loaded!=null)loaded.close();resource=null;}); }
+    public void close() { if(closed)return;closed=true;startupTimeout.stop();worker.shutdownNow();MediaResource loaded=resource;if(loaded!=null)loaded.close();Platform.runLater(()->{if(monitor!=null)monitor.stop();if(player!=null){player.dispose();player=null;}video.setScene(null);if(loaded!=null)loaded.close();resource=null;}); }
     static void shutdown() { if(initialized)Platform.runLater(Platform::exit); }
 }

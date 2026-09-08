@@ -374,7 +374,7 @@ public final class PreviewMain {
                 URI uri=sample?null:PageLoader.link(tab.original.uri,src);
                 if(!sample&&(uri==null||!MediaRelay.supported(uri))){mediaReply(tab,id,"error",Map.of(),"Unsupported media source",request);continue;}
                 String canonical=sample?"aster-sample.mp4":uri.toString();
-                if(tab.mediaId==id&&tab.media!=null&&tab.mediaSource.equals(canonical)){tab.media.control("play",null);continue;}
+                if(tab.mediaId==id&&tab.media!=null&&tab.media.usable()&&tab.mediaSource.equals(canonical)){tab.media.control("play",null);continue;}
                 if(!gesture){mediaReply(tab,id,"denied",Map.of(),"Click this page's Play button to allow playback",request);continue;}
                 if(tab.media!=null){int old=tab.mediaId;tab.media.close();tab.mediaTime.set(null);if(old>0&&old!=id)mediaReply(tab,old,"emptied",Map.of("paused",true,"readyState",0),null,0);}
                 tab.mediaId=id;tab.mediaSource=canonical;ScriptSession owner=tab.script;final URI source=uri;
@@ -593,6 +593,7 @@ public final class PreviewMain {
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && args[0].equals("--render-test")) { renderTest(args.length > 1 ? args[1] : "aster-engine.png"); return; }
         if(args.length>0&&(args[0].equals("--media-smoke")||args[0].equals("--stream-smoke"))){
+            if(args[0].equals("--stream-smoke"))System.setProperty("jfxmedia.loglevel","DEBUG");
             if(args.length<2)throw new IllegalArgumentException("--media-smoke requires an output image path");
             Thread.setDefaultUncaughtExceptionHandler((thread,error)->{mediaFailure(args[1],error.toString());error.printStackTrace();System.exit(1);});
         }
