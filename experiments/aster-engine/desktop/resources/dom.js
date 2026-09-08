@@ -99,7 +99,9 @@
   class HTMLMediaElement extends Node {
     constructor(tag){super(tag);this._media={currentTime:0,duration:null,paused:true,ended:false,readyState:0,volume:1,muted:false,videoWidth:0,videoHeight:0};this._plays=new Map();this.error=null;}
     get currentSrc(){return this._media.src||'';}
-    get currentTime(){return this._media.currentTime;}set currentTime(v){v=Number(v);if(!Number.isFinite(v)||v<0)throw new TypeError('Invalid media time');this._media.currentTime=v;mediaCommand({kind:'seek',id:this._id,value:v});}
+    get currentTime(){return this._media.currentTime;}set currentTime(v){v=Number(v);if(!Number.isFinite(v)||v<0)throw new TypeError('Invalid media time');if(!this._canSeek())throw new DOMException('HLS seeking is not supported in this preview','NotSupportedError');this._media.currentTime=v;mediaCommand({kind:'seek',id:this._id,value:v});}
+    _canSeek(){return this._media.seekSupported!==false&&!/\.m3u8(?:[?#]|$)/i.test(this.src||this.querySelector('source')?.src||'');}
+    get seekable(){const length=this._canSeek()&&Number.isFinite(this.duration)&&this.duration>0?1:0,end=this.duration;const range=i=>{if(Number(i)!==0||!length)throw new DOMException('No seekable range at this index','IndexSizeError');};return Object.freeze({length,start(i){range(i);return 0;},end(i){range(i);return end;}});}
     get duration(){return this._media.duration??NaN;}get paused(){return this._media.paused;}get ended(){return this._media.ended;}get readyState(){return this._media.readyState;}
     get videoWidth(){return this._media.videoWidth;}get videoHeight(){return this._media.videoHeight;}
     get volume(){return this._media.volume;}set volume(v){v=Number(v);if(!Number.isFinite(v)||v<0||v>1)throw new RangeError('Volume must be between 0 and 1');this._media.volume=v;mediaCommand({kind:'volume',id:this._id,value:v});}

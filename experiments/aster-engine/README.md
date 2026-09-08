@@ -34,7 +34,7 @@ or silently remove that prototype's reader and local companion.
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
-| Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS, plus page play/pause/seek/volume/mute and playback events; JavaFX Media without JavaFX WebView |
+| Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS; page play/pause/volume/mute/events and file seeking. HLS seeking is disabled. JavaFX Media without JavaFX WebView |
 | Not implemented | Modern HTML recovery, full DOM/CSS, complex selectors/stylesheets, images, forms, storage/cookies, OS process sandbox, Android downloads/scripts/media, MSE/EME, WebRTC, the companion/reader feature set |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
@@ -158,8 +158,11 @@ It receives metadata, play/playing/pause/timeupdate/volumechange/ended/error eve
 dimensions and playback state. The play Promise settles from actual native playback.
 A new player/source requires a real page click; startup autoplay rejects with
 `NotAllowedError`. One page-controlled player is shown above the rendered page.
-Seeks requested while paused are queued and applied when playback resumes; this
-avoids a native HLS audio-pipeline deadlock. This is a subset of HTMLMediaElement, without tracks, source objects, encrypted
+HLS seeking is disabled because native MPEG-TS seeking stalled playback in Linux
+and Windows tests. HLS has an empty `seekable` range; assigning `currentTime`
+throws `NotSupportedError` without stopping playback. **Restart** reopens its
+decoder from the beginning. Ordinary file media supports seeking, including from
+pause. This is a subset of HTMLMediaElement, without tracks, source objects, encrypted
 media, playback-rate controls or the complete media event/ready-state algorithms.
 
 Aster's private, loopback-only media transport forwards progressive bytes and
@@ -352,7 +355,8 @@ close and tab-lifetime cancellation. Transport tests require progressive bytes
 before EOF, byte ranges and master/variant/segment HLS requests, and refuse
 encrypted or unsafe manifests. The native `--stream-smoke` gate additionally
 requires a rendered page click, refused autoplay, page-controlled HLS playback,
-actual blue/red frames, play Promises, pause/resume/seek/volume/mute and navigation
+actual blue/red frames, play Promises, pause/resume/volume/mute, HLS seek refusal
+and restart, a separate progressive MP4 seek with an observed clock jump, and navigation
 cleanup. Native CI must pass before treating these checks as platform evidence.
 Linux HLS checks decode a silent AAC track into a PulseAudio virtual sink. The
 Windows hosted runner reports no sound device, so its HLS fixture has video only;

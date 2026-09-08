@@ -79,7 +79,7 @@ final class MediaRelay implements AutoCloseable {
             for(int redirects=0;;redirects++){
                 if(redirects>5)throw new IOException("Too many media redirects");validate(uri);c=(HttpURLConnection)uri.toURL().openConnection();active.add(c);
                 c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");c.setRequestProperty("User-Agent","AsterEnginePreview/0.3");
-                if(range!=null&&!item.playlist)c.setRequestProperty("Range",range);if(exchange.getRequestMethod().equals("HEAD"))c.setRequestMethod("HEAD");
+                if(range!=null&&!item.playlist)c.setRequestProperty("Range",range);if(exchange.getRequestMethod().equals("HEAD")&&!item.playlist)c.setRequestMethod("HEAD");
                 int code=c.getResponseCode();if(!Arrays.asList(301,302,303,307,308).contains(code))break;
                 String location=c.getHeaderField("Location");if(location==null)throw new IOException("Media redirect lacks a destination");uri=resolve(uri,location);active.remove(c);c.disconnect();c=null;
             }
@@ -88,9 +88,9 @@ final class MediaRelay implements AutoCloseable {
             long length=c.getContentLengthLong(),limit=item.playlist?131072:64L*1024*1024;
             if(length>limit)throw new IOException("Media resource size limit");
             Headers headers=exchange.getResponseHeaders();headers.set("Cache-Control","no-store");headers.set("X-Content-Type-Options","nosniff");
-            if(exchange.getRequestMethod().equals("HEAD")){headers.set("Content-Type",item.playlist?"application/vnd.apple.mpegurl":Objects.toString(c.getContentType(),"application/octet-stream"));if(length>=0)headers.set("Content-Length",Long.toString(length));exchange.sendResponseHeaders(code,-1);sent=true;return;}
+            if(exchange.getRequestMethod().equals("HEAD")&&!item.playlist){headers.set("Content-Type",Objects.toString(c.getContentType(),"application/octet-stream"));if(length>=0)headers.set("Content-Length",Long.toString(length));exchange.sendResponseHeaders(code,-1);sent=true;return;}
             try(InputStream input=c.getInputStream()){
-                if(item.playlist){ByteArrayOutputStream out=new ByteArrayOutputStream();transfer(input,out,limit);byte[] body=rewrite(uri,new String(out.toByteArray(),StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);headers.set("Content-Type","application/vnd.apple.mpegurl");exchange.sendResponseHeaders(200,body.length);sent=true;exchange.getResponseBody().write(body);}
+                if(item.playlist){ByteArrayOutputStream out=new ByteArrayOutputStream();transfer(input,out,limit);byte[] body=rewrite(uri,new String(out.toByteArray(),StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);headers.set("Content-Type","application/vnd.apple.mpegurl");boolean head=exchange.getRequestMethod().equals("HEAD");headers.set("Content-Length",Integer.toString(body.length));exchange.sendResponseHeaders(200,head?-1:body.length);sent=true;if(!head)exchange.getResponseBody().write(body);}
                 else{
                     String type=c.getContentType();headers.set("Content-Type",type==null?"application/octet-stream":type);
                     if(code==206){String contentRange=c.getHeaderField("Content-Range");if(contentRange==null||!contentRange.matches("bytes [0-9]+-[0-9]+/(?:[0-9]+|\\*)"))throw new IOException("Invalid media range response");headers.set("Content-Range",contentRange);}

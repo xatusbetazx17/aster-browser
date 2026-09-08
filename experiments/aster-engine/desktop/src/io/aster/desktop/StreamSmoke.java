@@ -17,7 +17,10 @@ final class StreamSmoke {
         final HttpServer server;final AtomicInteger manifests=new AtomicInteger(),segments=new AtomicInteger();
         final Set<String> requested=ConcurrentHashMap.newKeySet();
         final boolean videoOnly=System.getProperty("os.name").startsWith("Windows");
-        Fixture()throws Exception{
+        final boolean hls;
+        Fixture()throws Exception{this(true);}
+        Fixture(boolean hls)throws Exception{
+            this.hls=hls;
             server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),8);
             server.createContext("/",e->{
                 String path=e.getRequestURI().getPath(),type;byte[] bytes;
@@ -32,11 +35,11 @@ final class StreamSmoke {
             });server.start();
         }
         URI uri(){return URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/");}
-        private String page(){return "<title>Aster streaming test</title><h1>Video streamed inside Aster</h1><video id='clip' src='/master.m3u8'></video><button id='play'>Stream</button><p id='result'>Waiting</p><script>"+
-            "var v=document.getElementById('clip'),autoplay='',httpReady=false,played=0,pauses=0,once=false,mediaError='';fetch('/api').then(r=>r.json()).then(j=>httpReady=j.ready);v.play().catch(e=>autoplay=e.name);"+
+        private String page(){return "<title>Aster streaming test</title><h1>Video streamed inside Aster</h1><video id='clip' src='"+(hls?"/master.m3u8":"/clip.mp4")+"'></video><button id='play'>Stream</button><p id='result'>Waiting</p><script>"+
+            "var v=document.getElementById('clip'),autoplay='',httpReady=false,played=0,pauses=0,once=false,mediaError='',seekResult='',observedTime=0,seekJump=false;fetch('/api').then(r=>r.json()).then(j=>httpReady=j.ready);v.play().catch(e=>autoplay=e.name);"+
             "document.getElementById('play').addEventListener('click',()=>v.play().then(()=>played++).catch(e=>mediaError=e.name));"+
-            "v.addEventListener('timeupdate',()=>{document.getElementById('result').textContent='Time: '+v.currentTime.toFixed(1);if(v.currentTime>.25&&!once){once=true;v.pause();}});"+
-            "v.addEventListener('pause',()=>{pauses++;v.currentTime=.6;v.volume=.3;v.muted=true;v.play().then(()=>played++).catch(e=>mediaError=e.name);});"+
+            "v.addEventListener('timeupdate',()=>{if(once&&v.currentTime-observedTime>.5)seekJump=true;observedTime=v.currentTime;document.getElementById('result').textContent='Time: '+v.currentTime.toFixed(1);if(v.currentTime>.25&&!once){once=true;v.pause();}});"+
+            "v.addEventListener('pause',()=>{pauses++;try{v.currentTime=1.2;seekResult='accepted';}catch(e){seekResult=e.name;}v.volume=.3;v.muted=true;v.play().then(()=>played++).catch(e=>mediaError=e.name);});"+
             "v.addEventListener('error',()=>mediaError=v.error.message);</script>";}
         public void close(){server.stop(0);}
     }
@@ -44,7 +47,8 @@ final class StreamSmoke {
     private static void waitFor(String stage,Check test)throws Exception{long end=System.nanoTime()+25_000_000_000L;while(System.nanoTime()<end){if(test.test())return;Thread.sleep(30);}throw new AssertionError("Streaming check timed out: "+stage);}
     private static void edt(Runnable action)throws Exception{SwingUtilities.invokeAndWait(action);}
     static void run(PreviewMain app,String output){new Thread(()->{
-        try(Fixture fixture=new Fixture()){
+        try{for(boolean hls:new boolean[]{true,false})try(Fixture fixture=new Fixture(hls)){
+            Path frame=Paths.get(hls?output:output.replaceFirst("\\.png$","")+"-file.png");
             edt(()->app.load(app.current(),fixture.uri(),-1));
             waitFor("HTTP page",()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().original!=null&&app.current().original.uri.equals(fixture.uri()));return loaded[0];});
             edt(()->app.current().runScripts.doClick());
@@ -57,13 +61,17 @@ final class StreamSmoke {
             });
             waitFor("page click opened player",()->{boolean[] ready={false};edt(()->ready[0]=app.current().media!=null);return ready[0];});
             AtomicBoolean decoded=new AtomicBoolean();AtomicReference<String> error=new AtomicReference<>();
-            edt(()->app.current().media.evidence(Paths.get(output),()->decoded.set(true),error::set));
-            waitFor("decoded blue/red HLS frames",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
-            waitFor("page play/pause/seek/volume/mute state",()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''")));
-            if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
+            edt(()->app.current().media.evidence(frame,()->decoded.set(true),error::set));
+            waitFor("decoded blue/red "+(hls?"HLS":"MP4")+" frames",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
+            waitFor("page media controls",()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''&&"+(hls?"seekResult==='NotSupportedError'&&v.seekable.length===0":"seekResult==='accepted'&&seekJump&&v.seekable.length===1"))));
+            if(hls){
+                if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
+                decoded.set(false);edt(()->{app.current().media.evidence(Paths.get(output.replaceFirst("\\.png$","")+"-restart.png"),()->decoded.set(true),error::set);app.current().media.control("restart",null);});
+                waitFor("HLS restart decoded both colors again",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
+            }
             edt(()->app.load(app.current(),URI.create("aster:home"),-1));if(js.alive())throw new AssertionError("Navigation left the streaming page alive");
-            System.out.println("Native streaming passed: real HTTP JSON, autoplay refused, rendered Play click, HLS master/variant/two segments, actual blue/red H.264 frames, page play Promise, pause/resume/seek/volume/mute/events and navigation cleanup. Audio track="+!fixture.videoOnly+". Windows CI has no sound device; physical audio, bitrate switching, WebRTC and DRM not tested.");
-            edt(app::finishSmoke);
+            System.out.println("Native streaming passed: "+(hls?"HLS master/variant/two segments, seek refusal and decoder restart":"progressive MP4 and an observed seek jump")+", real HTTP JSON, autoplay refused, rendered Play click, actual blue/red H.264 frames, page play Promise, pause/resume/volume/mute/events and navigation cleanup. Audio track="+(hls&&!fixture.videoOnly)+". Physical audio, bitrate switching, WebRTC and DRM not tested.");
+        }edt(app::finishSmoke);
         }catch(Throwable e){e.printStackTrace();String detail=e.toString();try{ScriptSession js=app.current().script;if(js!=null&&js.alive())detail+="\nPage: "+js.eval("JSON.stringify({autoplay,httpReady,played,pauses,once,mediaError,state:v._media})");MediaPanel media=app.current().media;if(media!=null)detail+="\nNative: "+media.diagnostic();}catch(Exception diagnostic){detail+="\nDiagnostic: "+diagnostic;}System.err.println(detail);try{Files.writeString(Paths.get(output+".log"),detail);}catch(Exception ignored){}try{edt(app::finishSmoke);}catch(Exception ignored){}System.exit(1);}
     },"aster-native-stream-check").start();}
 }

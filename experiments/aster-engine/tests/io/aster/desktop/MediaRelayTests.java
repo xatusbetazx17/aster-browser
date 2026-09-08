@@ -13,6 +13,7 @@ public final class MediaRelayTests {
     public static void main(String[] args)throws Exception{
         try(StreamSmoke.Fixture source=new StreamSmoke.Fixture();MediaRelay relay=new MediaRelay(source.uri(),source.uri().resolve("master.m3u8"))){
             String master=new String(get(relay.uri()),StandardCharsets.UTF_8);check(!master.contains(source.uri().toString()),"HLS exposed unvalidated upstream URLs to decoder");
+            HttpURLConnection head=(HttpURLConnection)relay.uri().toURL().openConnection();head.setRequestMethod("HEAD");try{check(head.getResponseCode()==200&&head.getContentLengthLong()==master.getBytes(StandardCharsets.UTF_8).length,"HLS HEAD length must describe the rewritten GET response");}finally{head.disconnect();}
             URI variant=URI.create(Arrays.stream(master.split("\n")).filter(s->s.startsWith("http")).findFirst().orElseThrow());
             String playlist=new String(get(variant),StandardCharsets.UTF_8);for(String line:playlist.split("\n"))if(line.startsWith("http")){byte[] segment=get(URI.create(line));check(segment.length>1000&&(segment[0]&255)==0x47,"HLS relay changed MPEG-TS segment bytes");}
             check(source.requested.size()==2,"HLS did not fetch both independent segments");

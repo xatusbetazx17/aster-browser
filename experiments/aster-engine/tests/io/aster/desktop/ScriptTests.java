@@ -39,6 +39,8 @@ public final class ScriptTests {
                 js.controller(true);check(js.eval("navigator.getGamepads()") instanceof List,"Controller provider did not return gamepad snapshots");js.controller(false);
                 check(Boolean.TRUE.equals(js.eval("navigator.getGamepads().length===0")),"Controller permission was not revoked");
                 check(Boolean.TRUE.equals(js.eval("(2n**64n).toString()==='18446744073709551616' && [1,2,3].map(x=>x*2).join(',')==='2,4,6'")),"Actual ECMAScript runtime failed");
+                check(Boolean.TRUE.equals(js.eval("(()=>{const v=document.createElement('video');v.src='stream.m3u8?token=fixture';try{v.currentTime=1;return false;}catch(e){return e.name==='NotSupportedError'&&v.seekable.length===0&&v.currentTime===0;}})()")),"HLS seek must refuse without changing playback state");
+                check(((List<?>)js.snapshot().get("media")).isEmpty(),"Rejected HLS seek reached the decoder");
             }
             for(String path:new String[]{"/cross","/wrong"}) try{ResourceLoader.script(base,path);throw new AssertionError("Unsafe script response accepted");}catch(java.io.IOException expected){}
             Path downloaded=ResourceLoader.media(base,base.resolve("/clip.mp4"));try{check(Arrays.equals(clip,Files.readAllBytes(downloaded)),"Media fetch changed bytes");}finally{Files.delete(downloaded);}
