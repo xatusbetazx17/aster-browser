@@ -353,7 +353,11 @@ encrypted or unsafe manifests. The native `--stream-smoke` gate additionally
 requires a rendered page click, refused autoplay, page-controlled HLS playback,
 actual blue/red frames, play Promises, pause/resume/seek/volume/mute and navigation
 cleanup. Native CI must pass before treating these checks as platform evidence.
-The HLS fixtures are authored blue/red video with silent AAC, encoded from the
+Linux HLS checks decode a silent AAC track into a PulseAudio virtual sink. The
+Windows hosted runner reports no sound device, so its HLS fixture has video only;
+Windows audio decoding/output is not verified. Both platforms retain actual
+decoded-frame, page-control and transport assertions.
+The HLS fixtures are authored blue/red video with optional silent AAC, encoded from the
 bundled sample using ffmpeg/libx264, 12 fps, baseline profile, 24-frame keyframes,
 two-second MPEG-TS segments and low/high CRF 32/18. No commercial media is included.
 

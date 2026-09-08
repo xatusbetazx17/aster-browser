@@ -593,7 +593,6 @@ public final class PreviewMain {
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && args[0].equals("--render-test")) { renderTest(args.length > 1 ? args[1] : "aster-engine.png"); return; }
         if(args.length>0&&(args[0].equals("--media-smoke")||args[0].equals("--stream-smoke"))){
-            if(args[0].equals("--stream-smoke"))System.setProperty("jfxmedia.loglevel","DEBUG");
             if(args.length<2)throw new IllegalArgumentException("--media-smoke requires an output image path");
             Thread.setDefaultUncaughtExceptionHandler((thread,error)->{mediaFailure(args[1],error.toString());error.printStackTrace();System.exit(1);});
         }

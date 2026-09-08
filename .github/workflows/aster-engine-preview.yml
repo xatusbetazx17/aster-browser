@@ -81,10 +81,6 @@ jobs:
         shell: pwsh
         run: |
           Get-Service AudioEndpointBuilder, Audiosrv | Format-Table Name, Status, StartType
-          Set-Service AudioEndpointBuilder -StartupType Manual
-          Set-Service Audiosrv -StartupType Manual
-          Start-Service AudioEndpointBuilder
-          Start-Service Audiosrv
           Get-CimInstance Win32_SoundDevice | Select-Object Name, Status
           $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-stream-frame.png'
           $asterDecoder = "$asterFrame.decoder.log"

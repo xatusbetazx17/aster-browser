@@ -19,6 +19,8 @@ limited desktop foundation, not full website compatibility.
 
 WebRTC, MSE/DASH and EME are still absent. HLS master playlists and ordinary
 H.264/AAC MPEG-TS segments are implemented; native CI tests an on-demand stream.
+Linux CI uses a virtual audio sink; Windows CI tests video-only HLS because its
+hosted runner has no sound device. Windows audio output remains unverified.
 Bitrate switching under changing bandwidth and long-running live playback remain
 unverified. There are no placeholder
 `RTCPeerConnection`, `MediaSource` or key-system APIs reporting false support.

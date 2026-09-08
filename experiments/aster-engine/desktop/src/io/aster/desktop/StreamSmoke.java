@@ -16,6 +16,7 @@ final class StreamSmoke {
     static final class Fixture implements AutoCloseable {
         final HttpServer server;final AtomicInteger manifests=new AtomicInteger(),segments=new AtomicInteger();
         final Set<String> requested=ConcurrentHashMap.newKeySet();
+        final boolean videoOnly=System.getProperty("os.name").startsWith("Windows");
         Fixture()throws Exception{
             server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),8);
             server.createContext("/",e->{
@@ -24,7 +25,7 @@ final class StreamSmoke {
                 else if(path.equals("/api")){type="application/json";bytes="{\"ready\":true}".getBytes(StandardCharsets.UTF_8);}
                 else if(path.equals("/master.m3u8")){type="application/vnd.apple.mpegurl";manifests.incrementAndGet();bytes=("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000,RESOLUTION=160x90\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=128000,RESOLUTION=160x90\nhigh.m3u8\n").getBytes(StandardCharsets.UTF_8);}
                 else if(path.equals("/low.m3u8")||path.equals("/high.m3u8")){String q=path.substring(1,path.indexOf('.'));type="application/vnd.apple.mpegurl";manifests.incrementAndGet();bytes=("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:2.0,\n"+q+"0.ts\n#EXTINF:2.0,\n"+q+"1.ts\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);}
-                else if(path.matches("/(low|high)[01]\\.ts")){type="video/mp2t";segments.incrementAndGet();requested.add(path);bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/hls-"+path.substring(1)+".b64"));}
+                else if(path.matches("/(low|high)[01]\\.ts")){type="video/mp2t";segments.incrementAndGet();requested.add(path);String resource=videoOnly?"video"+path.charAt(path.indexOf('.')-1)+".ts":path.substring(1);bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/hls-"+resource+".b64"));}
                 else if(path.equals("/clip.mp4")){type="video/mp4";bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/sample.mp4.b64"));}
                 else{e.sendResponseHeaders(404,-1);e.close();return;}
                 e.getResponseHeaders().set("Content-Type",type);if(e.getRequestMethod().equals("HEAD")){e.getResponseHeaders().set("Content-Length",Integer.toString(bytes.length));e.sendResponseHeaders(200,-1);}else{e.sendResponseHeaders(200,bytes.length);e.getResponseBody().write(bytes);}e.close();
@@ -61,7 +62,7 @@ final class StreamSmoke {
             waitFor("page play/pause/seek/volume/mute state",()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''")));
             if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
             edt(()->app.load(app.current(),URI.create("aster:home"),-1));if(js.alive())throw new AssertionError("Navigation left the streaming page alive");
-            System.out.println("Native streaming passed: real HTTP JSON, autoplay refused, rendered Play click, HLS master/variant/two segments, actual blue/red H.264 frames, page play Promise, pause/resume/seek/volume/mute/events and navigation cleanup. Bitrate switching, WebRTC and DRM not tested.");
+            System.out.println("Native streaming passed: real HTTP JSON, autoplay refused, rendered Play click, HLS master/variant/two segments, actual blue/red H.264 frames, page play Promise, pause/resume/seek/volume/mute/events and navigation cleanup. Audio track="+!fixture.videoOnly+". Windows CI has no sound device; physical audio, bitrate switching, WebRTC and DRM not tested.");
             edt(app::finishSmoke);
         }catch(Throwable e){e.printStackTrace();String detail=e.toString();try{ScriptSession js=app.current().script;if(js!=null&&js.alive())detail+="\nPage: "+js.eval("JSON.stringify({autoplay,httpReady,played,pauses,once,mediaError,state:v._media})");MediaPanel media=app.current().media;if(media!=null)detail+="\nNative: "+media.diagnostic();}catch(Exception diagnostic){detail+="\nDiagnostic: "+diagnostic;}System.err.println(detail);try{Files.writeString(Paths.get(output+".log"),detail);}catch(Exception ignored){}try{edt(app::finishSmoke);}catch(Exception ignored){}System.exit(1);}
     },"aster-native-stream-check").start();}
