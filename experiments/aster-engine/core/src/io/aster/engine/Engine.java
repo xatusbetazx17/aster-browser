@@ -25,6 +25,8 @@ public final class Engine {
         public final URI link;
         public final int action;
         public final boolean newline;
+        public URI image;
+        public float imageWidth = 240, imageHeight = 160;
         Run(String text, Style style, URI link, int action, boolean newline) {
             this.text = text; this.style = style; this.link = link; this.action = action; this.newline = newline;
         }
@@ -36,11 +38,12 @@ public final class Engine {
         public final String source;
         public final boolean scriptsBlocked;
         public final List<URI> media;
+        public String css = "";
         Document(URI uri, String title, List<Run> runs, String source, boolean scriptsBlocked, List<URI> media) {
             this.uri = uri; this.title = title; this.runs = Collections.unmodifiableList(runs);
             this.source = source; this.scriptsBlocked = scriptsBlocked; this.media = Collections.unmodifiableList(media);
         }
-        public Document blockScripts() { return new Document(uri,title,runs,source,true,media); }
+        public Document blockScripts() { Document d=new Document(uri,title,runs,source,true,media);d.css=css;return d; }
         public String text() {
             StringBuilder out = new StringBuilder();
             for (Run run : runs) out.append(run.newline ? "\n" : run.text);
@@ -49,16 +52,20 @@ public final class Engine {
     }
     private static final class Frame {
         final String tag; final Style style; final URI link; final int action;
+        boolean hidden;
         Frame(String tag, Style style, URI link, int action) { this.tag = tag; this.style = style; this.link = link; this.action = action; }
     }
 
     public static Document parse(URI uri, String source) {
-        return parse(uri,source,false);
+        return parse(uri,source,false,"");
     }
+    public static Document parse(URI uri,String source,String css) { return parse(uri,source,false,css); }
     /** Only snapshots from a running script session attach click targets. */
-    public static Document parseInteractive(URI uri, String source) { return parse(uri,source,true); }
-    private static Document parse(URI uri, String source, boolean interactive) {
+    public static Document parseInteractive(URI uri, String source) { return parse(uri,source,true,""); }
+    public static Document parseInteractive(URI uri,String source,String css) { return parse(uri,source,true,css); }
+    private static Document parse(URI uri, String source, boolean interactive,String css) {
         if (source.length() > MAX_SOURCE) throw new IllegalArgumentException("Page exceeds the preview's 1 MB text limit.");
+        PageStyles styles = new PageStyles(source,css);
         List<Run> runs = new ArrayList<>();
         List<Frame> stack = new ArrayList<>();
         stack.add(new Frame("root", DEFAULT, null, -1));
@@ -110,8 +117,10 @@ public final class Engine {
                 pos = closeEnd < 0 ? source.length() : closeEnd + 1; continue;
             }
             Map<String, String> attrs = attributes(inside.substring(nameEnd));
-            if (BLOCKS.contains(tag) || tag.equals("br")) newline(runs, current);
-            Style style = style(tag, attrs.get("style"), current.style);
+            String declarations=styles.declarations(tag,attrs);
+            boolean hidden=current.hidden||attrs.containsKey("hidden")||PageStyles.property(declarations,"display").equals("none")||tag.equals("input")&&attrs.getOrDefault("type","").equalsIgnoreCase("hidden");
+            if (!hidden&&(BLOCKS.contains(tag) || tag.equals("br")||PageStyles.property(declarations,"display").equals("block"))) newline(runs, current);
+            Style style = style(tag, declarations, current.style);
             URI link = current.link;
             if (tag.equals("a")) link = PageLoader.link(uri, attrs.get("href"));
             if (link != null) style = new Style(style.size, 0xff2469ad, style.bold, style.italic, style.pre);
@@ -119,20 +128,25 @@ public final class Engine {
             if(interactive) try { action=Integer.parseInt(attrs.getOrDefault("data-aster-action","-1")); } catch(NumberFormatException ignored) { action=-1; }
             if(tag.equals("button")) style=new Style(style.size,0xff176b59,true,style.italic,style.pre);
             Frame frame = new Frame(tag, style, link, action);
+            frame.hidden=hidden;
             if((tag.equals("video") || tag.equals("audio") || tag.equals("source")) && media.size()<4) {
                 URI resource=PageLoader.link(uri,attrs.get("src")); if(resource!=null && !media.contains(resource))media.add(resource);
             }
             if (tag.equals("li")) add(runs, "• ", frame);
-            if (tag.equals("img")) add(runs, "[Image: " + attrs.getOrDefault("alt", "no description") + "]", frame);
+            if (tag.equals("img")&&!hidden) {
+                add(runs, "[Image: " + attrs.getOrDefault("alt", "no description") + "]", frame);
+                Run image=runs.get(runs.size()-1);image.image=PageLoader.link(uri,attrs.get("src"));
+                image.imageWidth=dimension(attrs.get("width"),240);image.imageHeight=dimension(attrs.get("height"),160);
+            }
             if (!VOID.contains(tag) && !inside.endsWith("/")) {
                 if (stack.size() >= MAX_DEPTH) throw new IllegalArgumentException("Page nesting exceeds the preview limit.");
                 stack.add(frame);
             }
         }
         if (title.length() > 160) title = title.substring(0, 160);
-        return new Document(uri, title.isEmpty() ? "Untitled page" : title, runs, source, false, media);
+        Document document=new Document(uri, title.isEmpty() ? "Untitled page" : title, runs, source, false, media);document.css=css;return document;
     }
-    private static int rawClose(String lower, String tag, int from) {
+    static int rawClose(String lower, String tag, int from) {
         int p = from;
         while ((p = lower.indexOf("</" + tag, p)) >= 0) {
             int next = p + tag.length() + 2;
@@ -141,7 +155,7 @@ public final class Engine {
         }
         return -1;
     }
-    private static int tagEnd(String text, int from) {
+    static int tagEnd(String text, int from) {
         char quote = 0;
         for (int i = from; i < text.length(); i++) {
             char c = text.charAt(i);
@@ -151,7 +165,7 @@ public final class Engine {
         }
         return -1;
     }
-    private static Map<String, String> attributes(String text) {
+    static Map<String, String> attributes(String text) {
         Map<String, String> attrs = new HashMap<>();
         int i = 0;
         while (i < text.length()) {
@@ -185,20 +199,25 @@ public final class Engine {
             String k = parts[0].trim().toLowerCase(Locale.ROOT), v = parts[1].trim().toLowerCase(Locale.ROOT);
             try {
                 if (k.equals("color") && v.matches("#[0-9a-f]{6}")) color = 0xff000000 | Integer.parseInt(v.substring(1), 16);
+                if (k.equals("color") && v.matches("#[0-9a-f]{3}")) color=0xff000000|Integer.parseInt(""+v.charAt(1)+v.charAt(1)+v.charAt(2)+v.charAt(2)+v.charAt(3)+v.charAt(3),16);
+                if(k.equals("color")){String[] names={"black","white","red","green","blue","gray"};int[] colors={0x000000,0xffffff,0xff0000,0x008000,0x0000ff,0x808080};for(int c=0;c<names.length;c++)if(v.equals(names[c]))color=0xff000000|colors[c];}
                 if (k.equals("font-size") && v.matches("[0-9]{1,2}px")) size = Math.max(10, Math.min(48, Float.parseFloat(v.substring(0, v.length() - 2))));
                 if (k.equals("font-weight") && (v.equals("bold") || v.equals("700"))) bold = true;
                 if (k.equals("font-style") && v.equals("italic")) italic = true;
+                if(k.equals("font-weight")&&(v.equals("normal")||v.equals("400")))bold=false;
+                if(k.equals("font-style")&&v.equals("normal"))italic=false;
             } catch (NumberFormatException ignored) { /* Unsupported declarations retain inherited values. */ }
         }
         return new Style(size, color, bold, italic, parent.pre || tag.equals("pre"));
     }
     private static void add(List<Run> runs, String text, Frame frame) {
-        if (text.isEmpty()) return;
+        if (text.isEmpty()||frame.hidden) return;
         if (!frame.style.pre) text = text.replaceAll("[\\t\\n\\r\\f ]+", " ");
         if (runs.size() >= MAX_RUNS) throw new IllegalArgumentException("Page has too many text runs.");
         runs.add(new Run(text, frame.style, frame.link, frame.action, false));
     }
     private static void newline(List<Run> runs, Frame frame) {
+        if(frame.hidden)return;
         if (!runs.isEmpty() && !runs.get(runs.size() - 1).newline) {
             if (runs.size() >= MAX_RUNS) throw new IllegalArgumentException("Page has too many text runs.");
             runs.add(new Run("", frame.style, null, -1, true));
@@ -229,10 +248,12 @@ public final class Engine {
         return out.toString();
     }
     public interface Measure { float width(String text, Style style); }
+    private static float dimension(String raw,float fallback){try{float value=Float.parseFloat(raw);return Float.isFinite(value)?Math.max(16,Math.min(1600,value)):fallback;}catch(Exception e){return fallback;}}
     public static final class Draw {
         public final String text; public final Style style; public final URI link;
         public final int action;
-        public final float x, y, width, height;
+        public final float x, y, width; public float height;
+        public URI image;
         Draw(String text, Style style, URI link, int action, float x, float y, float width) {
             this.text = text; this.style = style; this.link = link; this.x = x; this.y = y;
             this.width = width; this.height = style.size * 1.45f;
@@ -241,18 +262,26 @@ public final class Engine {
     }
     public static final class Layout {
         public final List<Draw> items; public final float height;
-        Layout(List<Draw> items, float height) { this.items = Collections.unmodifiableList(items); this.height = height; }
+        private final float maximumHeight;
+        Layout(List<Draw> items, float height) { this.items = Collections.unmodifiableList(items); this.height = height;float max=0;for(Draw d:items)max=Math.max(max,d.height);maximumHeight=max; }
+        public int firstVisible(float y){int lo=0,hi=items.size();float top=y-maximumHeight;while(lo<hi){int mid=(lo+hi)>>>1;if(items.get(mid).y<top)lo=mid+1;else hi=mid;}return lo;}
         public URI hit(float x, float y) {
-            for (Draw d : items) if (d.link != null && x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height) return d.link;
+            for(int i=firstVisible(y);i<items.size();i++){Draw d=items.get(i);if(d.y>y)break;if (d.link != null && x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height) return d.link;}
             return null;
         }
-        public int actionAt(float x,float y) { for(Draw d:items) if(d.action>0 && x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height)return d.action; return -1; }
+        public int actionAt(float x,float y) { for(int i=firstVisible(y);i<items.size();i++){Draw d=items.get(i);if(d.y>y)break;if(d.action>0 && x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height)return d.action;} return -1; }
     }
     public static Layout layout(Document doc, float viewportWidth, Measure measure) {
         float right = Math.max(100, Math.min(10_000, viewportWidth)) - 24, x = 24, y = 24, line = 25;
         List<Draw> items = new ArrayList<>();
         boolean pendingSpace = false;
         for (Run run : doc.runs) {
+            if(run.image!=null){
+                if(x>24){y+=line;x=24;}
+                float width=Math.min(run.imageWidth,right-24),height=run.imageHeight*width/run.imageWidth;
+                Draw draw=new Draw(run.text,run.style,run.link,run.action,x,y,width);draw.image=run.image;draw.height=height;items.add(draw);
+                y+=height+12;line=25;pendingSpace=false;continue;
+            }
             if (run.newline) { y += line + 10; x = 24; line = 25; pendingSpace = false; continue; }
             String text = run.text; int at = 0;
             while (at < text.length()) {

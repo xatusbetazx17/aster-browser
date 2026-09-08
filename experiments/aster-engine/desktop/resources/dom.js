@@ -5,6 +5,8 @@
   const nativePads = globalThis.__asterReadGamepads;
   delete globalThis.__asterReadGamepads;
   const records = new Map(), timers = new Map(), errors = [];
+  let revision=0, renderedRevision=-1, deliveredRevision=-1, cachedHTML='';
+  const changed=()=>{revision++;};
   const mediaCommands=[];let mediaRequest=1;
   function mediaCommand(value){if(mediaCommands.length>=32)throw new RangeError('Too many media commands');mediaCommands.push(value);}
   const voids = new Set('area base br col embed hr img input link meta param source track wbr'.split(' '));
@@ -50,13 +52,14 @@
       this._id = nextId++; records.set(this._id,this); this.nodeName = tag === '#text' ? tag : tag.toUpperCase();
       this.nodeType = tag === '#text' ? 3 : 1; this.tagName = this.nodeName;
       this.childNodes = []; this.parentNode = null; this._text = text; this._attrs = Object.create(null);
-      this.style = Object.create(null);
+      this.style = new Proxy(Object.create(null), {set(target,key,value){if(target[key]!==value){target[key]=value;changed();}return true;},deleteProperty(target,key){if(Object.hasOwn(target,key)){delete target[key];changed();}return true;}});
     }
     get children() { return this.childNodes.filter(x => x.nodeType === 1); }
     get firstChild() { return this.childNodes[0] || null; }
     get textContent() { return this.nodeType === 3 ? this._text : this.childNodes.map(x => x.textContent).join(''); }
     set textContent(text) {
       text = String(text); if(text.length > 1000000) throw new RangeError('DOM text limit reached');
+      if(this.textContent===text)return;changed();
       if(this.nodeType === 3) { this._text = text; return; }
       if(this.childNodes.length===1 && this.childNodes[0].nodeType===3) { this.childNodes[0]._text=text; return; }
       for(const child of this.childNodes) child.parentNode = null;
@@ -73,17 +76,17 @@
       name = String(name).toLowerCase(); value = String(value);
       if(!/^[a-z][a-z0-9:_-]*$/.test(name) || value.length > 8192) throw new TypeError('Unsupported attribute');
       if(Object.keys(this._attrs).length >= 64 && !this.hasAttribute(name)) throw new RangeError('Attribute limit reached');
-      this._attrs[name] = value;
+      if(this._attrs[name]!==value){this._attrs[name] = value;changed();}
     }
-    removeAttribute(name) { delete this._attrs[String(name).toLowerCase()]; }
+    removeAttribute(name) { name=String(name).toLowerCase();if(Object.hasOwn(this._attrs,name)){delete this._attrs[name];changed();} }
     appendChild(child) {
       if(!(child instanceof Node)) throw new TypeError('Expected a Node');
       let depth=0; for(let p=this;p;p=p.parentNode) { if(p===child) throw new TypeError('DOM cycle'); if(++depth>64) throw new RangeError('DOM depth limit'); }
       if(child.parentNode) child.parentNode.removeChild(child);
-      child.parentNode=this; this.childNodes.push(child); return child;
+      child.parentNode=this; this.childNodes.push(child); changed();return child;
     }
     append(...nodes) { for(const n of nodes) this.appendChild(n instanceof Node ? n : new Node('#text',String(n))); }
-    removeChild(child) { const i=this.childNodes.indexOf(child); if(i<0) throw new TypeError('Not a child'); this.childNodes.splice(i,1); child.parentNode=null; return child; }
+    removeChild(child) { const i=this.childNodes.indexOf(child); if(i<0) throw new TypeError('Not a child'); this.childNodes.splice(i,1); child.parentNode=null;changed(); return child; }
     remove() { if(this.parentNode) this.parentNode.removeChild(this); }
     querySelectorAll(selector) {
       selector=String(selector); let test;
@@ -153,7 +156,7 @@
     querySelector:s=>root.querySelector(s),querySelectorAll:s=>root.querySelectorAll(s),getElementById:id=>{
       for(const n of records.values()) if(n.nodeType===1 && n.id===String(id)) { let p=n; while(p.parentNode) p=p.parentNode; if(p===root || p===document) return n; } return null;
     }});
-  Object.defineProperties(document,{body:{get:()=>body},head:{get:()=>root.querySelector('head')},title:{get:()=>title,set:v=>{title=String(v).slice(0,160);}}});
+  Object.defineProperties(document,{body:{get:()=>body},head:{get:()=>root.querySelector('head')},title:{get:()=>title,set:v=>{v=String(v).slice(0,160);if(v!==title){title=v;changed();}}}});
   root.parentNode=document;
   Object.assign(globalThis,{window:globalThis,self:globalThis,document,EventTarget:Target,Event:AsterEvent,KeyboardEvent:AsterEvent,MouseEvent:AsterEvent,Node,HTMLElement:Node,HTMLMediaElement,HTMLVideoElement:HTMLMediaElement,HTMLAudioElement:HTMLMediaElement,
     addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),dispatchEvent:win.dispatchEvent.bind(win),
@@ -166,21 +169,24 @@
   }
   Object.assign(globalThis,{setTimeout:(fn,ms,...args)=>schedule(fn,ms,false,args),setInterval:(fn,ms,...args)=>schedule(fn,ms,true,args),
     clearTimeout:id=>timers.delete(id),clearInterval:id=>timers.delete(id),requestAnimationFrame:fn=>schedule(()=>fn(clock),16,false,[]),cancelAnimationFrame:id=>timers.delete(id)});
-  function snapshot() {
+  function snapshot(force=true) {
+    const result={html:null,title,errors:[...errors],navigation,media:mediaCommands.splice(0),revision};navigation=null;
+    if(!force&&deliveredRevision===revision)return result;
+    if(renderedRevision===revision){result.html=cachedHTML;deliveredRevision=revision;return result;}
     let count=0, size=0;
     const render=(n,depth)=>{
       if(++count>10000 || depth>64) throw new RangeError('DOM render limit');
       if(n.nodeType===3) { size+=n._text.length; if(size>1000000) throw new RangeError('DOM text limit'); return escape(n._text); }
       const tag=n.tagName.toLowerCase(); if(hidden.has(tag)) return '';
       if(!/^[a-z][a-z0-9-]*$/.test(tag)) return '';
-      let attrs=''; for(const k of ['href','src','alt','id','class','style','type','controls']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
+      let attrs=''; for(const k of ['href','src','alt','id','class','style','type','controls','width','height','hidden']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
       const css=Object.entries(n.style).map(([k,v])=>k.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+':'+String(v)).join(';');
       if(css) attrs=attrs.replace(/ style="[^"]*"/,'')+' style="'+escape(css)+'"';
       attrs+=' data-aster-action="'+n._id+'"';
       return '<'+tag+attrs+'>'+n.childNodes.map(c=>render(c,depth+1)).join('')+(voids.has(tag)?'':'</'+tag+'>');
     };
     const html='<title>'+escape(title)+'</title>'+render(root,0); if(html.length>1000000) throw new RangeError('Rendered page limit');
-    const result={html,title,errors:[...errors],navigation,media:mediaCommands.splice(0)}; navigation=null; return result;
+    cachedHTML=html;renderedRevision=revision;deliveredRevision=revision;result.html=html;return result;
   }
   globalThis.__aster = Object.freeze({
     init(source,url) { parse(source); root.parentNode=document; document.URL=url; document.documentURI=url; document.readyState='loading';
@@ -198,7 +204,7 @@
       else if(event==='pause'||event==='emptied'){for(const p of n._plays.values())p.reject(new DOMException('Playback was interrupted','AbortError'));n._plays.clear();}
       if(event!=='denied')n.dispatchEvent(new AsterEvent(event));
     },
-    tick(time) { clock=Math.max(clock,Number(time)||0); for(const [id,t] of [...timers]) if(t.when<=clock && timers.has(id)) { if(t.repeat) t.when=clock+t.ms; else timers.delete(id); try { t.fn(...t.args); } catch(e) { warn(e); } } return snapshot(); },
+    tick(time) { clock=Math.max(clock,Number(time)||0); for(const [id,t] of [...timers]) if(t.when<=clock && timers.has(id)) { if(t.repeat) t.when=clock+t.ms; else timers.delete(id); try { t.fn(...t.args); } catch(e) { warn(e); } } return snapshot(false); },
     click(id) { const n=records.get(id); if(!n) return snapshot(); const e=new AsterEvent('click',{bubbles:true}); n.dispatchEvent(e);
       if(!e.defaultPrevented) for(let p=n;p && p instanceof Node;p=p.parentNode) if(p.tagName==='A' && p.href) { navigation=p.href; break; } return snapshot(); },
     key(type,key,code,repeat) { document.dispatchEvent(new AsterEvent(type,{key,code,repeat,bubbles:true})); win.dispatchEvent(new AsterEvent(type,{key,code,repeat})); return snapshot(); }

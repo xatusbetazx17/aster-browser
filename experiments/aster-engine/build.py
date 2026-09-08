@@ -71,11 +71,12 @@ def desktop(test=False, package=False):
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.MediaRelayTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.DesktopTests", BUILD)
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.ReadingTests", BUILD)
     if package:
         image = BUILD / "native/AsterEnginePreview"
         if image.exists():
             shutil.rmtree(image)
-        run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.1.0",
+        run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.2.0",
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
             "--add-modules", "java.desktop,java.prefs,java.net.http,jdk.httpserver,jdk.crypto.ec,jdk.unsupported,jdk.unsupported.desktop,java.xml,java.logging", "--dest", image.parent)
         shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")

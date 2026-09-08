@@ -24,6 +24,9 @@ public final class PreviewMain {
     final JTextField address = new JTextField();
     final JLabel status = new JLabel();
     private final Preferences preferences;
+    private final ExecutorService assets=Executors.newFixedThreadPool(2,r->{Thread t=new Thread(r,"aster-images");t.setDaemon(true);return t;});
+    private final ArrayDeque<URI> closedTabs=new ArrayDeque<>();
+    private boolean restoring;
     final java.util.List<Visit> visits = new ArrayList<>();
     private final ExecutorService network = Executors.newFixedThreadPool(2, r -> { Thread t = new Thread(r, "aster-navigation"); t.setDaemon(true); return t; });
     private final JButton back = button("←", "Back", () -> move(-1));
@@ -78,10 +81,11 @@ public final class PreviewMain {
         JPanel navigation = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)); navigation.setOpaque(false);
         navigation.add(back); navigation.add(forward);
         navigation.add(button("⌂", "Home", () -> load(current(), PageLoader.HOME, -1)));
+        navigation.add(button("↻", "Reload (Ctrl+R)",this::reload));
         toolbar.add(navigation, BorderLayout.WEST);
         address.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
         address.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0xc6d6cd)), BorderFactory.createEmptyBorder(5, 10, 5, 10)));
-        address.setToolTipText("Website address or aster:settings"); address.getAccessibleContext().setAccessibleName("Website address");
+        address.setToolTipText("Search with DuckDuckGo or enter a website address"); address.getAccessibleContext().setAccessibleName("Search or website address");
         address.addActionListener(e -> { try { load(current(), target(address.getText()), -1); } catch (IllegalArgumentException ex) { message(ex.getMessage()); } });
         toolbar.add(address, BorderLayout.CENTER);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0)); actions.setOpaque(false);
@@ -95,6 +99,8 @@ public final class PreviewMain {
         surface.add(header, BorderLayout.NORTH); surface.add(tabs, BorderLayout.CENTER);
         bind("control L", () -> { address.requestFocusInWindow(); address.selectAll(); });
         bind("control S", this::saveCurrentPage); bind("control J", () -> load(current(), URI.create("aster:downloads"), -1));
+        bind("control R",this::reload);bind("F5",this::reload);bind("control F",this::findPage);
+        bind("control shift T",this::reopenTab);bind("control O",this::openDocument);
         bind("control T", this::newTab); bind("control W", this::closeTab); bind("control D", this::saveBookmark);
         bind("alt LEFT", () -> move(-1)); bind("alt RIGHT", () -> move(1));
         bind("control TAB", () -> cycle(1)); bind("control shift TAB", () -> cycle(-1));
@@ -103,7 +109,7 @@ public final class PreviewMain {
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
     }
-    void dispose() { disposed = true; downloads.close(); network.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
+    void dispose() { saveSession();disposed = true;ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
     private static final class RoundButton extends JButton {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {
@@ -126,6 +132,7 @@ public final class PreviewMain {
         final TabChip chip = new TabChip(this);
         final java.util.List<DownloadRow> downloadRows = new ArrayList<>();
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
+        Future<?> imageTask;int restoreScroll=-1;
         volatile ScriptSession script;
         Future<?> scriptTask;
         javax.swing.Timer scriptTimer; boolean scriptBusy,controllerAllowed,scriptStarting;
@@ -189,6 +196,8 @@ public final class PreviewMain {
     private void closeTab() { closeTab(current()); }
     private void closeTab(Tab tab) {
         if(tab == null || tab.closed) return;
+        if(tab.canvas.document!=null){closedTabs.addFirst(tab.canvas.document.uri);while(closedTabs.size()>20)closedTabs.removeLast();}
+        if(tab.imageTask!=null)tab.imageTask.cancel(true);
         stopScripts(tab);
         if(tab.media!=null){tab.media.close();tab.media=null;}
         tab.closed = true; tab.generation++; tab.chip.closing = true; tab.chip.select.setEnabled(false); tab.chip.close.setEnabled(false);
@@ -204,10 +213,14 @@ public final class PreviewMain {
         for(String page : new String[]{"settings","bookmarks","history","downloads","playground"}) if(s.equals("aster:"+page)) return page;
         return null;
     }
-    static URI target(String input) { URI uri; try { uri = URI.create(input.trim()); } catch(IllegalArgumentException e) { return PageLoader.address(input); } return internal(uri) != null ? uri : PageLoader.address(input); }
+    static URI target(String input) { URI uri; try { uri = URI.create(input.trim()); } catch(IllegalArgumentException e) { return PageLoader.searchOrAddress(input); } return internal(uri) != null ? uri : PageLoader.searchOrAddress(input); }
     void move(int delta) { Tab tab = current(); if(tab == null) return; int next = tab.index+delta; if(next>=0 && next<tab.history.size()) load(tab,tab.history.get(next),next); }
     void load(Tab tab, URI uri, int historyIndex) {
+        load(tab,uri,historyIndex,null);
+    }
+    void load(Tab tab,URI uri,int historyIndex,byte[] formBody) {
         if(tab == null || tab.closed) return; if(tab.pending != null) tab.pending.cancel(true);
+        if(tab.imageTask!=null)tab.imageTask.cancel(true);tab.canvas.images.clear();
         stopScripts(tab); tab.setColumnHeaderView(null); tab.original=null;
         if(tab.media!=null){tab.media.close();tab.media=null;}
         int generation = ++tab.generation; tab.downloadRows.clear();
@@ -218,12 +231,13 @@ public final class PreviewMain {
         }
         tab.message = "Opening " + uri + "…"; sync();
         tab.pending = network.submit(() -> { try {
-            Engine.Document document = PageLoader.load(uri);
+            Engine.Document document = PageLoader.load(uri,formBody);
             SwingUtilities.invokeLater(() -> { if(tab.closed || tab.generation != generation || disposed) return;
                 tab.canvas.setDocument(document); tab.setViewportView(tab.canvas);
                 visits.add(0,new Visit(document.uri,document.title)); if(visits.size()>200) visits.remove(visits.size()-1);
                 completed(tab,document,historyIndex); refreshInternal(current());
                 scriptControls(tab,document);
+                loadImages(tab,document,generation);
             });
         } catch(PageLoader.DownloadRequired file) { SwingUtilities.invokeLater(() -> {
             if(!tab.closed && tab.generation == generation && !disposed) showDownloadOffer(tab, file, historyIndex);
@@ -233,6 +247,56 @@ public final class PreviewMain {
         Tab tab=current();
         if(tab==null || tab.canvas.document==null || internal(tab.canvas.document.uri)!=null) { message("Open a website first, or paste a direct link in Downloads."); return; }
         chooseDownload(tab.canvas.document.uri,DownloadManager.filename(tab.canvas.document.uri,null));
+    }
+    private void reload(){Tab t=current();if(t!=null&&t.canvas.document!=null)load(t,t.canvas.document.uri,t.index);}
+    void reopenTab(){if(closedTabs.isEmpty()||tabs.getTabCount()>=20)return;URI uri=closedTabs.removeFirst();newTab();load(current(),uri,-1);}
+    private void findPage(){Tab tab=current();if(tab==null||tab.canvas.document==null)return;
+        String term=JOptionPane.showInputDialog(surface,"Find text on this page",tab.canvas.findText);if(term==null)return;
+        tab.canvas.findText=term;tab.canvas.repaint();tab.canvas.ensureLayout();
+        if(tab.canvas.layout!=null)for(Engine.Draw d:tab.canvas.layout.items)if(d.text.toLowerCase(Locale.ROOT).contains(term.toLowerCase(Locale.ROOT))){tab.canvas.scrollRectToVisible(new Rectangle(0,(int)(d.y*tab.canvas.scale),20,(int)(d.height*tab.canvas.scale)));return;}
+        message("No matching word on this page. Use Read page to search across words.");
+    }
+    private void readPage(){Tab t=current();if(t!=null&&t.canvas.document!=null)ReadingTools.open(surface,t.canvas.document.title,t.canvas.document.text(),t.canvas.document.uri.toString(),preferences);}
+    private void openDocument(){JFileChooser chooser=new JFileChooser();chooser.setDialogTitle("Open a Word, text or Markdown document");
+        if(chooser.showOpenDialog(surface)!=JFileChooser.APPROVE_OPTION)return;File file=chooser.getSelectedFile();
+        network.submit(()->{try(java.io.InputStream in=Files.newInputStream(file.toPath())){String text=DocumentReader.read(file.getName(),in);
+            SwingUtilities.invokeLater(()->{if(!disposed)ReadingTools.open(surface,file.getName(),text,file.toURI().toString(),preferences);});
+        }catch(Exception e){SwingUtilities.invokeLater(()->message("Could not read document: "+e.getMessage()));}});
+    }
+    void saveSession(){if(restoring)return;int count=0,selected=0;
+        for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);Engine.Document d=t.canvas.document;
+            if(d==null||internal(d.uri)!=null)continue;String url=d.uri.toString();if(url.length()>7000)continue;
+            preferences.put("session-url-"+count,url);preferences.putInt("session-scroll-"+count,t.getVerticalScrollBar().getValue());
+            if(t==current())selected=count;count++;}
+        if(count>0){preferences.putInt("session-count",count);preferences.putInt("session-selected",selected);}
+    }
+    void restoreSession(){int count=Math.max(0,Math.min(20,preferences.getInt("session-count",0)));
+        java.util.List<URI> urls=new ArrayList<>();java.util.List<Integer> offsets=new ArrayList<>();
+        for(int i=0;i<count;i++)try{urls.add(PageLoader.address(preferences.get("session-url-"+i,"")));offsets.add(Math.max(0,preferences.getInt("session-scroll-"+i,0)));}catch(IllegalArgumentException ignored){}
+        if(urls.isEmpty()){message("No saved browsing session yet.");return;}
+        boolean reuse=tabs.getTabCount()==1&&current().canvas.document!=null&&"home".equals(internal(current().canvas.document.uri));
+        if(tabs.getTabCount()+urls.size()-(reuse?1:0)>20){message("Close some tabs before restoring this session.");return;}
+        int selected=preferences.getInt("session-selected",0);restoring=true;
+        try{for(int i=0;i<urls.size();i++){if(i!=0||tabs.getTabCount()!=1||!"home".equals(internal(current().canvas.document.uri)))newTab();Tab t=current();t.restoreScroll=offsets.get(i);load(t,urls.get(i),-1);}
+            int base=tabs.getTabCount()-urls.size();tabs.setSelectedIndex(Math.max(0,Math.min(tabs.getTabCount()-1,base+selected)));}
+        finally{restoring=false;}
+    }
+    private void loadImages(Tab tab,Engine.Document document,int generation){
+        if(document.scriptsBlocked)return;
+        java.util.List<URI> sources=new ArrayList<>();for(Engine.Run r:document.runs)if(r.image!=null&&PageAssets.sameOrigin(document.uri,r.image)&&!sources.contains(r.image)&&sources.size()<8)sources.add(r.image);
+        tab.imageTask=assets.submit(()->{long bytes=0;for(URI source:sources){if(Thread.currentThread().isInterrupted())return;
+            try{BufferedImage decoded=decodeImage(PageAssets.fetch(document.uri,source,true));long size=(long)decoded.getWidth()*decoded.getHeight()*4;
+                if(bytes+size>8*1024*1024)break;bytes+=size;
+                SwingUtilities.invokeLater(()->{if(!disposed&&!tab.closed&&tab.generation==generation){tab.canvas.images.put(source,decoded);tab.canvas.repaint();}});
+            }catch(Exception ignored){/* Keep the image description when a bounded decode fails. */}
+        }});
+    }
+    static BufferedImage decodeImage(byte[] bytes)throws java.io.IOException{
+        try(javax.imageio.stream.ImageInputStream input=new javax.imageio.stream.MemoryCacheImageInputStream(new java.io.ByteArrayInputStream(bytes))){
+            Iterator<javax.imageio.ImageReader> readers=ImageIO.getImageReaders(input);if(!readers.hasNext())throw new java.io.IOException("Unknown image format");
+            javax.imageio.ImageReader reader=readers.next();try{reader.setInput(input,true,true);int w=reader.getWidth(0),h=reader.getHeight(0);
+                if(w<1||h<1||(long)w*h>2_000_000)throw new java.io.IOException("Image dimensions exceed limit");return reader.read(0);
+            }finally{reader.dispose();}}
     }
     private Path chooseDestination(String filename) {
         JFileChooser chooser=new JFileChooser(); chooser.setDialogTitle("Save file as"); chooser.setSelectedFile(new File(filename));
@@ -304,6 +368,14 @@ public final class PreviewMain {
         tab.controllerButton.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));tab.controllerButton.setBackground(PAPER);tab.controllerButton.setFocusPainted(false);
         if("playground".equals(internal(document.uri)))bar.add(button("Play sample","Play Aster's bundled sample video",()->openMedia(tab,MediaPanel::sample)));
         else if(!document.media.isEmpty())bar.add(button("Play media","Play this page's first direct media source",()->openMedia(tab,()->MediaResource.remote(document.uri,document.media.get(0)))));
+        bar.add(button("Read page","Read, select text, make notes or read aloud",this::readPage));
+        java.util.List<PageForms.Form> forms=PageForms.parse(document.uri,document.source);
+        if(!forms.isEmpty())bar.add(button("Forms","Fill this page's native forms",()->{
+            stopScripts(tab);PageForms.Form form=forms.get(0);
+            if(forms.size()>1){Object choice=JOptionPane.showInputDialog(surface,"Choose a form","Page forms",JOptionPane.PLAIN_MESSAGE,null,forms.stream().map(f->f.title).toArray(),forms.get(0).title);if(choice==null)return;for(PageForms.Form f:forms)if(f.title.equals(choice)){form=f;break;}}
+            java.util.List<String> values=ReadingTools.form(surface,form);if(values==null)return;
+            try{PageForms.Submission request=form.submit(values);load(tab,request.uri,-1,request.body);}catch(Exception e){message(e.getMessage());}
+        }));
         JLabel label=new JLabel(document.scriptsBlocked ? "Scripts disabled: CSP support pending" : "Experimental · permission resets on navigation");label.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,12));bar.add(label);
         tab.setColumnHeaderView(bar);
     }
@@ -354,8 +426,9 @@ public final class PreviewMain {
     }
     private void applySnapshot(Tab tab,Map<String,Object> snapshot,boolean click) {
         try {
-            String html=String.valueOf(snapshot.get("html")); if(html.length()>Engine.MAX_SOURCE)throw new IllegalArgumentException("Page snapshot exceeds limit");
-            if(!html.equals(tab.canvas.document.source))tab.canvas.setDocument(Engine.parseInteractive(tab.original.uri,html));
+            Object update=snapshot.get("html");if(update!=null&&!(update instanceof String))throw new IllegalArgumentException("Invalid page snapshot");
+            if(update instanceof String){String html=(String)update;if(html.length()>Engine.MAX_SOURCE)throw new IllegalArgumentException("Page snapshot exceeds limit");
+                if(!html.equals(tab.canvas.document.source))tab.canvas.setDocument(Engine.parseInteractive(tab.original.uri,html,tab.original.css));}
             tab.chip.title(tab.canvas.document.title);tabs.setTitleAt(tabs.indexOfComponent(tab),plainLabel(tab.canvas.document.title));
             Object errors=snapshot.get("errors");tab.message=errors instanceof java.util.List&&!((java.util.List<?>)errors).isEmpty()?"Page script: "+((java.util.List<?>)errors).get(0):"";
             applyMediaCommands(tab,snapshot.get("media"),click);
@@ -408,6 +481,8 @@ public final class PreviewMain {
         else { while(tab.history.size()>tab.index+1) tab.history.remove(tab.history.size()-1); tab.history.add(document.uri); if(tab.history.size()>100) tab.history.remove(0); tab.index=tab.history.size()-1; }
         tabs.setTitleAt(tabs.indexOfComponent(tab),plainLabel(document.title)); tab.chip.title(document.title); tab.message=""; sync();
         tab.getVerticalScrollBar().setValue(0);
+        if(tab.restoreScroll>=0){int offset=tab.restoreScroll;tab.restoreScroll=-1;SwingUtilities.invokeLater(()->{tab.canvas.ensureLayout();tab.canvas.revalidate();SwingUtilities.invokeLater(()->tab.getVerticalScrollBar().setValue(offset));});}
+        if(!restoring)saveSession();
     }
     private void message(String text) { if(current()!=null) current().message=text; status.setText(plainLabel(text)); status.setVisible(!text.isEmpty()); }
     private void sync() {
@@ -427,6 +502,8 @@ public final class PreviewMain {
     private void menu() {
         JPopupMenu popup=new JPopupMenu(); JPanel grid=new JPanel(new GridLayout(0,2,8,8)); grid.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
         for(String page:new String[]{"bookmarks","history","downloads","settings","playground"}) { JButton b=button(capitalize(page),"Open "+page,()->{ popup.setVisible(false); load(current(),URI.create("aster:"+page),-1); }); b.setPreferredSize(new Dimension(112,76)); grid.add(b); }
+        String[] labels={"Read page","Open document","Restore session","Reopen tab"};Runnable[] commands={this::readPage,this::openDocument,this::restoreSession,this::reopenTab};
+        for(int i=0;i<labels.length;i++){Runnable command=commands[i];JButton b=button(labels[i],labels[i],()->{popup.setVisible(false);command.run();});b.setPreferredSize(new Dimension(112,76));grid.add(b);}
         popup.add(grid); popup.show(surface,Math.max(0,surface.getWidth()-260),88);
     }
     private static String capitalize(String s) { return s.substring(0,1).toUpperCase(Locale.ROOT)+s.substring(1); }
@@ -450,6 +527,8 @@ public final class PreviewMain {
             JPanel links=new JPanel(new GridLayout(2,3,8,8)); links.setOpaque(false); links.setAlignmentX(Component.LEFT_ALIGNMENT); links.setMaximumSize(new Dimension(Integer.MAX_VALUE,130));
             String[][] targets={{"Example website","https://example.com"},{"Bookmarks","aster:bookmarks"},{"History","aster:history"},{"Settings","aster:settings"},{"Downloads","aster:downloads"},{"Aster project","https://github.com/xatusbetazx17/aster-browser"}};
             for(String[] item:targets) links.add(button(item[0],item[0],()->load(tab,target(item[1]),-1))); panel.add(links); panel.add(Box.createVerticalStrut(24));
+            JPanel reading=new JPanel(new FlowLayout(FlowLayout.LEFT));reading.setOpaque(false);reading.setAlignmentX(Component.LEFT_ALIGNMENT);reading.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
+            reading.add(button("Open document","Open Word, text or Markdown",this::openDocument));reading.add(button("Continue previous session","Restore saved tabs and reading positions",this::restoreSession));panel.add(reading);
             JPanel awareness=new JPanel(new FlowLayout(FlowLayout.LEFT,16,0)); awareness.setOpaque(false); awareness.setAlignmentX(Component.LEFT_ALIGNMENT); awareness.setMaximumSize(new Dimension(Integer.MAX_VALUE,120));
             final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(new Color(0xdbe7df)); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
             ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel("Open tabs · "+bookmarkCount()+" bookmarks · "+visits.size()+" recent visits")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
@@ -488,6 +567,9 @@ public final class PreviewMain {
     }
     private static String plainLabel(String text) { return "\u200b"+text; }
     static final class PageCanvas extends JPanel implements Scrollable {
+        final Map<URI,BufferedImage> images=new HashMap<>();String findText="";
+        private final Map<String,Font> fonts=new HashMap<>();
+        private Font cachedFont(Engine.Style style){String key=style.size+":"+style.bold+":"+style.italic+":"+style.pre;return fonts.computeIfAbsent(key,k->font(style));}
         Engine.Document document; Engine.Layout layout; int layoutWidth = -1; double scale = 1;
         java.util.function.Consumer<URI> navigate = uri -> { };
         java.util.function.Consumer<URI> save = uri -> { };
@@ -521,7 +603,7 @@ public final class PreviewMain {
         void ensureLayout() {
             if (document != null && (layout == null || layoutWidth != getWidth())) {
                 layoutWidth = getWidth();
-                try { layout = Engine.layout(document, (float)(getWidth()/scale), (text, style) -> getFontMetrics(font(style)).stringWidth(text)); }
+                try { layout = Engine.layout(document, (float)(getWidth()/scale), (text, style) -> getFontMetrics(cachedFont(style)).stringWidth(text)); }
                 catch (IllegalArgumentException e) { document = Engine.parse(PageLoader.HOME, "<h1>Page is too complex</h1><p>" + PageLoader.escape(e.getMessage()) + "</p>"); layout = Engine.layout(document, (float)(getWidth()/scale), (t, s) -> getFontMetrics(font(s)).stringWidth(t)); }
                 revalidate();
             }
@@ -530,9 +612,14 @@ public final class PreviewMain {
             super.paintComponent(graphics); ensureLayout(); if (layout == null) return;
             Graphics2D g = (Graphics2D) graphics.create(); g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.scale(scale, scale); Rectangle clip = g.getClipBounds();
-            for (Engine.Draw draw : layout.items) {
+            for (int i=layout.firstVisible(clip==null?0:clip.y);i<layout.items.size();i++) {Engine.Draw draw=layout.items.get(i);
+                if(clip!=null&&draw.y>clip.y+clip.height)break;
                 if (clip != null && (draw.y + draw.height < clip.y || draw.y > clip.y + clip.height)) continue;
-                g.setFont(font(draw.style)); g.setColor(new Color(draw.style.color, true));
+                if(draw.image!=null){BufferedImage bitmap=images.get(draw.image);
+                    if(bitmap!=null){double fit=Math.min(draw.width/bitmap.getWidth(),draw.height/bitmap.getHeight());g.drawImage(bitmap,(int)draw.x,(int)draw.y,(int)(bitmap.getWidth()*fit),(int)(bitmap.getHeight()*fit),null);continue;}
+                    g.setColor(new Color(0xe8eeec));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
+                if(!findText.isEmpty()&&draw.text.toLowerCase(Locale.ROOT).contains(findText.toLowerCase(Locale.ROOT))){g.setColor(new Color(0xffe38a));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
+                g.setFont(cachedFont(draw.style)); g.setColor(new Color(draw.style.color, true));
                 g.drawString(draw.text, draw.x, draw.y + draw.style.size);
                 if (draw.link != null) g.drawLine((int) draw.x, (int) (draw.y + draw.style.size + 2), (int) (draw.x + draw.width), (int) (draw.y + draw.style.size + 2));
             }

@@ -1,8 +1,10 @@
 # Aster Browser
 
-Aster is being developed as a **standalone browser with its own interface and features**. The active prototype opens directly as Aster. Its Linux application uses GTK4, WebKitGTK and JavaScriptCore, with no Firefox, Chrome or Chromium installation required.
+Aster is being developed as a **standalone browser with its own interface and page engine**. The original-engine Windows/Linux/Android application is the destination for new development. It opens directly as Aster and embeds no Chrome, Firefox, WebKit or WebView. The older Linux WebKit prototype remains available separately.
 
-**Status: experimental.** The standalone application does not yet have all original v15 features, native Windows/Android ports, a validated Steam Deck package or verified premium streaming. WebKit is an existing rendering engine; a complete Aster engine written from scratch has not been implemented.
+**Status: experimental.** The independent engine is a limited implementation, not a complete modern browser. The 0.2 browsing/reading milestone adds images, basic CSS/forms, search, document tools and saved sessions, with Windows/Linux bundles, an Android 8+ APK and a Flatpak build. Full web compatibility, protected streaming, production signing and validated Steam Deck support remain unfinished.
+
+Read [Aster 0.2 features, package choices, compatibility and update limitations](experiments/aster-engine/RELEASE_0.2.md).
 
 Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 

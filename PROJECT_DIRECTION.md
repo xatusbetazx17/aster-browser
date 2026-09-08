@@ -4,7 +4,7 @@ Aster must launch as its own application, with its own interface, tabs, settings
 
 ## Current engine and independence
 
-The active Linux application uses GTK4/libadwaita for its native interface and **WebKitGTK / JavaScriptCore** for web rendering and JavaScript. It starts directly as Aster and does not launch or require another installed browser. WebKit is still a third-party engine; this is **not a claim that Aster already has an original rendering engine**.
+The older Linux prototype uses GTK4/libadwaita for its native interface and **WebKitGTK / JavaScriptCore** for web rendering and JavaScript. It starts directly as Aster and does not launch or require another installed browser. WebKit is still a third-party engine; this is **not a claim that Aster already has an original rendering engine**.
 
 A custom interface and browser features can be developed within this standalone app while using an independent rendering engine. Building Aster's own complete HTML/CSS/JavaScript engine from scratch is a separate, much larger implementation. No existing custom Lite renderer currently supplies full modern-web compatibility or premium DRM playback.
 
@@ -16,11 +16,14 @@ A custom interface and browser features can be developed within this standalone 
 - Install and update actual Aster application code while preserving existing user data.
 - Pursue legitimate codec/DRM integration and service testing. Do not replace Aster with an external browser to claim streaming support.
 
+The original-engine app is now the development destination. Its [0.2 release notes](experiments/aster-engine/RELEASE_0.2.md) describe the cross-platform browsing/reading milestone and remaining limits.
+
 ## Deliverable status
 
 | Deliverable | Current status |
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
+| Original-engine browsing/reading | 0.2 adds bounded images, CSS/form subsets, search, native Word/text reader, notes/speech, saved sessions and Android Save As |
 | Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts/fetch/WebSocket; opt-in, not a complete web platform |
 | Original-engine desktop media/input | Progressive unencrypted files/HLS through JavaFX media, page play/pause/volume/events and file seeking; HLS seeking disabled; XInput/Linux joystick provider with per-visit consent; no WebRTC/MSE/EME |
 | Original-engine desktop file downloads | Implemented: direct HTTP/HTTPS Save As, progress/cancel/retry; two transfers and 2 GiB/file; no login/JavaScript downloads |

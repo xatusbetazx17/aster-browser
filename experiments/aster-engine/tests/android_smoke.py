@@ -8,6 +8,8 @@ import subprocess
 import threading
 import time
 import xml.etree.ElementTree as ET
+import struct
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/android"
@@ -51,13 +53,40 @@ def menu(label):
     tap(wait_text(label))
 
 
+def image_fixture():
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 8, 8, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress((b'\x00' + b'\x11\x53\x97' * 8) * 8)) + chunk(b'IEND', b'')
+
+
 class Fixture(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == '/image.png':
+            body = image_fixture()
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/png')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         html = "<title>Second fixture</title><h1>Second fixture</h1><p>Link navigation worked.</p>" if self.path == "/second" else "<title>First fixture</title><a href='/second'>Open second fixture</a><p>Network page rendered by Aster.</p>"
+        if self.path != '/second':
+            html += "<img src='/image.png' width='80' height='40' alt='Aster image fixture'><form action='/submitted' method='post'><input name='q' value='android8'></form>"
         body = html.encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=UTF-8")
         self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        data = self.rfile.read(int(self.headers.get('Content-Length', '0')))
+        if self.path != '/submitted' or data != b'q=android8':
+            raise AssertionError(f'Incorrect native form submission: {self.path} {data!r}')
+        body = b'<h1>Android form submitted</h1><p>Native POST reached the server.</p>'
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
@@ -90,6 +119,21 @@ def main():
         adb("shell", "input", "keyevent", "66")
         node = wait_text("Network page rendered by Aster.")
         print("HTTP fixture loaded.", flush=True)
+        deadline = time.monotonic() + 15
+        while True:
+            raw = adb('exec-out', 'screencap', binary=True)
+            width, height, pixel_format = struct.unpack('<III', raw[:12])
+            if pixel_format != 1:
+                raise AssertionError(f'Expected emulator RGBA8888, got {pixel_format}')
+            pixels = raw[-width * height * 4:]
+            count = sum(pixels[i:i + 3] == b'\x11\x53\x97' for i in range(0, len(pixels), 4))
+            if count > 100:
+                break
+            if time.monotonic() > deadline:
+                raise AssertionError('Android did not paint the fetched image pixels')
+            time.sleep(0.5)
+        (OUT / 'aster-android-images.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
+        print('Fetched image pixels were rendered by the native Android Canvas.', flush=True)
         bounds = list(map(int, re.findall(r"\d+", node.attrib["bounds"])))
         density = float(adb("shell", "wm", "density").strip().split()[-1]) / 160
         # The fixture's first link is at the engine's 24px content inset.
@@ -98,6 +142,14 @@ def main():
         print("Link tap navigated successfully.", flush=True)
         menu("Back")
         wait_text("Network page rendered by Aster.")
+        menu('Read page / Find')
+        wait_text('Save notes')
+        tap(wait_text('Close'))
+        menu('Page forms')
+        tap(wait_text('Submit'))
+        wait_text('Native POST reached the server.')
+        menu('Back')
+        wait_text('Network page rendered by Aster.')
         menu("Bookmark this page")
         wait_text("Bookmark saved on this device.")
         adb("shell", "am", "force-stop", PACKAGE)
@@ -112,7 +164,7 @@ def main():
         report = screen()
         OUT.joinpath("drm-device-report.xml").write_text(ET.tostring(report, encoding="unicode"), encoding="utf-8")
         OUT.joinpath("aster-android-drm.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
-        print("Android passed: native Canvas, real HTTP, tapped link, Back, bookmark-preserving APK replacement, MediaDrm capability query.")
+        print("Android passed: native Canvas, actual fetched image pixels, real HTTP/link/Back, native form POST, reader controls, bookmark-preserving APK replacement, MediaDrm query.")
     finally:
         server.shutdown()
         logs = adb("logcat", "-d", "-s", "AndroidRuntime:E")

@@ -1,5 +1,9 @@
 # Aster original engine preview
 
+**Version 0.2:** see [the browsing/reading release notes and package guide](RELEASE_0.2.md)
+for shared images, the CSS/form subset, search, reading/notes/speech, saved sessions,
+Android Save As and the new Linux Flatpak build. Full web compatibility remains unfinished.
+
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
 Blink, Gecko, WebKit, JavaFX WebView, Android WebView or external browser. It is
@@ -11,8 +15,7 @@ Java2D drawing, a bundled OpenJDK runtime) and a native Android application
 the desktop adds standalone **QuickJS-NG 0.16.2** for JavaScript and **JavaFX
 21.0.12 media/graphics/Swing** for unencrypted playback. These are components,
 not browser engines; the interpreter and decoders are third-party code.
-Aster owns its small page renderer, DOM bridge and browser controls. Android
-remains a text preview without these new desktop components.
+Aster owns its small page renderer, DOM bridge and browser controls. Android shares the browsing/reading features but does not include desktop scripting/media.
 
 **This is not the full browser Marcelo requested.** It opens basic HTML/text
 websites. It can run limited scripts and direct media files, but cannot run Prime Video,
@@ -27,15 +30,15 @@ or silently remove that prototype's reader and local companion.
 | Navigation | HTTP/HTTPS address entry, relative links, bounded redirects, Back, Forward, Home |
 | Layout | Text, headings, paragraphs, lists, basic table text, preformatted lines, Unicode, word wrapping |
 | Typography | Bold, italic, inherited size/color; inline `font-size` in px, six-digit hex `color`, bold/italic declarations |
-| Images | Alternative text only; image bytes are not fetched or decoded |
+| Images | Bounded same-origin PNG/JPEG/GIF decoding; alternative text on unsupported or failed resources |
 | Desktop UI | Rectangular tabs with individual close buttons, hover/close animations, adjacent new-tab button, rounded controls, flat internal pages, up to 20 tabs and 30 persisted bookmarks |
-| Android UI | Single page, navigation menu, persisted bookmarks, restored address after rotation |
+| Android UI | Up to 12 tabs, search, native forms, document reader, notes/speech, Save As, bookmarks and saved sessions |
 | Network | Platform TLS validation; no certificate bypass, cookies or embedded URL credentials; desktop adds bounded same-origin scripts/fetch/WebSocket and explicitly requested media |
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
 | Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS; page play/pause/volume/mute/events and file seeking. HLS seeking is disabled. JavaFX Media without JavaFX WebView |
-| Not implemented | Modern HTML recovery, full DOM/CSS, complex selectors/stylesheets, images, forms, storage/cookies, OS process sandbox, Android downloads/scripts/media, MSE/EME, WebRTC, the companion/reader feature set |
+| Not implemented | Modern HTML recovery, full DOM/CSS/box layout, complex selectors, advanced forms, storage/cookies, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
@@ -75,8 +78,7 @@ Reading sizes 100%, 125%, 150% and 200% preserve link hit testing.
 
 Internal-page navigation is handled only by the desktop shell's address bar and
 native controls. Webpage links and redirects cannot invoke internal settings.
-These changes target the original-engine **desktop** app; the Android app and
-separate Linux WebKit prototype retain their existing interfaces.
+These changes target the original-engine **desktop** app; the separate Linux WebKit prototype retains its existing interface; Android has its own native controls.
 
 ## Try scripting, media and controller input
 
@@ -107,8 +109,8 @@ node creation/appending/removal, click listeners, keydown/keyup, title changes,
 DOMContentLoaded/load, Promises, timers, requestAnimationFrame and gamepad snapshots.
 Aster reparses text snapshots for its own renderer. This is not a complete DOM,
 HTML parser, CSS engine or event model. Scripts execute after initial parsing;
-modules, inline HTML event attributes, XHR, cookies/storage, forms and canvas/WebGL
-are not implemented. The network and media bindings below are subsets. Keyboard
+modules, inline HTML event attributes, XHR, cookies/storage, JavaScript form handling and canvas/WebGL
+are not implemented. Native forms are available separately. The network and media bindings below are subsets. Keyboard
 code/repeat and default-action behavior are preliminary; there is no pointer lock.
 Pages with a CSP header or meta policy refuse scripts until policy support exists.
 
@@ -219,8 +221,7 @@ links use an exclusive-copy fallback during finalization.
 This is direct GET downloading: there are no login cookies, authentication headers,
 POST-generated files, JavaScript/blob URLs, pause/resume or cross-restart transfer
 recovery. The Save As offer and the transfer use separate requests, so a one-use
-URL may fail when fetched again. The Android preview currently reports file links
-as unsupported for saving; its download UI has not been implemented.
+URL may fail when fetched again. Android 0.2 supplies a separate native Save As path; see the release notes for its limits.
 
 ## Try the actual packages
 
@@ -255,8 +256,7 @@ tar -xzf aster-engine-linux-x64.tar.gz
 ```
 
 The bundle contains Java. It still needs the operating system's desktop graphics
-libraries/X11 or XWayland and compatible glibc. CI builds on Ubuntu 24.04. This is
-not an all-distribution binary, Flatpak, ARM package or a validated Steam Deck release.
+libraries/X11 or XWayland and compatible glibc. CI builds on Ubuntu 24.04. The additional Flatpak package provides a common runtime. Neither package proves every distribution or Steam Deck; desktop ARM is not built.
 The desktop source currently builds for Linux/Windows x64 with Java 17+, a C
 compiler, the pinned native script host and matching JavaFX libraries. Keep the
 whole `build/jar` directory together when launching its JAR. Linux media also needs
