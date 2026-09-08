@@ -1,7 +1,7 @@
 # Linux: install or update Aster
 
 For **Aster original-engine 0.2**, use its
-[native Linux and Flatpak instructions](../../experiments/aster-engine/RELEASE_0.2.md#packages-and-updates).
+[release downloads and Flatpak install/update instructions](../../DOWNLOADS.md#linux-with-flatpak-x86_64).
 It has limited images, CSS/forms, scripting/media and Word/text reading without
 embedding WebKit or another browser engine. Full web compatibility, PDF and the AI
 companion remain unfinished. The commands below install the separate WebKit prototype.

@@ -225,67 +225,65 @@ URL may fail when fetched again. Android 0.2 supplies a separate native Save As 
 
 ## Try the actual packages
 
-Open [Aster original engine preview builds](https://github.com/xatusbetazx17/aster-browser/actions/workflows/aster-engine-preview.yml),
-choose a **successful run on `codex/aster-webkit-desktop`**, and download its artifacts.
-GitHub may require sign-in. These are temporary development artifacts, not a stable
-release channel. Each archive has SHA-256 checksums and test screenshots.
+Use [Latest Codex preview](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview)
+for permanent download links, checksums and platform verification reports. See
+[the regular-user install/update guide](../../DOWNLOADS.md). Actions artifacts remain
+temporary developer evidence and are not the normal installation route.
 
 ### Windows x64
 
-1. Download `aster-engine-Windows` and extract it.
-2. Extract its inner `aster-engine-windows-x64.zip` completely.
-3. Open `AsterEnginePreview/AsterEnginePreview.exe`. Its Java runtime is included.
-4. Try `https://example.com`, a link, Back, a new tab and a bookmark.
+Download `aster-windows-x64-setup.exe`, close Aster, and run setup. Open **Aster
+Preview** from Start. A newer setup replaces the same per-user installation and
+preserves bookmarks, notes, settings and saved sessions. Java is included. The
+publisher certificate is not configured; Windows may show an unknown-publisher
+warning. Windows HLS/video remains unreliable; see the release's build report.
 
-The app has no publisher code-signing certificate yet. Do not disable Windows
-security protections to run it. It is a portable native launcher with a bundled
-Java application, not an MSI installer or a full native port of the WebKit app.
-
-To update, close the preview and extract a newer archive into a **new directory**;
-launch that version. Bookmarks stay in the per-user Java Preferences node
-`io/aster/engine-preview` (Windows stores Java Preferences in the user registry).
-Keep the earlier directory to roll back. No existing Aster installation is converted.
+The optional portable ZIP must be extracted completely. Both portable and installed
+original-engine builds use Java Preferences at `io/aster/engine-preview`; shortcuts
+to an older extracted EXE continue to open that old program. Older browser-engine
+experiments have separate profiles and are not converted by this setup.
 
 ### Linux x64 and Steam Deck desktop mode
 
-Download `aster-engine-Linux`, extract it, then run:
+Download `aster-linux-x64.flatpak`, then open it with a Flatpak-capable software
+manager or use the same command for installation and replacement:
 
 ```sh
-tar -xzf aster-engine-linux-x64.tar.gz
-./AsterEnginePreview/bin/AsterEnginePreview
+flatpak install --user --or-update ./aster-linux-x64.flatpak
+flatpak run io.aster.browser.EnginePreview
 ```
 
-The bundle contains Java. It still needs the operating system's desktop graphics
-libraries/X11 or XWayland and compatible glibc. CI builds on Ubuntu 24.04. The additional Flatpak package provides a common runtime. Neither package proves every distribution or Steam Deck; desktop ARM is not built.
-The desktop source currently builds for Linux/Windows x64 with Java 17+, a C
-compiler, the pinned native script host and matching JavaFX libraries. Keep the
-whole `build/jar` directory together when launching its JAR. Linux media also needs
-compatible GTK3, ALSA and libavcodec/libavformat system libraries; CI tests Ubuntu
-24.04, not every distribution. SteamOS requires no read-only filesystem
-unlock for extracting the archive into your home directory.
+The application ID and `preview` branch remain fixed, so replacement preserves
+its profile. Flatpak and an initial runtime download are required. X11/XWayland,
+graphics/audio support and x64 hardware are needed. Many distributions can use
+the common runtime, but every distribution and physical Steam Deck are not verified.
+No read-only OS unlock is required.
 
-Close the preview and extract a newer archive into a new directory to update;
-bookmarks remain in Java's per-user preferences outside that directory. Keeping
-the previous directory permits code rollback. WebKit profile data is separate.
+The optional `aster-linux-x64.tar.gz` includes Java and uses an Ubuntu 22.04 glibc
+baseline. It still needs host GTK3, ALSA, libavcodec/libavformat and desktop graphics
+libraries. Extract a newer tarball into a new folder and run
+`AsterEnginePreview/bin/AsterEnginePreview`. Its profile is separate from Flatpak.
+Use Flatpak for managed replacements. Desktop ARM and musl-native builds are absent.
 
 ### Android 8.0/API 26 or later
 
-Download `aster-engine-Android`, extract it and open `aster-engine-preview.apk`
-on a test device, using Android's per-source installation permission when requested.
-The package name is `io.aster.browser.enginepreview`; it cannot replace the old
-WebView-based Android Lite app. Do not use development builds for sensitive browsing.
+The release table distinguishes `aster-android-8-plus.apk` (persistent signing,
+install over the same release identity) from `aster-android-8-plus-test.apk`
+(disposable-key test installation, no cross-run update guarantee). Open the APK
+and use Android's per-source installation permission when requested.
 
-This APK is development-signed. **CI generates an ephemeral signing key for each
-run. APKs from different runs cannot be installed over each other.** Installing an
-APK built with the same key preserves bookmarks; the emulator test verifies that
-replacement. For ongoing personal builds, keep the generated keystore at
-`~/.android/aster-engine-preview.keystore` or set `ASTER_PREVIEW_KEYSTORE` to your
-development keystore path. It uses the documented development password `android`.
-Do not use this development identity/password for production distribution.
+The package is `io.aster.browser.enginepreview`. Future release APKs preserve that
+identity and signing key and increase versionCode. The emulator checks a lower
+version followed by a higher version while keeping a bookmark. A one-time private
+Actions signing secret must be configured by the owner to enable release updates;
+[the guide includes a setup helper](../../DOWNLOADS.md#one-time-android-setup-for-the-repository-owner).
 
-A stable release signing identity, signed update channel and migration/export
-workflow are still required. Do not uninstall an existing preview with bookmarks
-you need to retain just to work around a signature mismatch.
+Earlier Actions APKs had a different key on each run. They cannot be upgraded by
+an unrelated signing identity. Do not uninstall an existing app containing data
+you need. Migration/export for those old builds and Android Lite remains unfinished.
+For personal source builds, retain `~/.android/aster-engine-preview.keystore` or
+set `ASTER_PREVIEW_KEYSTORE`; the local development password is `android` and is
+not a production identity. Release keys are supplied privately, never in git.
 
 ## Build from source
 

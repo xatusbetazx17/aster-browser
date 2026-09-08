@@ -5,6 +5,7 @@ No package manager, browser engine download, shell command interpolation or Grad
 """
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import platform
@@ -12,6 +13,8 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import xml.etree.ElementTree as ET
+from version import VERSION, build_number, display_version, native_version
 
 ROOT = Path(__file__).resolve().parent
 BUILD = ROOT / "build"
@@ -76,11 +79,12 @@ def desktop(test=False, package=False):
         image = BUILD / "native/AsterEnginePreview"
         if image.exists():
             shutil.rmtree(image)
-        run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.2.0",
+        run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", native_version(),
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
             "--add-modules", "java.desktop,java.prefs,java.net.http,jdk.httpserver,jdk.crypto.ec,jdk.unsupported,jdk.unsupported.desktop,java.xml,java.logging", "--dest", image.parent)
         shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")
         shutil.copyfile(ROOT / "README.md", image / "README.md")
+        shutil.copyfile(BUILD / "VERSION.json", image / "VERSION.json")
         if sys.platform == "win32":
             shutil.make_archive(str(BUILD / "aster-engine-windows-x64"), "zip", image.parent, image.name)
         else:
@@ -111,29 +115,32 @@ def android():
     # Invoking D8's Java entry point also works without .bat execution on Windows.
     run("java", "-cp", tools / "lib/d8.jar", "com.android.tools.r8.D8", "--min-api", "26", "--lib", platform, "--output", dex, jar)
     unsigned = out / "unsigned.apk"
-    run(tools / ("aapt2" + exe), "link", "-o", unsigned, "-I", platform, "--manifest", ROOT / "android/AndroidManifest.xml")
+    manifest = ET.parse(ROOT / "android/AndroidManifest.xml")
+    manifest.getroot().set("{http://schemas.android.com/apk/res/android}versionCode", str(build_number()))
+    manifest.getroot().set("{http://schemas.android.com/apk/res/android}versionName", display_version())
+    generated_manifest = out / "AndroidManifest.xml"
+    manifest.write(generated_manifest, encoding="utf-8", xml_declaration=True)
+    run(tools / ("aapt2" + exe), "link", "-o", unsigned, "-I", platform, "--manifest", generated_manifest)
     with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as archive:
         archive.write(ROOT.parents[1] / "LICENSE", "assets/LICENSE")
         for path in sorted(dex.glob("*.dex")):
             archive.write(path, path.name)
     aligned = out / "aligned.apk"
     run(tools / ("zipalign" + exe), "-f", "-p", "4", unsigned, aligned)
-    # Development signing only. The key stays outside source control. Keep it for upgrades.
-    key = Path(os.environ.get("ASTER_PREVIEW_KEYSTORE", str(Path.home() / ".android/aster-engine-preview.keystore")))
-    key.parent.mkdir(parents=True, exist_ok=True)
-    if not key.exists():
-        run("keytool", "-genkeypair", "-noprompt", "-keystore", key, "-storepass", "android", "-keypass", "android", "-alias", "aster-preview",
-            "-keyalg", "RSA", "-keysize", "2048", "-validity", "3650", "-dname", "CN=Aster Development Preview")
     apk = out / "aster-engine-preview.apk"
-    run("java", "-jar", tools / "lib/apksigner.jar", "sign", "--ks", key, "--ks-key-alias", "aster-preview",
-        "--ks-pass", "pass:android", "--key-pass", "pass:android", "--out", apk, aligned)
-    run("java", "-jar", tools / "lib/apksigner.jar", "verify", "--verbose", "--print-certs", apk)
+    from signing import sign_apk
+    sign_apk(tools / "lib/apksigner.jar", aligned, apk, out / "SIGNING.json")
     print(f"Android application: {apk}")
 
 
 def hashes():
     files = list(BUILD.glob("*.zip")) + list(BUILD.glob("*.tar.gz")) + list((BUILD / "android").glob("aster-engine-preview.apk"))
     (BUILD / "SHA256SUMS.txt").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(BUILD).as_posix()}\n" for path in sorted(files)), encoding="utf-8")
+
+
+def metadata():
+    (BUILD / "VERSION.json").write_text(json.dumps({"version": display_version(), "native_version": native_version(),
+        "version_code": build_number(), "base_version": VERSION, "commit": os.environ.get("ASTER_BUILD_COMMIT", "local")}, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
@@ -143,6 +150,7 @@ if __name__ == "__main__":
     parser.add_argument("--package", action="store_true", help="Bundle a native launcher and Java runtime (desktop)")
     args = parser.parse_args()
     BUILD.mkdir(exist_ok=True)
+    metadata()
     if args.target == "desktop":
         desktop(args.test, args.package)
     else:

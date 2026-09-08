@@ -1,30 +1,20 @@
-# Windows: Aster previews and full-browser status
+# Windows: install or update Aster Preview
 
-**A Windows preview using Aster's original basic text engine is now implemented.**
-Follow [its package, launch and update instructions](../../experiments/aster-engine/README.md#windows-x64).
-Use the EXE bundle from a successful original-engine CI run. It includes Java and
-does not use another browser engine. It has no JavaScript/video/DRM and is not the
-completed port of Aster's reader/assistant/WebKit browser.
+Download the **Windows setup EXE** from [Latest Codex preview](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview),
+close Aster, and run setup. Open **Aster Preview** from Start. A newer setup replaces
+the same application and preserves the original-engine profile. Java is included.
 
-The Linux GTK/WebKit prototype cannot simply be installed as a Windows program.
-The original-engine preview is a separate portable EXE application, not an MSI
-installer or a conversion of an existing Aster installation. The old Qt installer
-still belongs to the legacy Chromium-based edition.
+See [the installation and update guide](../../DOWNLOADS.md#windows-1011-64-bit-intel-or-amd)
+for portable-installation details, system requirements and known limitations.
+The package targets Windows 10/11 x64, has no publisher certificate yet, and
+Windows video/HLS remains unreliable. Core browsing/reading, native window and
+setup/update checks must pass before the package can be released.
 
-## What the setup file does now
+Aster uses its own renderer and includes limited images, CSS/forms, document
+reading and opt-in desktop scripting. Full modern-web compatibility, logins,
+protected streaming and the AI companion are still unfinished.
 
-`installers/install-windows.ps1` is retained at its former download location to prevent misleading installation. It reports the missing standalone build and exits with status 2. With `-Check`, it reports status and exits successfully. It installs no browser or runtime and changes no existing application data.
-
-## Required Windows implementation
-
-- Build and test the standalone Aster application and an engine integration that meets the project's requirements.
-- Package it with its actual runtime dependencies, without depending on another browser application.
-- Provide a versioned installer that detects an existing Aster installation and updates its application files while preserving profiles.
-- Validate clean installation, upgrades, rollback, downloads, media, permissions and accessibility on supported Windows versions.
-- Verify legitimate protected-video playback inside Aster separately from ordinary video rendering.
-
-Most of these steps remain development work. The portable engine preview updates
-by extracting a newer bundle into a new directory, preserving its per-user
-bookmarks. There is no automatic Windows full-browser update or stable release channel.
-
-See [the project direction](../../PROJECT_DIRECTION.md), or test the available [standalone Linux prototype](linux.md).
+The old `installers/install-windows.ps1` remains a compatibility notice. The
+published setup EXE is the normal installation path. Older Qt/Chromium and
+Linux WebKit editions have separate application identities and profiles;
+the Windows preview does not automatically convert them.

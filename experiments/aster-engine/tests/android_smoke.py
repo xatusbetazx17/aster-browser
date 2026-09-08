@@ -132,7 +132,8 @@ def main():
     try:
         adb("wait-for-device")
         adb("reverse", "tcp:8765", "tcp:8765")
-        adb("install", "--no-incremental", "--no-streaming", "-r", str(OUT / "aster-engine-preview.apk"))
+        baseline = Path(os.environ.get("ASTER_ANDROID_BASELINE_APK", str(OUT / "aster-engine-preview.apk")))
+        adb("install", "--no-incremental", "--no-streaming", "-r", str(baseline))
         print("APK installed.", flush=True)
         adb("shell", "am", "start", "-W", "-n", PACKAGE + "/io.aster.android.MainActivity")
         wait_text("Your space to explore.", recover_system_ui=True)
@@ -189,6 +190,10 @@ def main():
         wait_text("Bookmark saved on this device.")
         adb("shell", "am", "force-stop", PACKAGE)
         adb("install", "--no-incremental", "--no-streaming", "-r", str(OUT / "aster-engine-preview.apk"))
+        if os.environ.get("ASTER_ANDROID_BASELINE_APK"):
+            package_info = adb("shell", "dumpsys", "package", PACKAGE)
+            if not re.search(r"versionCode=" + re.escape(os.environ["ASTER_BUILD_NUMBER"]) + r"\b", package_info):
+                raise AssertionError('Android did not install the higher version code')
         adb("shell", "am", "start", "-W", "-n", PACKAGE + "/io.aster.android.MainActivity")
         wait_text("Your space to explore.")
         menu("Open bookmark")

@@ -1,5 +1,13 @@
 # Aster Browser
 
+## Download the latest preview
+
+**[Windows setup — download and run](https://github.com/xatusbetazx17/aster-browser/releases/download/codex-preview/aster-windows-x64-setup.exe)** · **[Linux Flatpak — download and install](https://github.com/xatusbetazx17/aster-browser/releases/download/codex-preview/aster-linux-x64.flatpak)** · **[Android 8+ — choose the APK](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview)**
+
+[Install and update instructions](DOWNLOADS.md) · [Latest Codex preview and release notes](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview) · [All versions](https://github.com/xatusbetazx17/aster-browser/releases)
+
+Windows setup and Linux Flatpak replace an older original-engine installation while keeping its profile. Android needs the persistent signing identity described on the release page; disposable-key testing APKs cannot update one another. These release downloads have no 14-day artifact expiry.
+
 Aster is being developed as a **standalone browser with its own interface and page engine**. The original-engine Windows/Linux/Android application is the destination for new development. It opens directly as Aster and embeds no Chrome, Firefox, WebKit or WebView. The older Linux WebKit prototype remains available separately.
 
 **Status: experimental.** The independent engine is a limited implementation, not a complete modern browser. The 0.2 browsing/reading milestone adds images, basic CSS/forms, search, document tools and saved sessions, with Windows/Linux bundles, an Android 8+ APK and a Flatpak build. Full web compatibility, protected streaming, production signing and validated Steam Deck support remain unfinished.
@@ -13,8 +21,9 @@ Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 [`experiments/aster-engine`](experiments/aster-engine/README.md) now contains Aster's
 own basic HTML/text parser, layout and link renderer, shared by Windows/Linux
 desktop and native Android preview applications. It embeds no other browser engine.
-Its build workflow produces a Windows EXE bundle, Linux bundle and Android APK and
-tests the actual applications. Use only artifacts from a successful run.
+Its build workflow produces a Windows setup EXE and portable bundle, Linux Flatpak
+and portable bundle, and Android APK. The [release page](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview)
+provides regular-user downloads and the actual verification status of each platform.
 The original-engine Windows/Linux desktop preview includes animated tabs, flat
 internal pages and [working direct file downloads](experiments/aster-engine/README.md#download-files-on-windowslinux) with Save As, progress and cancellation.
 

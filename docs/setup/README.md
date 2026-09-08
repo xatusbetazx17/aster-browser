@@ -1,6 +1,6 @@
 # Install or update standalone Aster
 
-Aster's original-engine 0.2 preview has [Windows, Linux and Android package instructions](../../experiments/aster-engine/RELEASE_0.2.md#packages-and-updates). The source updater described below continues to install the separate Linux WebKit prototype.
+Aster's original-engine 0.2 preview has [Windows, Linux and Android release downloads and update instructions](../../DOWNLOADS.md). The source updater described below continues to install the separate Linux WebKit prototype.
 
 | Device | Guide | Current deliverable |
 | --- | --- | --- |

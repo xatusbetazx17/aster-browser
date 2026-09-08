@@ -3,7 +3,7 @@
 **A native Android original-engine preview is now implemented.** It uses Android
 widgets and Canvas with Aster's own basic HTML/text renderer, without WebView or
 another browser engine. [Build, install and update instructions](../../experiments/aster-engine/README.md#android-80api-26-or-later)
-describe the APK from successful CI runs and its development-signing limitations.
+describe the release APK and its signing requirements.
 The [0.2 release](../../experiments/aster-engine/RELEASE_0.2.md) adds images, basic CSS/forms,
 search, tabs, saved sessions, native documents/notes/speech and Save As downloads.
 Android 8/API 26 remains the minimum. The full browser, companion, JavaScript and
@@ -13,14 +13,19 @@ The existing Android Lite source in the legacy v15 package uses Android WebView.
 
 ## Installation and updates
 
-The new package is `io.aster.browser.enginepreview`, distributed as a development
-APK, not an AAB/store release. It uses the original 0.2 browsing/reading core and saves local bookmarks.
-It does not upgrade or convert the old Android Lite app. Preserve that app's data
-until a migration plan is implemented. CI APKs use a different development key
-per run; cross-run in-place updates are not supported. Personal builds can retain
-the same development keystore, and the emulator checks same-key replacement.
+Download from [Latest Codex preview](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview).
+The release page distinguishes the persistent-key update APK from a testing APK.
+Read [Android installation/update help](../../DOWNLOADS.md#android-80-or-later).
 
-For the eventual Android app, installation/update must use an actual signed Aster APK or an official Aster store listing. Upgrades must retain the same Android application identity and a compatible signing key so Android can update the installed application while preserving its data. Keep that signing identity secure as part of the release process.
+The package stays `io.aster.browser.enginepreview`. Persistent release signing
+and increasing versionCode allow Android to replace it while retaining app data.
+The owner must configure the private signing secret once; the publisher rejects
+later key changes. The API 26 emulator checks a lower-version install followed
+by a higher-version replacement and retention of a bookmark.
+
+Earlier Actions APKs used disposable keys. Those cannot be updated with an
+unrelated key, and Android Lite is a separate application. Do not uninstall an
+older app containing data you need; an export/migration path is still unfinished.
 
 ## Required Android implementation
 

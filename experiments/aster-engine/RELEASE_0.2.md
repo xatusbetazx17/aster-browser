@@ -76,54 +76,36 @@ separate work.
 
 ## Packages and updates
 
-Use artifacts from
-[Aster original engine preview](https://github.com/xatusbetazx17/aster-browser/actions/workflows/aster-engine-preview.yml)
-on `codex/aster-webkit-desktop`. All packages are development previews, not signed
-stable releases. Checksums are included. Prefer a successful workflow. A Windows
-browsing bundle can also be retained when its core/reading/native-window checks
-pass but media checks fail; read its `BUILD-STATUS.txt` and decoder logs first.
-The failure remains visible in GitHub Actions and is not counted as a passing check.
+The 0.2.1 packaging update adds permanent [GitHub preview releases](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview),
+a per-user Windows setup EXE, a verified Flatpak replacement path, per-build
+versions and a persistent Android signing gate. The browsing/reading features
+above remain included. Follow the [download and update guide](../../DOWNLOADS.md)
+for the current package names and installation steps.
 
-| Artifact | Contents and intended use |
-| --- | --- |
-| `aster-engine-Windows` | Windows x64 portable EXE bundle with Java runtime. Extract the entire inner ZIP; run `AsterEnginePreview.exe`. |
-| `aster-engine-Linux` | Linux x64 bundle built on Ubuntu 22.04 for an older glibc baseline. Extract the tarball; run `AsterEnginePreview/bin/AsterEnginePreview`. |
-| `aster-engine-Linux-ubuntu24` | Additional native Ubuntu 24.04 build and tests. |
-| `aster-engine-Linux-Flatpak` | Linux x64 package using Freedesktop 25.08. Requires Flatpak and network access to install its runtime initially. |
-| `aster-engine-Android` | Android 8+ APK and emulator evidence. Development signing limitations below apply. |
+Windows setup keeps the same application identity and Java Preferences profile.
+Linux Flatpak keeps `io.aster.browser.EnginePreview` on the `preview` branch;
+`flatpak install --user --or-update ./aster-linux-x64.flatpak` installs or replaces
+it without removing its saved profile. The native Linux tarball and Flatpak
+have separate profiles. Desktop packages are x64; every Linux distro, CPU and
+physical Steam Deck has not been verified.
 
-Windows native video is currently a known verification blocker: the 0.2 CI checks
-observed an HLS clock stall after pause/resume and, on another runner, a native
-`ERROR_MEDIA_INVALID` decoding error. The attempted playback scheduling change
-did not resolve it and was reverted. Browsing, reading and native-window checks
-passed separately. Do not rely on this preview for Windows video/streaming until
-the native media checks pass on the package you download.
+Android update releases require the owner's persistent private signing secret.
+Until it is configured, the clearly named testing APK has disposable signing and
+cannot promise cross-run updates. The publisher refuses a subsequent change to
+an established release certificate or a non-increasing Android versionCode.
+Earlier differently signed APKs and the old Android Lite need a future migration
+path. Do not uninstall an app containing notes/bookmarks you need.
 
-On Linux systems with Flatpak installed:
+Windows native video remains a known verification blocker: the 0.2 checks observed
+an HLS clock stall and, on another runner, a native `ERROR_MEDIA_INVALID` decoding
+error. Browsing, reading and native-window checks passed separately. Windows
+packages are retained only if those checks and the real setup/update test pass;
+failed media results remain visible in their report and the overall workflow.
+Windows publisher signing is still unconfigured.
 
-```sh
-flatpak install --user ./aster-linux-x64.flatpak
-flatpak run io.aster.browser.EnginePreview
-```
-
-The Flatpak uses X11 or XWayland, graphics/audio access, network, the Downloads
-directory and read-only Documents access. Other folders require explicit user
-permission. It uses a separate application profile. A consistent runtime reduces
-host distribution dependencies, but does not prove every distribution, CPU,
-graphics driver or Steam Deck control configuration works. ARM desktop builds,
-musl-native binaries and headless Linux are not supplied.
-
-Close a native desktop preview before extracting a newer bundle into a new folder.
-Keep the earlier directory for rollback; the profile is stored separately. Flatpak
-updates use a newer bundle of the same application ID. There is no automatic update
-feed yet.
-
-Android CI still uses an ephemeral development signing key per run. Different runs
-cannot upgrade each other in place. A maintained private signing identity and an
-export/migration workflow are required before distributing durable Android updates.
-Do not uninstall a preview containing bookmarks or notes you need to keep. Local
-builders can preserve their existing development keystore to install updates with
-the same identity. Windows publisher signing also remains unconfigured.
+Release assets have no 14-day Actions artifact expiry. Updates are initiated by
+downloading a newer package; there is no silent background updater. All downloads
+are development previews rather than a completed, stable browser.
 
 ## Validation and remaining work
 
