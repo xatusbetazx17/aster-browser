@@ -1,10 +1,12 @@
 /* Aster DOM/event preview. QuickJS supplies ECMAScript, not browser APIs.
- * No network, file, OS, media, DRM or browser-engine bindings are hidden here. */
+ * Networking and media use explicit bounded brokers; no browser engine is embedded. */
 (() => {
   'use strict';
   const nativePads = globalThis.__asterReadGamepads;
   delete globalThis.__asterReadGamepads;
   const records = new Map(), timers = new Map(), errors = [];
+  const mediaCommands=[];let mediaRequest=1;
+  function mediaCommand(value){if(mediaCommands.length>=32)throw new RangeError('Too many media commands');mediaCommands.push(value);}
   const voids = new Set('area base br col embed hr img input link meta param source track wbr'.split(' '));
   const hidden = new Set(['script', 'style', 'head', 'template', 'iframe', 'object']);
   let nextId = 1, timerId = 1, clock = 0, title = '', navigation = null, initialScripts = [], body;
@@ -94,6 +96,24 @@
     querySelector(s) { return this.querySelectorAll(s)[0] || null; }
     click() { this.dispatchEvent(new AsterEvent('click',{bubbles:true})); }
   }
+  class HTMLMediaElement extends Node {
+    constructor(tag){super(tag);this._media={currentTime:0,duration:null,paused:true,ended:false,readyState:0,volume:1,muted:false,videoWidth:0,videoHeight:0};this._plays=new Map();this.error=null;}
+    get currentSrc(){return this._media.src||'';}
+    get currentTime(){return this._media.currentTime;}set currentTime(v){v=Number(v);if(!Number.isFinite(v)||v<0)throw new TypeError('Invalid media time');this._media.currentTime=v;mediaCommand({kind:'seek',id:this._id,value:v});}
+    get duration(){return this._media.duration??NaN;}get paused(){return this._media.paused;}get ended(){return this._media.ended;}get readyState(){return this._media.readyState;}
+    get videoWidth(){return this._media.videoWidth;}get videoHeight(){return this._media.videoHeight;}
+    get volume(){return this._media.volume;}set volume(v){v=Number(v);if(!Number.isFinite(v)||v<0||v>1)throw new RangeError('Volume must be between 0 and 1');this._media.volume=v;mediaCommand({kind:'volume',id:this._id,value:v});}
+    get muted(){return this._media.muted;}set muted(v){this._media.muted=!!v;mediaCommand({kind:'muted',id:this._id,value:!!v});}
+    get controls(){return this.hasAttribute('controls');}set controls(v){if(v)this.setAttribute('controls','');else this.removeAttribute('controls');}
+    play(){
+      if(this._plays.size>=8)return Promise.reject(new RangeError('Too many pending play requests'));
+      const request=mediaRequest++,src=this.src||(this.querySelector('source')?.src)||'';
+      return new Promise((resolve,reject)=>{this._plays.set(request,{resolve,reject});try{mediaCommand({kind:'play',id:this._id,request,src,volume:this.volume,muted:this.muted,time:this.currentTime});}catch(e){this._plays.delete(request);reject(e);}});
+    }
+    pause(){mediaCommand({kind:'pause',id:this._id});}
+    load(){mediaCommand({kind:'unload',id:this._id});}
+  }
+  const makeNode=tag=>tag==='video'||tag==='audio'?new HTMLMediaElement(tag):new Node(tag);
   const document = new Target(), win = new Target();
   const root = new Node('html');
   function parse(source) {
@@ -109,7 +129,7 @@
       const tag=match[2].toLowerCase();
       if(match[1]) { for(let i=stack.length-1;i>0;i--) if(stack[i].tagName===tag.toUpperCase()) { stack.length=i; break; } continue; }
       if(tag==='html') continue;
-      const n=new Node(tag); const attrs=token.slice(match[0].length), re=/([^\s=/'">]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g; let a;
+      const n=makeNode(tag); const attrs=token.slice(match[0].length), re=/([^\s=/'">]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g; let a;
       while((a=re.exec(attrs))) { try { n.setAttribute(a[1],entity(a[2]??a[3]??a[4]??'')); } catch(e) { warn(e); } }
       parent.appendChild(n);
       if(['script','style','title','template','iframe','object'].includes(tag)) {
@@ -127,13 +147,13 @@
     }
     body=root.querySelector('body') || root;
   }
-  Object.assign(document,{documentElement:root,createElement:tag=>new Node(String(tag).toLowerCase()),createTextNode:text=>new Node('#text',String(text)),
+  Object.assign(document,{documentElement:root,createElement:tag=>makeNode(String(tag).toLowerCase()),createTextNode:text=>new Node('#text',String(text)),
     querySelector:s=>root.querySelector(s),querySelectorAll:s=>root.querySelectorAll(s),getElementById:id=>{
       for(const n of records.values()) if(n.nodeType===1 && n.id===String(id)) { let p=n; while(p.parentNode) p=p.parentNode; if(p===root || p===document) return n; } return null;
     }});
   Object.defineProperties(document,{body:{get:()=>body},head:{get:()=>root.querySelector('head')},title:{get:()=>title,set:v=>{title=String(v).slice(0,160);}}});
   root.parentNode=document;
-  Object.assign(globalThis,{window:globalThis,self:globalThis,document,Event:AsterEvent,KeyboardEvent:AsterEvent,MouseEvent:AsterEvent,Node,HTMLElement:Node,
+  Object.assign(globalThis,{window:globalThis,self:globalThis,document,EventTarget:Target,Event:AsterEvent,KeyboardEvent:AsterEvent,MouseEvent:AsterEvent,Node,HTMLElement:Node,HTMLMediaElement,HTMLVideoElement:HTMLMediaElement,HTMLAudioElement:HTMLMediaElement,
     addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),dispatchEvent:win.dispatchEvent.bind(win),
     navigator:Object.freeze({userAgent:'AsterEnginePreview/0.2 QuickJS',getGamepads:()=>nativePads()}),
     performance:Object.freeze({now:()=>clock}),console:Object.freeze({log:(...args)=>warn(args.join(' ')),warn:(...args)=>warn(args.join(' ')),error:(...args)=>warn(args.join(' '))})});
@@ -158,7 +178,7 @@
       return '<'+tag+attrs+'>'+n.childNodes.map(c=>render(c,depth+1)).join('')+(voids.has(tag)?'':'</'+tag+'>');
     };
     const html='<title>'+escape(title)+'</title>'+render(root,0); if(html.length>1000000) throw new RangeError('Rendered page limit');
-    const result={html,title,errors:[...errors],navigation}; navigation=null; return result;
+    const result={html,title,errors:[...errors],navigation,media:mediaCommands.splice(0)}; navigation=null; return result;
   }
   globalThis.__aster = Object.freeze({
     init(source,url) { parse(source); root.parentNode=document; document.URL=url; document.documentURI=url; document.readyState='loading';
@@ -166,8 +186,16 @@
       if(root.querySelectorAll('meta').some(n=>(n.getAttribute('http-equiv')||'').toLowerCase()==='content-security-policy')) throw new Error('Pages with CSP await a complete policy implementation; scripts remain disabled');
       return initialScripts;
     },
-    ready() { initialScripts=[]; document.readyState='interactive'; document.dispatchEvent(new AsterEvent('DOMContentLoaded')); document.readyState='complete'; win.dispatchEvent(new AsterEvent('load')); return snapshot(); },
+    ready() { initialScripts=[]; document.readyState='interactive'; document.dispatchEvent(new AsterEvent('DOMContentLoaded')); document.readyState='complete'; win.dispatchEvent(new AsterEvent('load')); return null; },
     snapshot,
+    mediaUpdate(id,state,event,error,request) {
+      const n=records.get(id);if(!(n instanceof HTMLMediaElement))return;
+      Object.assign(n._media,state||{});
+      if(error){n.error={code:4,message:error};for(const [key,p] of [...n._plays])if(!request||key===request){p.reject(new DOMException(error,event==='denied'?'NotAllowedError':'NotSupportedError'));n._plays.delete(key);}}
+      else if(event==='playing'){for(const p of n._plays.values())p.resolve();n._plays.clear();n.error=null;}
+      else if(event==='pause'||event==='emptied'){for(const p of n._plays.values())p.reject(new DOMException('Playback was interrupted','AbortError'));n._plays.clear();}
+      if(event!=='denied')n.dispatchEvent(new AsterEvent(event));
+    },
     tick(time) { clock=Math.max(clock,Number(time)||0); for(const [id,t] of [...timers]) if(t.when<=clock && timers.has(id)) { if(t.repeat) t.when=clock+t.ms; else timers.delete(id); try { t.fn(...t.args); } catch(e) { warn(e); } } return snapshot(); },
     click(id) { const n=records.get(id); if(!n) return snapshot(); const e=new AsterEvent('click',{bubbles:true}); n.dispatchEvent(e);
       if(!e.defaultPrevented) for(let p=n;p && p instanceof Node;p=p.parentNode) if(p.tagName==='A' && p.href) { navigation=p.href; break; } return snapshot(); },

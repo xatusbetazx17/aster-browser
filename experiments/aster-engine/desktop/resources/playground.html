@@ -8,15 +8,25 @@
 <p>Click this page, then press an arrow key. Enable controller to let this page read a connected gamepad.</p>
 <p id="key">Waiting for a key</p><p id="pad">Controller access is off</p>
 <h2>Media preview</h2>
-<p>Use Play sample above for a short video, or open a direct MP4, M4A, MP3 or WAV link. Playback stays inside Aster.</p>
+<video id="clip" src="aster-sample.mp4" controls></video>
+<p><button id="play">Play video</button> · <button id="pause">Pause video</button> · <button id="restart">Restart video</button></p>
+<p id="media-status">A four-second video, controlled by this page. Select Run JavaScript, then Play video.</p>
+<p>Direct MP4, M4A, MP3, WAV and unencrypted M3U8 streams can also play inside Aster.</p>
 <h2>What comes next</h2>
-<p>WebRTC, live/adaptive streaming, full web layout and authorized DRM integration are still under development. Prime Video and cloud gaming sites are not playable yet.</p>
+<p>WebRTC, full web layout and authorized DRM integration are still under development. Prime Video and cloud gaming sites are not playable yet.</p>
 <script>
 let count=0;
 document.getElementById('state').textContent='JavaScript is running';
 document.getElementById('state').style.color='#176b59';
 document.getElementById('add').addEventListener('click',()=>document.getElementById('counter').textContent='Click count: '+(++count));
 document.addEventListener('keydown',e=>document.getElementById('key').textContent='Key: '+e.key);
+const clip=document.getElementById('clip'),mediaStatus=document.getElementById('media-status');
+document.getElementById('play').addEventListener('click',()=>clip.play().catch(e=>mediaStatus.textContent=e.message));
+document.getElementById('pause').addEventListener('click',()=>clip.pause());
+document.getElementById('restart').addEventListener('click',()=>{clip.currentTime=0;clip.play().catch(e=>mediaStatus.textContent=e.message);});
+clip.addEventListener('timeupdate',()=>mediaStatus.textContent=clip.currentTime.toFixed(1)+' / '+clip.duration.toFixed(1)+' seconds');
+clip.addEventListener('pause',()=>mediaStatus.textContent='Paused at '+clip.currentTime.toFixed(1)+' seconds');
+clip.addEventListener('ended',()=>mediaStatus.textContent='Video finished');
 setInterval(()=>{
   const pads=navigator.getGamepads(); const pad=pads.find(p=>p&&p.connected);
   document.getElementById('pad').textContent=pad ? pad.id+' · axes '+pad.axes.slice(0,4).map(n=>n.toFixed(2)).join(', ')+' · pressed '+pad.buttons.map((b,i)=>b.pressed?i:null).filter(n=>n!==null).join(', ') : (pads.length?'No readable controller connected':'Controller access is off');

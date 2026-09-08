@@ -1,0 +1,68 @@
+package io.aster.desktop;
+
+import io.aster.engine.Engine;
+import com.sun.net.httpserver.HttpServer;
+import javax.swing.SwingUtilities;
+import java.awt.event.MouseEvent;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+
+/** Explicit --stream-smoke only: actual page JS, local HTTP/HLS, and native decoded frames. */
+final class StreamSmoke {
+    static final class Fixture implements AutoCloseable {
+        final HttpServer server;final AtomicInteger manifests=new AtomicInteger(),segments=new AtomicInteger();
+        final Set<String> requested=ConcurrentHashMap.newKeySet();
+        Fixture()throws Exception{
+            server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),8);
+            server.createContext("/",e->{
+                String path=e.getRequestURI().getPath(),type;byte[] bytes;
+                if(path.equals("/")){type="text/html";bytes=page().getBytes(StandardCharsets.UTF_8);}
+                else if(path.equals("/api")){type="application/json";bytes="{\"ready\":true}".getBytes(StandardCharsets.UTF_8);}
+                else if(path.equals("/master.m3u8")){type="application/vnd.apple.mpegurl";manifests.incrementAndGet();bytes=("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000,RESOLUTION=160x90\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=128000,RESOLUTION=160x90\nhigh.m3u8\n").getBytes(StandardCharsets.UTF_8);}
+                else if(path.equals("/low.m3u8")||path.equals("/high.m3u8")){String q=path.substring(1,path.indexOf('.'));type="application/vnd.apple.mpegurl";manifests.incrementAndGet();bytes=("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:2.0,\n"+q+"0.ts\n#EXTINF:2.0,\n"+q+"1.ts\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);}
+                else if(path.matches("/(low|high)[01]\\.ts")){type="video/mp2t";segments.incrementAndGet();requested.add(path);bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/hls-"+path.substring(1)+".b64"));}
+                else if(path.equals("/clip.mp4")){type="video/mp4";bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/sample.mp4.b64"));}
+                else{e.sendResponseHeaders(404,-1);e.close();return;}
+                e.getResponseHeaders().set("Content-Type",type);e.sendResponseHeaders(200,bytes.length);e.getResponseBody().write(bytes);e.close();
+            });server.start();
+        }
+        URI uri(){return URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/");}
+        private String page(){return "<title>Aster streaming test</title><h1>Video streamed inside Aster</h1><video id='clip' src='/master.m3u8'></video><button id='play'>Stream</button><p id='result'>Waiting</p><script>"+
+            "var v=document.getElementById('clip'),autoplay='',httpReady=false,played=0,pauses=0,once=false,mediaError='';fetch('/api').then(r=>r.json()).then(j=>httpReady=j.ready);v.play().catch(e=>autoplay=e.name);"+
+            "document.getElementById('play').addEventListener('click',()=>v.play().then(()=>played++).catch(e=>mediaError=e.name));"+
+            "v.addEventListener('timeupdate',()=>{document.getElementById('result').textContent='Time: '+v.currentTime.toFixed(1);if(v.currentTime>.25&&!once){once=true;v.pause();}});"+
+            "v.addEventListener('pause',()=>{pauses++;v.currentTime=.6;v.volume=.3;v.muted=true;v.play().then(()=>played++).catch(e=>mediaError=e.name);});"+
+            "v.addEventListener('error',()=>mediaError=v.error.message);</script>";}
+        public void close(){server.stop(0);}
+    }
+    interface Check{boolean test()throws Exception;}
+    private static void waitFor(Check test)throws Exception{long end=System.nanoTime()+25_000_000_000L;while(System.nanoTime()<end){if(test.test())return;Thread.sleep(30);}throw new AssertionError("Streaming check timed out");}
+    private static void edt(Runnable action)throws Exception{SwingUtilities.invokeAndWait(action);}
+    static void run(PreviewMain app,String output){new Thread(()->{
+        try(Fixture fixture=new Fixture()){
+            edt(()->app.load(app.current(),fixture.uri(),-1));
+            waitFor(()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().original!=null&&app.current().original.uri.equals(fixture.uri()));return loaded[0];});
+            edt(()->app.current().runScripts.doClick());
+            waitFor(()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().script!=null&&!app.current().scriptStarting);return loaded[0];});
+            ScriptSession js=app.current().script;
+            waitFor(()->Boolean.TRUE.equals(js.eval("autoplay==='NotAllowedError'&&httpReady")));
+            edt(()->{
+                PreviewMain.PageCanvas c=app.current().canvas;c.setSize(900,800);c.ensureLayout();Engine.Draw draw=c.layout.items.stream().filter(d->d.text.equals("Stream")).findFirst().orElseThrow(()->new AssertionError("Rendered Stream button missing"));
+                c.dispatchEvent(new MouseEvent(c,MouseEvent.MOUSE_CLICKED,System.currentTimeMillis(),0,(int)((draw.x+2)*c.scale),(int)((draw.y+4)*c.scale),1,false,MouseEvent.BUTTON1));
+            });
+            waitFor(()->{boolean[] ready={false};edt(()->ready[0]=app.current().media!=null);return ready[0];});
+            AtomicBoolean decoded=new AtomicBoolean();AtomicReference<String> error=new AtomicReference<>();
+            edt(()->app.current().media.evidence(Paths.get(output),()->decoded.set(true),error::set));
+            waitFor(()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
+            waitFor(()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''")));
+            if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
+            edt(()->app.load(app.current(),URI.create("aster:home"),-1));if(js.alive())throw new AssertionError("Navigation left the streaming page alive");
+            System.out.println("Native streaming passed: real HTTP JSON, autoplay refused, rendered Play click, HLS master/variant/two segments, actual blue/red H.264 frames, page play Promise, pause/resume/seek/volume/mute/events and navigation cleanup. Bitrate switching, WebRTC and DRM not tested.");
+            edt(app::finishSmoke);
+        }catch(Throwable e){e.printStackTrace();try{Files.writeString(Paths.get(output+".log"),e.toString());}catch(Exception ignored){}try{edt(app::finishSmoke);}catch(Exception ignored){}System.exit(1);}
+    },"aster-native-stream-check").start();}
+}

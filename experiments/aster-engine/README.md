@@ -30,11 +30,11 @@ or silently remove that prototype's reader and local companion.
 | Images | Alternative text only; image bytes are not fetched or decoded |
 | Desktop UI | Rectangular tabs with individual close buttons, hover/close animations, adjacent new-tab button, rounded controls, flat internal pages, up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Single page, navigation menu, persisted bookmarks, restored address after rotation |
-| Network | Platform TLS validation; no certificate bypass, cookies or embedded URL credentials; desktop adds bounded same-origin scripts and explicitly requested direct media |
+| Network | Platform TLS validation; no certificate bypass, cookies or embedded URL credentials; desktop adds bounded same-origin scripts/fetch/WebSocket and explicitly requested media |
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
-| Desktop media | Explicitly requested direct unencrypted file playback using JavaFX Media, without JavaFX WebView |
+| Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS, plus page play/pause/seek/volume/mute and playback events; JavaFX Media without JavaFX WebView |
 | Not implemented | Modern HTML recovery, full DOM/CSS, complex selectors/stylesheets, images, forms, storage/cookies, OS process sandbox, Android downloads/scripts/media, MSE/EME, WebRTC, the companion/reader feature set |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
@@ -89,8 +89,11 @@ Open **Menu → Playground**, or enter `aster:playground`.
    buttons. Windows uses XInput standard mapping; Linux uses `/dev/input/js0`–`js3`
    with raw device mapping. No permissions are changed and inaccessible devices
    remain unavailable. Physical controllers and Steam Deck controls still need testing.
-5. Select **Play sample** to play the bundled four-second blue/red video inside Aster.
-   Close the player to return. This is unencrypted H.264 video, not a DRM test.
+5. Select **Play video** in the page to play the bundled four-second blue/red video.
+   The player appears above the page; scroll down to **Pause video** or **Restart
+   video**. The page's time display comes from the actual player. **Close player**
+   removes it. **Play sample** in the toolbar also works with scripts disabled.
+   This is unencrypted H.264 video, not a DRM test.
 
 Website pages have the same **Run JavaScript** control. Scripts are off initially
 and permission lasts only for that visit. Stop, navigation, tab close and browser
@@ -104,8 +107,8 @@ node creation/appending/removal, click listeners, keydown/keyup, title changes,
 DOMContentLoaded/load, Promises, timers, requestAnimationFrame and gamepad snapshots.
 Aster reparses text snapshots for its own renderer. This is not a complete DOM,
 HTML parser, CSS engine or event model. Scripts execute after initial parsing;
-modules, inline HTML event attributes, fetch/XHR, WebSocket, cookies/storage,
-forms, canvas/WebGL and HTMLMediaElement bindings are not implemented. Keyboard
+modules, inline HTML event attributes, XHR, cookies/storage, forms and canvas/WebGL
+are not implemented. The network and media bindings below are subsets. Keyboard
 code/repeat and default-action behavior are preliminary; there is no pointer lock.
 Pages with a CSP header or meta policy refuse scripts until policy support exists.
 
@@ -113,27 +116,69 @@ QuickJS runs in a separate process with a 32 MiB allocation limit, 1 MiB C stack
 500 ms per command, a two-second parent watchdog, bounded Promise jobs and 2 MiB
 protocol frames. A page has at most 10,000 DOM nodes, depth 64, 64 timers and 32
 classic scripts totalling 1 MB. The process exposes no filesystem, shell, Java
-objects, socket, standard-library modules or module loader. **This is not an OS
+objects, raw sockets, standard-library modules or module loader. Network requests
+go through a separate validated Java broker. **This is not an OS
 sandbox**: protection against a native runtime exploit still requires platform
 process isolation. This remains an opt-in development preview for controlled pages.
 
-### Play direct media
+### Page networking
 
-Open a direct `.mp4`, `.m4a`, `.mp3` or `.wav` HTTP/HTTPS URL and choose **Play in
+Opt-in desktop scripts can use `fetch(url, options)` with a URL string, GET/HEAD/
+POST/PUT/PATCH/DELETE/OPTIONS, string or ArrayBuffer/view bodies, `Headers`, and
+`Response.text()`, `.json()`, `.arrayBuffer()` and `.clone()`. HTTP 4xx/5xx responses
+resolve normally; transport and policy errors reject. `AbortController` cancels
+pending work. UTF-8 `TextEncoder`/`TextDecoder` and `atob`/`btoa` are included.
+
+Connections and redirects must stay on the page's origin. Cross-origin CORS,
+credentials/cookies, service workers, streaming request/response bodies, compressed
+responses, `Request`/`Blob`/`FormData`, manual redirects and a complete URL API are
+not implemented. Browser-controlled headers cannot be supplied by scripts and
+Set-Cookie response headers are withheld. Four HTTP requests may run per page;
+request bodies are limited to 256 KiB, responses to 1 MiB, redirects to five and
+the total fetch lifetime to 15 seconds. Abort, navigation and Stop JavaScript
+cancel network work.
+
+`WebSocket` uses actual WS/WSS handshakes, protocols, open/message/error/close
+events, text and ArrayBuffer messages, send buffering and closing handshakes.
+Its endpoint must match the page's host, port and security (HTTP→WS, HTTPS→WSS).
+There are no login cookies or cross-origin sockets. Four connections, 256 KiB per
+message/send buffer and bounded event queues prevent unbounded buffering in a
+background page. Only `binaryType='arraybuffer'` is supported, including as the
+preview default; Blob delivery is absent. Closing the page aborts every socket.
+This persistent message transport does **not** implement WebRTC video transport.
+
+### Play and stream media
+
+Open a direct `.mp4`, `.m4a`, `.mp3`, `.wav` or `.m3u8` HTTP/HTTPS URL and choose **Play in
 Aster** on the file offer. A basic page containing `<video src>`, `<audio src>` or
 `<source src>` has **Play media** for its first detected source. The native player
-has play/pause, restart, volume and close controls. Nothing plays automatically on
-page navigation. JavaScript cannot yet call the player's controls.
+has play/pause, restart, volume and close controls. A page's `<video>` or `<audio>`
+can call `play()`/`pause()`/`load()` and set `currentTime`, `volume` and `muted`.
+It receives metadata, play/playing/pause/timeupdate/volumechange/ended/error events,
+dimensions and playback state. The play Promise settles from actual native playback.
+A new player/source requires a real page click; startup autoplay rejects with
+`NotAllowedError`. One page-controlled player is shown above the rendered page.
+This is a subset of HTMLMediaElement, without tracks, source objects, encrypted
+media, playback-rate controls or the complete media event/ready-state algorithms.
 
-The entire file is fetched to a temporary file before playback, at most **64 MiB**,
-five redirects and a 60-second transfer deadline, with validated TLS, no HTTPS
-redirect downgrade, no mixed HTTP media on an HTTPS page and no login cookies.
-Temporary media is removed when playback closes; forced termination can leave a
-file in the system temporary directory. Cancellation during a silent server read
-waits up to eight seconds. Native codec failures are reported in the player.
+Aster's private, loopback-only media transport forwards progressive bytes and
+byte ranges to the decoder. HLS master/variant playlists are rewritten so every
+segment remains under Aster's URL validation. Remote media no longer has to finish
+downloading first. TLS is validated; HTTPS downgrade, mixed media, cross-origin
+playlist resources/redirects, encrypted HLS and unsupported playlist tags are
+refused. No keys are fetched and no login cookies are sent. The unguessable decoder
+URLs are not exposed to scripts, and requests from webpage origins are refused.
 
-This is file playback, **not live WebRTC, MSE/DASH/HLS adaptive streaming, EME or
-Widevine**. Prime Video, Boosteroid, GeForce NOW and Xbox Cloud Gaming remain
+Limits: 128 KiB/playlist, 2,048 distinct HLS resources, 64 MiB per resource/range
+response, 1 GiB total transfer per player, five redirects and 60 seconds per
+resource. Only an on-demand H.264/AAC MPEG-TS HLS fixture is tested. Live playlist
+refresh and automatic bitrate switching rely on JavaFX and remain unverified;
+cross-origin CDNs and other HLS profiles may fail. Closing playback stops the
+transport; bundled samples use temporary files removed after decoder disposal.
+Native codec failures are reported in the player.
+
+This does not implement **WebRTC, MSE/DASH, EME or Widevine**. Prime Video,
+Boosteroid, GeForce NOW and Xbox Cloud Gaming remain
 unverified and unsupported. The [streaming development status](../../docs/setup/streaming.md)
 explains the remaining engine work and authorized DRM requirements.
 
@@ -299,6 +344,18 @@ H.264 decode and two actual blue/red video frames. Local display startup was
 unavailable in the coding workspace; require successful native CI checks for
 platform playback evidence. Neither speaker output nor a physical controller
 has been tested, and none of these fixtures exercises WebRTC or DRM.
+
+The network suite uses real HTTP and RFC 6455 peers, including Unicode/binary
+responses, POST, redirects/errors, aborted requests, WebSocket fragments, ping,
+close and tab-lifetime cancellation. Transport tests require progressive bytes
+before EOF, byte ranges and master/variant/segment HLS requests, and refuse
+encrypted or unsafe manifests. The native `--stream-smoke` gate additionally
+requires a rendered page click, refused autoplay, page-controlled HLS playback,
+actual blue/red frames, play Promises, pause/resume/seek/volume/mute and navigation
+cleanup. Native CI must pass before treating these checks as platform evidence.
+The HLS fixtures are authored blue/red video with silent AAC, encoded from the
+bundled sample using ffmpeg/libx264, 12 fps, baseline profile, 24-frame keyframes,
+two-second MPEG-TS segments and low/high CRF 32/18. No commercial media is included.
 
 The API 35 attempts reached boot/installation timeouts on the hosted runner,
 which denies this job access to KVM. That runtime validation remains unfinished.

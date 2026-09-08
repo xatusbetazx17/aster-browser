@@ -132,6 +132,9 @@ public final class PreviewMain {
         final ArrayDeque<String> inputCommands=new ArrayDeque<>();
         JToggleButton controllerButton; JButton runScripts; Engine.Document original;
         MediaPanel media;
+        int mediaId;String mediaSource="";
+        final java.util.concurrent.ConcurrentLinkedQueue<String> mediaEvents=new java.util.concurrent.ConcurrentLinkedQueue<>();
+        final java.util.concurrent.atomic.AtomicReference<String> mediaTime=new java.util.concurrent.atomic.AtomicReference<>();
         Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); canvas.save = uri -> chooseDownload(uri, DownloadManager.filename(uri, null));
             canvas.action=id->scriptCommand(this,"__aster.click("+id+")",true);
             canvas.keys=(type,key)->scriptCommand(this,"__aster.key("+Json.quote(type)+","+Json.quote(key)+","+Json.quote(key)+",false)",false);
@@ -251,7 +254,7 @@ public final class PreviewMain {
         paragraph(panel,"From "+file.uri.getHost()+" · "+(file.length<0 ? "Size not provided" : DownloadManager.bytes(file.length)));
         paragraph(panel,"Choose where to save this file. Aster will not open it automatically.");
         panel.add(button("Save as…","Choose destination for "+filename,()->chooseDownload(file.uri,filename)));
-        if(file.uri.getPath().toLowerCase(Locale.ROOT).matches(".*\\.(mp4|m4a|mp3|wav)"))panel.add(button("Play in Aster","Play this unencrypted file inside Aster",()->openMedia(tab,()->ResourceLoader.media(file.uri,file.uri))));
+        if(MediaRelay.supported(file.uri))panel.add(button("Play in Aster","Play this unencrypted media inside Aster",()->openMedia(tab,()->MediaResource.remote(file.uri,file.uri))));
         panel.add(Box.createVerticalGlue()); tab.setViewportView(panel); completed(tab,doc,historyIndex);
     }
     private void updateDownloads() {
@@ -300,7 +303,7 @@ public final class PreviewMain {
         tab.controllerButton=new JToggleButton("Enable controller");tab.controllerButton.setEnabled(false);tab.controllerButton.addActionListener(e->{tab.controllerAllowed=tab.controllerButton.isSelected();tab.canvas.requestFocusInWindow();});bar.add(tab.controllerButton);
         tab.controllerButton.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));tab.controllerButton.setBackground(PAPER);tab.controllerButton.setFocusPainted(false);
         if("playground".equals(internal(document.uri)))bar.add(button("Play sample","Play Aster's bundled sample video",()->openMedia(tab,MediaPanel::sample)));
-        else if(!document.media.isEmpty())bar.add(button("Play media","Play this page's first direct media source",()->openMedia(tab,()->ResourceLoader.media(document.uri,document.media.get(0)))));
+        else if(!document.media.isEmpty())bar.add(button("Play media","Play this page's first direct media source",()->openMedia(tab,()->MediaResource.remote(document.uri,document.media.get(0)))));
         JLabel label=new JLabel(document.scriptsBlocked ? "Scripts disabled: CSP support pending" : "Experimental · permission resets on navigation");label.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,12));bar.add(label);
         tab.setColumnHeaderView(bar);
     }
@@ -333,6 +336,7 @@ public final class PreviewMain {
         if(tab.scriptTask!=null){tab.scriptTask.cancel(true);tab.scriptTask=null;}
         if(tab.scriptTimer!=null){tab.scriptTimer.stop();tab.scriptTimer=null;}
         ScriptSession session=tab.script;tab.script=null;if(session!=null)session.close();tab.scriptBusy=false;tab.controllerAllowed=false;tab.scriptStarting=false;tab.inputCommands.clear();
+        if(tab.mediaId!=0){if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);}tab.mediaEvents.clear();tab.mediaTime.set(null);
         if(tab.controllerButton!=null){tab.controllerButton.setSelected(false);tab.controllerButton.setEnabled(false);}
         if(tab.runScripts!=null){tab.runScripts.setText("Run JavaScript");tab.runScripts.setEnabled(tab.original!=null&&!tab.original.scriptsBlocked);}
         if(session!=null&&tab.canvas.document!=null)tab.canvas.setDocument(Engine.parse(tab.canvas.document.uri,tab.canvas.document.source));
@@ -342,7 +346,9 @@ public final class PreviewMain {
         if(tab.scriptBusy){if(!command.startsWith("__aster.tick(")&&tab.inputCommands.size()<32)tab.inputCommands.addLast(command);return;}
         tab.scriptBusy=true;int generation=tab.generation;boolean allow=tab.controllerAllowed;
         scripts.submit(()->{try{
-            session.controller(allow);Map<String,Object> snapshot=(Map<String,Object>)session.eval(command);
+            session.controller(allow);session.pump();String mediaEvent;int count=0;while(count++<64&&(mediaEvent=tab.mediaEvents.poll())!=null)session.eval(mediaEvent);
+            String mediaTime=tab.mediaTime.getAndSet(null);if(mediaTime!=null)session.eval(mediaTime);
+            Map<String,Object> snapshot=(Map<String,Object>)session.eval(command);
             SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation&&tab.script==session){tab.scriptBusy=false;applySnapshot(tab,snapshot,click);if(!tab.inputCommands.isEmpty()){String next=tab.inputCommands.removeFirst();scriptCommand(tab,next,next.startsWith("__aster.click("));}}});
         }catch(Exception e){SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation&&tab.script==session){stopScripts(tab);tab.runScripts.setText("Run JavaScript");tab.message="JavaScript stopped: "+e.getMessage();sync();}});}});
     }
@@ -352,9 +358,50 @@ public final class PreviewMain {
             if(!html.equals(tab.canvas.document.source))tab.canvas.setDocument(Engine.parseInteractive(tab.original.uri,html));
             tab.chip.title(tab.canvas.document.title);tabs.setTitleAt(tabs.indexOfComponent(tab),plainLabel(tab.canvas.document.title));
             Object errors=snapshot.get("errors");tab.message=errors instanceof java.util.List&&!((java.util.List<?>)errors).isEmpty()?"Page script: "+((java.util.List<?>)errors).get(0):"";
+            applyMediaCommands(tab,snapshot.get("media"),click);
             if(click && snapshot.get("navigation") instanceof String) { URI next=PageLoader.link(tab.original.uri,(String)snapshot.get("navigation"));if(next!=null){load(tab,next,-1);return;} }
             sync();
         }catch(Exception e){stopScripts(tab);tab.message="Could not display script changes: "+e.getMessage();sync();}
+    }
+    @SuppressWarnings("unchecked") private void applyMediaCommands(Tab tab,Object value,boolean gesture)throws Exception{
+        if(!(value instanceof java.util.List))return;java.util.List<?> commands=(java.util.List<?>)value;if(commands.size()>32)throw new IllegalArgumentException("Media command limit");
+        for(Object raw:commands){
+            if(!(raw instanceof Map))throw new IllegalArgumentException("Invalid media command");Map<String,Object> c=(Map<String,Object>)raw;
+            int id=PageNetwork.integer(c,"id");String kind=PageNetwork.string(c,"kind");if(id<=0||id>10001)throw new IllegalArgumentException("Invalid media element");
+            if(kind.equals("play")){
+                String src=PageNetwork.string(c,"src");int request=PageNetwork.integer(c,"request");
+                boolean sample="playground".equals(internal(tab.original.uri))&&src.equals("aster-sample.mp4");
+                URI uri=sample?null:PageLoader.link(tab.original.uri,src);
+                if(!sample&&(uri==null||!MediaRelay.supported(uri))){mediaReply(tab,id,"error",Map.of(),"Unsupported media source",request);continue;}
+                String canonical=sample?"aster-sample.mp4":uri.toString();
+                if(tab.mediaId==id&&tab.media!=null&&tab.mediaSource.equals(canonical)){tab.media.control("play",null);continue;}
+                if(!gesture){mediaReply(tab,id,"denied",Map.of(),"Click this page's Play button to allow playback",request);continue;}
+                if(tab.media!=null){int old=tab.mediaId;tab.media.close();tab.mediaTime.set(null);if(old>0&&old!=id)mediaReply(tab,old,"emptied",Map.of("paused",true,"readyState",0),null,0);}
+                tab.mediaId=id;tab.mediaSource=canonical;ScriptSession owner=tab.script;final URI source=uri;
+                try{
+                    tab.media=new MediaPanel(sample?MediaPanel::sample:()->MediaResource.remote(tab.original.uri,source),()->{
+                        if(tab.script==owner){mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0),null,0);tab.media=null;tab.mediaId=0;tab.mediaTime.set(null);tab.mediaSource="";tab.setViewportView(tab.canvas);}
+                    },(event,state)->{
+                        if(!owner.alive())return;Map<String,Object> copy=new LinkedHashMap<>(state);copy.put("src",canonical);
+                        String code="__aster.mediaUpdate("+id+","+Json.stringify(copy)+","+Json.quote(event)+","+(event.equals("error")?Json.quote(String.valueOf(state.get("message"))):"null")+",0);void 0";
+                        if(event.equals("timeupdate"))tab.mediaTime.set(code);else {tab.mediaTime.set(null);if(tab.mediaEvents.size()<64)tab.mediaEvents.add(code);}
+                    });
+                    tab.media.setPreferredSize(new Dimension(800,340));JPanel content=new JPanel(new BorderLayout());content.setBackground(PAPER);content.add(tab.media,BorderLayout.NORTH);content.add(tab.canvas,BorderLayout.CENTER);tab.setViewportView(content);
+                    for(String property:Arrays.asList("volume","muted")){Object v=c.get(property);if(property.equals("volume"))validMediaNumber(v,0,1);else if(!(v instanceof Boolean))throw new IllegalArgumentException("Invalid mute value");tab.media.control(property,v);}
+                    Object time=c.get("time");validMediaNumber(time,0,86400*365);tab.media.control("seek",time);
+                }catch(Throwable e){if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"error",Map.of(),"Media could not start: "+e.getMessage(),request);}
+            }else if(tab.mediaId==id&&tab.media!=null){
+                if(kind.equals("unload")){tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaTime.set(null);tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0,"currentTime",0),null,0);}
+                else if(kind.equals("pause"))tab.media.control(kind,null);
+                else if(kind.equals("seek")||kind.equals("volume")){validMediaNumber(c.get("value"),0,kind.equals("volume")?1:86400*365);tab.media.control(kind,c.get("value"));}
+                else if(kind.equals("muted")){if(!(c.get("value") instanceof Boolean))throw new IllegalArgumentException("Invalid mute value");tab.media.control(kind,c.get("value"));}
+                else throw new IllegalArgumentException("Unsupported media command");
+            }
+        }
+    }
+    private static void validMediaNumber(Object value,double min,double max){if(!(value instanceof Number)||!Double.isFinite(((Number)value).doubleValue())||((Number)value).doubleValue()<min||((Number)value).doubleValue()>max)throw new IllegalArgumentException("Invalid media control value");}
+    private void mediaReply(Tab tab,int id,String event,Map<String,Object> state,String error,int request){
+        if(tab.mediaEvents.size()<64)tab.mediaEvents.add("__aster.mediaUpdate("+id+","+Json.stringify(state)+","+Json.quote(event)+","+(error==null?"null":Json.quote(error))+","+request+");void 0");
     }
     private void completed(Tab tab, Engine.Document document, int historyIndex) {
         if(historyIndex>=0) tab.index=historyIndex;
@@ -545,16 +592,18 @@ public final class PreviewMain {
     }
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && args[0].equals("--render-test")) { renderTest(args.length > 1 ? args[1] : "aster-engine.png"); return; }
-        if(args.length>0&&args[0].equals("--media-smoke")){
+        if(args.length>0&&(args[0].equals("--media-smoke")||args[0].equals("--stream-smoke"))){
             if(args.length<2)throw new IllegalArgumentException("--media-smoke requires an output image path");
             Thread.setDefaultUncaughtExceptionHandler((thread,error)->{mediaFailure(args[1],error.toString());error.printStackTrace();System.exit(1);});
         }
         SwingUtilities.invokeLater(() -> {
             boolean mediaSmoke = args.length > 0 && args[0].equals("--media-smoke");
-            boolean smoke = args.length > 0 && (args[0].equals("--smoke")||mediaSmoke);
+            boolean streamSmoke=args.length>0&&args[0].equals("--stream-smoke");
+            boolean smoke = args.length > 0 && (args[0].equals("--smoke")||mediaSmoke||streamSmoke);
             PreviewMain app = smoke ? new PreviewMain(Preferences.userRoot().node("io/aster/ui-smoke-" + UUID.randomUUID())) : new PreviewMain();
             app.window.setVisible(true);
-            if(mediaSmoke){app.load(app.current(),URI.create("aster:playground"),-1);app.openMedia(app.current(),MediaPanel::sample);
+            if(streamSmoke){StreamSmoke.run(app,args[1]);}
+            else if(mediaSmoke){app.load(app.current(),URI.create("aster:playground"),-1);app.openMedia(app.current(),MediaPanel::sample);
                 if(app.current().media==null){app.window.dispose();System.exit(1);return;}
                 final javax.swing.Timer deadline=new javax.swing.Timer(25000,e->{mediaFailure(args[1],"Media smoke timed out");app.window.dispose();System.exit(1);});deadline.setRepeats(false);deadline.start();
                 app.current().media.evidence(Paths.get(args[1]),()->{deadline.stop();try{preferencesRemove(app.preferences);}catch(Exception ignored){}app.window.dispose();},error->{deadline.stop();mediaFailure(args[1],error);app.window.dispose();System.exit(1);});
@@ -562,5 +611,6 @@ public final class PreviewMain {
         });
     }
     private static void preferencesRemove(Preferences preferences) throws Exception { preferences.removeNode(); }
+    void finishSmoke(){try{preferencesRemove(preferences);}catch(Exception ignored){}window.dispose();}
     private static void mediaFailure(String output,String error){System.err.println(error);try{Files.write(Paths.get(output+".log"),error.getBytes(java.nio.charset.StandardCharsets.UTF_8));}catch(Exception ignored){}}
 }

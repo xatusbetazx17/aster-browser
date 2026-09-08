@@ -21,8 +21,8 @@ A custom interface and browser features can be developed within this standalone 
 | Deliverable | Current status |
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
-| Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts; opt-in, not a complete web platform |
-| Original-engine desktop media/input | Direct unencrypted file playback through JavaFX media; XInput/Linux joystick provider with per-visit consent; no WebRTC/MSE/EME |
+| Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts/fetch/WebSocket; opt-in, not a complete web platform |
+| Original-engine desktop media/input | Progressive unencrypted files/HLS through JavaFX media, page play/pause/seek/volume/events; XInput/Linux joystick provider with per-visit consent; no WebRTC/MSE/EME |
 | Original-engine desktop file downloads | Implemented: direct HTTP/HTTPS Save As, progress/cancel/retry; two transfers and 2 GiB/file; no login/JavaScript downloads |
 | Managed Linux code installation and updates | Implemented, with file verification and rollback |
 | Word/PDF/text reading and read-aloud | Native reading panel; DOCX body/tables, PDF/DOC via local tools, English/Spanish speech |

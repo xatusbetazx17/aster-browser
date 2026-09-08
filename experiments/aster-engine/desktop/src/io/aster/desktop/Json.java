@@ -4,6 +4,15 @@ import java.util.*;
 
 /** Bounded JSON for the private script-process protocol; no object deserialization. */
 final class Json {
+    static String stringify(Object value) {
+        if(value==null)return "null";
+        if(value instanceof String)return quote((String)value);
+        if(value instanceof Boolean)return value.toString();
+        if(value instanceof Number)return Double.isFinite(((Number)value).doubleValue())?value.toString():"null";
+        if(value instanceof Map){StringJoiner j=new StringJoiner(",","{","}");((Map<?,?>)value).forEach((k,v)->j.add(quote(k.toString())+":"+stringify(v)));return j.toString();}
+        if(value instanceof Iterable){StringJoiner j=new StringJoiner(",","[","]");for(Object v:(Iterable<?>)value)j.add(stringify(v));return j.toString();}
+        throw new IllegalArgumentException("Unsupported JSON value");
+    }
     static String quote(String s) {
         StringBuilder b=new StringBuilder("\"");
         for(int i=0;i<s.length();i++) { char c=s.charAt(i); switch(c) {

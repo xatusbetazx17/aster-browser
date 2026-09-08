@@ -16,10 +16,11 @@ tests the actual applications. Use only artifacts from a successful run.
 The original-engine Windows/Linux desktop preview includes animated tabs, flat
 internal pages and [working direct file downloads](experiments/aster-engine/README.md#download-files-on-windowslinux) with Save As, progress and cancellation.
 
-**The desktop now has opt-in JavaScript/DOM interaction, native controller input
-and direct unencrypted media playback.** Try `aster:playground`. It uses standalone
+**The desktop now has opt-in JavaScript/DOM interaction, same-origin fetch and
+WebSocket connections, native controller input, page video controls, progressive
+media and unencrypted HLS playback.** Try `aster:playground`. It uses standalone
 QuickJS and JavaFX media, with no embedded browser engine. This is still an early
-foundation: full web layout, WebRTC, adaptive streaming, EME and Prime Video/Boosteroid
+foundation: full web layout, WebRTC, MSE/DASH, EME and Prime Video/Boosteroid
 playback remain unfinished. Android retains the earlier text engine. It runs alongside the
 existing WebKit prototype; the reader/companion have not been ported into this core.
 See [preview installation and update limitations](experiments/aster-engine/README.md#try-the-actual-packages).

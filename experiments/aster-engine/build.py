@@ -21,10 +21,10 @@ def run(*args):
     subprocess.run([str(arg) for arg in args], check=True, cwd=ROOT)
 
 
-def compile_java(sources, output, classpath=None):
+def compile_java(sources, output, classpath=None, release="8"):
     output.mkdir(parents=True, exist_ok=True)
     javac = [shutil.which("javac")] if shutil.which("javac") else ["java", "com.sun.tools.javac.Main"]
-    args = [*javac, "--release", "8", "-encoding", "UTF-8", "-d", output]
+    args = [*javac, "--release", release, "-encoding", "UTF-8", "-d", output]
     if classpath:
         args += ["-cp", classpath]
     run(*args, *sorted(sources))
@@ -52,7 +52,7 @@ def desktop(test=False, package=False):
     classes = BUILD / "desktop-classes"
     if classes.exists():
         shutil.rmtree(classes)
-    compile_java(list((ROOT / "core/src").rglob("*.java")) + list((ROOT / "desktop/src").rglob("*.java")), classes, libraries)
+    compile_java(list((ROOT / "core/src").rglob("*.java")) + list((ROOT / "desktop/src").rglob("*.java")), classes, libraries, release="11")
     for resource in (ROOT / 'desktop/resources').iterdir():
         if resource.is_file():
             shutil.copyfile(resource, classes / resource.name)
@@ -67,6 +67,8 @@ def desktop(test=False, package=False):
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.tests.EngineTests")
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.DownloadTests")
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.ScriptTests")
+        run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.NetworkTests")
+        run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.MediaRelayTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.DesktopTests", BUILD)
     if package:
@@ -75,7 +77,7 @@ def desktop(test=False, package=False):
             shutil.rmtree(image)
         run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", "0.1.0",
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
-            "--add-modules", "java.desktop,java.prefs,jdk.crypto.ec,jdk.unsupported,jdk.unsupported.desktop,java.xml,java.logging", "--dest", image.parent)
+            "--add-modules", "java.desktop,java.prefs,java.net.http,jdk.httpserver,jdk.crypto.ec,jdk.unsupported,jdk.unsupported.desktop,java.xml,java.logging", "--dest", image.parent)
         shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")
         shutil.copyfile(ROOT / "README.md", image / "README.md")
         if sys.platform == "win32":

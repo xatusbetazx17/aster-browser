@@ -14,6 +14,7 @@ final class ScriptSession implements AutoCloseable {
     private final DataInputStream input;
     private final DataOutputStream output;
     private volatile boolean closed;
+    private volatile PageNetwork network;
     private final ScheduledExecutorService watchdog=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"aster-script-watchdog");t.setDaemon(true);return t;});
     static Path host() throws Exception {
         String override=System.getProperty("aster.script.host"); if(override!=null)return Paths.get(override).toAbsolutePath();
@@ -31,6 +32,7 @@ final class ScriptSession implements AutoCloseable {
             if(source==null)throw new IOException("Aster DOM bootstrap missing");
             ByteArrayOutputStream bytes=new ByteArrayOutputStream(); byte[] buffer=new byte[8192];int n;while((n=source.read(buffer))!=-1)bytes.write(buffer,0,n);
             eval(new String(bytes.toByteArray(),StandardCharsets.UTF_8));
+            eval(PreviewMain.resourceText("/web.js"));
         } catch(Exception e) { close(); throw e; }
     }
     synchronized Object eval(String code) throws IOException { return command(1,code); }
@@ -50,6 +52,7 @@ final class ScriptSession implements AutoCloseable {
     }
     @SuppressWarnings("unchecked") Map<String,Object> start(Engine.Document document) throws IOException {
         if(document.scriptsBlocked)throw new IOException("Pages with Content Security Policy await Aster's policy implementation; scripts remain disabled");
+        network=new PageNetwork(document.uri);
         Object value=eval("__aster.init("+Json.quote(document.source)+","+Json.quote(document.uri.toString())+")");
         List<Object> scripts=(List<Object>)value; int total=0;
         for(Object item:scripts) {
@@ -58,11 +61,18 @@ final class ScriptSession implements AutoCloseable {
             total+=code.length(); if(total>1_000_000)throw new IOException("Combined script source exceeds 1 MB");
             eval(code+"\n;void 0;");
         }
-        eval("__aster.ready();void 0"); return snapshot();
+        eval("__aster.ready();void 0"); pump(); return snapshot();
+    }
+    @SuppressWarnings("unchecked") synchronized void pump() throws IOException {
+        if(network==null)return;
+        Object commands=eval("__asterWeb.drain()");
+        if(!(commands instanceof List)||((List<?>)commands).size()>64)throw new IOException("Invalid page network commands");
+        for(Object c:(List<?>)commands){if(!(c instanceof Map))throw new IOException("Invalid page network command");network.accept((Map<String,Object>)c);}
+        String events=network.drain();if(!events.equals("[]"))eval("__asterWeb.complete("+events+");void 0");
     }
     @SuppressWarnings("unchecked") Map<String,Object> snapshot() throws IOException { return (Map<String,Object>)eval("__aster.snapshot()"); }
     public void close() {
-        if(closed)return; closed=true; process.destroyForcibly(); watchdog.shutdownNow();
+        if(closed)return; closed=true; if(network!=null)network.close();process.destroyForcibly(); watchdog.shutdownNow();
         // Destroy first: closing a pipe must not block behind a hostile reader/writer.
         try{input.close();}catch(IOException ignored){} try{output.close();}catch(IOException ignored){}
     }

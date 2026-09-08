@@ -34,7 +34,7 @@ public final class ScriptTests {
                 js.eval("__aster.click("+id+")");check(Engine.parseInteractive(base,js.snapshot().get("html").toString()).text().contains("1"),"Click did not update rendered text");
                 js.eval("__aster.key('keydown','ArrowLeft','ArrowLeft',false)");check(js.snapshot().get("html").toString().contains("ArrowLeft"),"Keyboard event did not reach document");
                 js.eval("__aster.tick(50)");check(js.snapshot().get("html").toString().contains("Timer fired"),"Timer did not fire");
-                check(Boolean.TRUE.equals(js.eval("typeof std==='undefined' && typeof os==='undefined' && typeof require==='undefined' && typeof process==='undefined' && typeof fetch==='undefined' && typeof WebSocket==='undefined' && typeof RTCPeerConnection==='undefined' && typeof MediaSource==='undefined' && typeof navigator.requestMediaKeySystemAccess==='undefined'")),"Host exposed unsupported APIs or system access");
+                check(Boolean.TRUE.equals(js.eval("typeof std==='undefined' && typeof os==='undefined' && typeof require==='undefined' && typeof process==='undefined' && typeof RTCPeerConnection==='undefined' && typeof MediaSource==='undefined' && typeof navigator.requestMediaKeySystemAccess==='undefined'")),"Host exposed unsupported APIs or system access");
                 check(Boolean.TRUE.equals(js.eval("navigator.getGamepads().length===0")),"Controllers exposed before native permission");
                 js.controller(true);check(js.eval("navigator.getGamepads()") instanceof List,"Controller provider did not return gamepad snapshots");js.controller(false);
                 check(Boolean.TRUE.equals(js.eval("navigator.getGamepads().length===0")),"Controller permission was not revoked");

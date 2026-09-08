@@ -10,12 +10,17 @@ separate engine foundation; it does not replace the WebKit prototype described b
 The original-engine desktop now has [working direct file downloads](../../experiments/aster-engine/README.md#download-files-on-windowslinux). Saving bytes from an HTTP response does not require a JavaScript interpreter, a media decoder or a DRM module. It does not supply streaming playback.
 
 The desktop now includes standalone QuickJS-NG, a small Aster DOM/event bridge,
-opt-in native gamepad input and direct unencrypted file playback through JavaFX
-media (without JavaFX WebView). Try **Menu → Playground**. Files are fetched in full
-before playback; this is not low-latency streaming. The new APIs are a limited
-desktop foundation, not full website compatibility.
+opt-in native gamepad input, same-origin `fetch`/`WebSocket`, and native video
+controls connected to page scripts. JavaFX media (without JavaFX WebView) receives
+progressive file bytes or rewritten, unencrypted HLS playlists and segments from
+Aster's private transport. Playback can begin before the full transfer finishes.
+Try **Menu → Playground → Run JavaScript → Play video**. The new APIs remain a
+limited desktop foundation, not full website compatibility.
 
-WebRTC, MSE/adaptive streaming and EME are still absent. There are no placeholder
+WebRTC, MSE/DASH and EME are still absent. HLS master playlists and ordinary
+H.264/AAC MPEG-TS segments are implemented; native CI tests an on-demand stream.
+Bitrate switching under changing bandwidth and long-running live playback remain
+unverified. There are no placeholder
 `RTCPeerConnection`, `MediaSource` or key-system APIs reporting false support.
 The Android preview has not received the desktop scripting/media components. Its Android menu uses
 the platform's [MediaDrm API](https://developer.android.com/reference/android/media/MediaDrm)
@@ -28,8 +33,8 @@ DOM/CSS implementation and renderer isolation; JavaScript/DOM/event integration;
 network/storage/origin/permission APIs; graphics/media/codec playback and MSE;
 WebRTC with ICE/DTLS/SRTP and real audio/video/controller tests; then EME plus
 an authorized platform CDM integration, license exchange and service tests.
-Parser, real QuickJS/DOM, input permission, resource-fetch and native decoder
-tests cover the implemented subset. They do not prove a cloud game or protected
+Parser, real QuickJS/DOM, input permission, HTTP/WebSocket peers, HLS transport and
+native page-controlled decoder tests cover the implemented subset. They do not prove a cloud game or protected
 service session. See the [exact desktop scope and test instructions](../../experiments/aster-engine/README.md#try-scripting-media-and-controller-input).
 
 For Widevine, the repository owner must obtain the necessary integration agreement
