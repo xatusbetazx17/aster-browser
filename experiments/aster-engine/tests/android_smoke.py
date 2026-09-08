@@ -47,7 +47,8 @@ def wait_text(text, timeout=90, recover_system_ui=False):
                 system_ui_waits += 1
                 continue
         for node in root.iter("node"):
-            if text in node.attrib.get("text", "") or text in node.attrib.get("content-desc", ""):
+            # Android themes may capitalize native button labels for display.
+            if text.casefold() in node.attrib.get("text", "").casefold() or text.casefold() in node.attrib.get("content-desc", "").casefold():
                 return node
         time.sleep(1)
     raise AssertionError(f"Android UI did not show {text!r}; observed: {observed!r}")
@@ -167,10 +168,14 @@ def main():
         wait_text("Network page rendered by Aster.")
         menu('Read page / Find')
         wait_text('Save notes')
+        wait_text('Network page rendered by Aster.')
+        (OUT / 'aster-android-reader.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
         tap(wait_text('Close'))
+        print('Native reader text and controls opened.', flush=True)
         menu('Page forms')
         tap(wait_text('Submit'))
         wait_text('Native POST reached the server.')
+        print('Native form POST submitted successfully.', flush=True)
         menu('Back')
         wait_text('Network page rendered by Aster.')
         menu("Bookmark this page")

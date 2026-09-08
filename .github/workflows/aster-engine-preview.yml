@@ -39,14 +39,17 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Test original parser, layout, HTTP and Java2D; build native package
+        id: package
         run: python experiments/aster-engine/build.py desktop --test --package
       - name: Open the Linux native application
+        id: linux_ui
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb
           xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --smoke experiments/aster-engine/build/aster-window.png
       - name: Decode and display actual Linux video frames
+        id: linux_video
         if: runner.os == 'Linux'
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
@@ -56,6 +59,7 @@ jobs:
           fi
           xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --media-smoke experiments/aster-engine/build/aster-media-frame.png
       - name: Stream real HLS and control it from a page on Linux
+        id: linux_stream
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install -y pulseaudio libasound2-plugins
@@ -69,6 +73,7 @@ jobs:
           ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-frame.png
           ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-repeat.png
       - name: Open the Windows EXE
+        id: windows_ui
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -77,6 +82,7 @@ jobs:
           if (-not $asterProcess.WaitForExit(30000)) { $asterProcess.Kill(); throw 'Aster window did not finish its smoke check' }
           if ($asterProcess.ExitCode -ne 0 -or -not (Test-Path $asterOutput)) { throw 'Aster EXE smoke check failed' }
       - name: Decode and display actual Windows video frames
+        id: windows_video
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -88,7 +94,8 @@ jobs:
             throw 'Aster EXE did not decode the test video'
           }
       - name: Stream real HLS and control it from a page on Windows
-        if: runner.os == 'Windows'
+        id: windows_stream
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.windows_ui.outcome == 'success' }}
         shell: pwsh
         run: |
           Get-Service AudioEndpointBuilder, Audiosrv | Format-Table Name, Status, StartType
@@ -102,13 +109,38 @@ jobs:
             if (Test-Path $asterDecoder) { Get-Content -LiteralPath $asterDecoder -Tail 100 }
             throw 'Aster EXE streaming and page media controls failed'
           }
+      - name: Record the package verification results
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        shell: python
+        env:
+          ASTER_BUILD_OS: ${{ runner.os }}
+          ASTER_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          ASTER_BUILD_UI: ${{ runner.os == 'Windows' && steps.windows_ui.outcome || steps.linux_ui.outcome }}
+          ASTER_BUILD_VIDEO: ${{ runner.os == 'Windows' && steps.windows_video.outcome || steps.linux_video.outcome }}
+          ASTER_BUILD_STREAM: ${{ runner.os == 'Windows' && steps.windows_stream.outcome || steps.linux_stream.outcome }}
+        run: |
+          import os
+          from pathlib import Path
+          lines = ['Aster 0.2 development preview', 'Core, browsing and reading checks: passed']
+          for label, key in [('Platform', 'OS'), ('Commit', 'COMMIT'), ('Native window', 'UI'), ('Video decoding', 'VIDEO'), ('HLS and page controls', 'STREAM')]:
+              lines.append(label + ': ' + os.environ['ASTER_BUILD_' + key])
+          if any(os.environ['ASTER_BUILD_' + key] != 'success' for key in ('VIDEO', 'STREAM')):
+              lines.append('A failed media check remains a failed workflow. This package is not verified for media playback.')
+          else:
+              lines.append('Media fixtures passed; protected streaming and full website compatibility remain unsupported.')
+          Path('experiments/aster-engine/build/BUILD-STATUS.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
       - uses: actions/upload-artifact@v7.0.1
+        # Preserve a usable Windows browsing preview and its failure evidence.
+        # Linux input artifacts continue to require all native checks to pass.
+        if: ${{ success() || (failure() && runner.os == 'Windows' && steps.package.outcome == 'success' && steps.windows_ui.outcome == 'success') }}
         with:
           name: aster-engine-${{ matrix.artifact }}
           path: |
             experiments/aster-engine/build/*.zip
             experiments/aster-engine/build/*.tar.gz
             experiments/aster-engine/build/*.png
+            experiments/aster-engine/build/*.log
+            experiments/aster-engine/build/BUILD-STATUS.txt
             experiments/aster-engine/build/SHA256SUMS.txt
           retention-days: 14
   flatpak:

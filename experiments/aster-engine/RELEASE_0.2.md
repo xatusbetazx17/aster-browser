@@ -76,10 +76,13 @@ separate work.
 
 ## Packages and updates
 
-Use artifacts from a successful run of
+Use artifacts from
 [Aster original engine preview](https://github.com/xatusbetazx17/aster-browser/actions/workflows/aster-engine-preview.yml)
 on `codex/aster-webkit-desktop`. All packages are development previews, not signed
-stable releases. Checksums are included.
+stable releases. Checksums are included. Prefer a successful workflow. A Windows
+browsing bundle can also be retained when its core/reading/native-window checks
+pass but media checks fail; read its `BUILD-STATUS.txt` and decoder logs first.
+The failure remains visible in GitHub Actions and is not counted as a passing check.
 
 | Artifact | Contents and intended use |
 | --- | --- |
@@ -88,6 +91,13 @@ stable releases. Checksums are included.
 | `aster-engine-Linux-ubuntu24` | Additional native Ubuntu 24.04 build and tests. |
 | `aster-engine-Linux-Flatpak` | Linux x64 package using Freedesktop 25.08. Requires Flatpak and network access to install its runtime initially. |
 | `aster-engine-Android` | Android 8+ APK and emulator evidence. Development signing limitations below apply. |
+
+Windows native video is currently a known verification blocker: the 0.2 CI checks
+observed an HLS clock stall after pause/resume and, on another runner, a native
+`ERROR_MEDIA_INVALID` decoding error. The attempted playback scheduling change
+did not resolve it and was reverted. Browsing, reading and native-window checks
+passed separately. Do not rely on this preview for Windows video/streaming until
+the native media checks pass on the package you download.
 
 On Linux systems with Flatpak installed:
 

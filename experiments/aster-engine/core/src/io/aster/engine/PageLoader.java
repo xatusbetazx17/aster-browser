@@ -6,20 +6,19 @@ import java.nio.charset.*;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
 
-/** Top-level text navigation only. No cookies, credentials, subresources or external handlers. */
+/** Bounded page navigation, native form POST and same-origin stylesheets. No cookies or external handlers. */
 public final class PageLoader {
     public static final URI HOME = URI.create("aster://welcome");
     public static final String WELCOME = "<html><head><title>Aster · Engine preview</title></head><body>"
         + "<p style='color:#247878;font-weight:bold'>A S T E R</p><h1>Your space to explore.</h1>"
-        + "<p>A first look at Aster's own rendering engine.</p>"
-        + "<h2>Start with something simple</h2><p>Enter an HTTPS address above or try "
-        + "<a href='https://example.com'>Example Domain</a>. Basic text pages and links work here.</p>"
-        + "<h2>Built for a different direction</h2><p>This preview paints pages with Aster code. "
-        + "It does not embed Chrome, Chromium, Firefox, WebKit or Android WebView.</p>"
-        + "<h2>Still growing</h2><p>Full web apps, images, forms, cloud gaming and Prime Video "
-        + "are not supported yet. The desktop Playground offers limited scripts and direct media playback. "
-        + "This is an engine development preview, not the full Aster browser.</p>"
-        + "<p><b>Tip:</b> use Back, Forward, Home and bookmarks to explore text websites.</p></body></html>";
+        + "<p>Search, read and keep useful things together.</p>"
+        + "<h2>Start exploring</h2><p>Search above, enter a website address or try "
+        + "<a href='https://example.com'>Example Domain</a>. Simple pages, images and basic forms work here.</p>"
+        + "<h2>Read your way</h2><p>Open the menu to read a page, find text, keep notes or "
+        + "open a Word or text document. Read aloud uses an installed English or Spanish voice.</p>"
+        + "<h2>Still growing</h2><p>Aster 0.2 is an independent browser preview. Full web apps, "
+        + "account sign-in, PDF, cloud gaming and protected streaming remain unfinished.</p>"
+        + "<p><b>Tip:</b> use Tabs and bookmarks in the menu to keep exploring.</p></body></html>";
 
     public static URI address(String input) {
         String text = input.trim();
@@ -55,7 +54,7 @@ public final class PageLoader {
         public final String contentType, disposition;
         public final long length;
         DownloadRequired(URI uri, String type, String disposition, long length) {
-            super("This response is a file download. Save it with the desktop download manager.");
+            super("This response is a file download. Choose Save As to keep it.");
             this.uri = uri; this.contentType = type; this.disposition = disposition; this.length = length;
         }
     }
@@ -72,7 +71,7 @@ public final class PageLoader {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Page request cancelled or timed out.");
             HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
             connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
-            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.1");
+            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.2");
             connection.setRequestProperty("Accept", "text/html,text/plain;q=0.9");
             connection.setRequestProperty("Accept-Encoding", "gzip");
             try {
