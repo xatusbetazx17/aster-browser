@@ -57,6 +57,7 @@ jobs:
           ctl.!default { type pulse }
           EOF
           ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-frame.png
+          ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-repeat.png
       - name: Open the Windows EXE
         if: runner.os == 'Windows'
         shell: pwsh

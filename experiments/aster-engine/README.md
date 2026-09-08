@@ -158,7 +158,8 @@ It receives metadata, play/playing/pause/timeupdate/volumechange/ended/error eve
 dimensions and playback state. The play Promise settles from actual native playback.
 A new player/source requires a real page click; startup autoplay rejects with
 `NotAllowedError`. One page-controlled player is shown above the rendered page.
-This is a subset of HTMLMediaElement, without tracks, source objects, encrypted
+Seeks requested while paused are queued and applied when playback resumes; this
+avoids a native HLS audio-pipeline deadlock. This is a subset of HTMLMediaElement, without tracks, source objects, encrypted
 media, playback-rate controls or the complete media event/ready-state algorithms.
 
 Aster's private, loopback-only media transport forwards progressive bytes and
