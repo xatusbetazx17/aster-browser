@@ -668,10 +668,10 @@ public final class PreviewMain {
                             throw new AssertionError("Animated closed tab was not removed");
                         try {
                             BufferedImage screenshot = new Robot().createScreenCapture(window.getBounds());
-                            ImageIO.write(screenshot, "png", new File(output)); preferences.removeNode();
+                            ImageIO.write(screenshot, "png", new File(output));
                         } catch (Exception e) { throw new RuntimeException(e); }
                         System.out.println("Aster native desktop passed: welcome, hover fade, background close, shrink cleanup and window rendering.");
-                        window.dispose();
+                        finishSmoke();
                     });
                 });
             });
@@ -693,11 +693,11 @@ public final class PreviewMain {
             else if(mediaSmoke){app.load(app.current(),URI.create("aster:playground"),-1);app.openMedia(app.current(),MediaPanel::sample);
                 if(app.current().media==null){app.window.dispose();System.exit(1);return;}
                 final javax.swing.Timer deadline=new javax.swing.Timer(25000,e->{mediaFailure(args[1],"Media smoke timed out");app.window.dispose();System.exit(1);});deadline.setRepeats(false);deadline.start();
-                app.current().media.evidence(Paths.get(args[1]),()->{deadline.stop();try{preferencesRemove(app.preferences);}catch(Exception ignored){}app.window.dispose();},error->{deadline.stop();mediaFailure(args[1],error);app.window.dispose();System.exit(1);});
+                app.current().media.evidence(Paths.get(args[1]),()->{deadline.stop();app.finishSmoke();},error->{deadline.stop();mediaFailure(args[1],error);app.window.dispose();System.exit(1);});
             } else if (smoke) app.nativeSmoke(args[1]);
         });
     }
     private static void preferencesRemove(Preferences preferences) throws Exception { preferences.removeNode(); }
-    void finishSmoke(){try{preferencesRemove(preferences);}catch(Exception ignored){}window.dispose();}
+    void finishSmoke(){dispose();try{preferencesRemove(preferences);}catch(Exception ignored){}window.dispose();}
     private static void mediaFailure(String output,String error){System.err.println(error);try{Files.write(Paths.get(output+".log"),error.getBytes(java.nio.charset.StandardCharsets.UTF_8));}catch(Exception ignored){}}
 }
