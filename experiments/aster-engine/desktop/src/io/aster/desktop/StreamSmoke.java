@@ -27,7 +27,7 @@ final class StreamSmoke {
                 else if(path.matches("/(low|high)[01]\\.ts")){type="video/mp2t";segments.incrementAndGet();requested.add(path);bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/hls-"+path.substring(1)+".b64"));}
                 else if(path.equals("/clip.mp4")){type="video/mp4";bytes=Base64.getMimeDecoder().decode(PreviewMain.resourceText("/sample.mp4.b64"));}
                 else{e.sendResponseHeaders(404,-1);e.close();return;}
-                e.getResponseHeaders().set("Content-Type",type);e.sendResponseHeaders(200,bytes.length);e.getResponseBody().write(bytes);e.close();
+                e.getResponseHeaders().set("Content-Type",type);if(e.getRequestMethod().equals("HEAD")){e.getResponseHeaders().set("Content-Length",Integer.toString(bytes.length));e.sendResponseHeaders(200,-1);}else{e.sendResponseHeaders(200,bytes.length);e.getResponseBody().write(bytes);}e.close();
             });server.start();
         }
         URI uri(){return URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/");}
@@ -40,29 +40,29 @@ final class StreamSmoke {
         public void close(){server.stop(0);}
     }
     interface Check{boolean test()throws Exception;}
-    private static void waitFor(Check test)throws Exception{long end=System.nanoTime()+25_000_000_000L;while(System.nanoTime()<end){if(test.test())return;Thread.sleep(30);}throw new AssertionError("Streaming check timed out");}
+    private static void waitFor(String stage,Check test)throws Exception{long end=System.nanoTime()+25_000_000_000L;while(System.nanoTime()<end){if(test.test())return;Thread.sleep(30);}throw new AssertionError("Streaming check timed out: "+stage);}
     private static void edt(Runnable action)throws Exception{SwingUtilities.invokeAndWait(action);}
     static void run(PreviewMain app,String output){new Thread(()->{
         try(Fixture fixture=new Fixture()){
             edt(()->app.load(app.current(),fixture.uri(),-1));
-            waitFor(()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().original!=null&&app.current().original.uri.equals(fixture.uri()));return loaded[0];});
+            waitFor("HTTP page",()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().original!=null&&app.current().original.uri.equals(fixture.uri()));return loaded[0];});
             edt(()->app.current().runScripts.doClick());
-            waitFor(()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().script!=null&&!app.current().scriptStarting);return loaded[0];});
+            waitFor("script start",()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().script!=null&&!app.current().scriptStarting);return loaded[0];});
             ScriptSession js=app.current().script;
-            waitFor(()->Boolean.TRUE.equals(js.eval("autoplay==='NotAllowedError'&&httpReady")));
+            waitFor("autoplay refusal and real HTTP JSON",()->Boolean.TRUE.equals(js.eval("autoplay==='NotAllowedError'&&httpReady")));
             edt(()->{
                 PreviewMain.PageCanvas c=app.current().canvas;c.setSize(900,800);c.ensureLayout();Engine.Draw draw=c.layout.items.stream().filter(d->d.text.equals("Stream")).findFirst().orElseThrow(()->new AssertionError("Rendered Stream button missing"));
                 c.dispatchEvent(new MouseEvent(c,MouseEvent.MOUSE_CLICKED,System.currentTimeMillis(),0,(int)((draw.x+2)*c.scale),(int)((draw.y+4)*c.scale),1,false,MouseEvent.BUTTON1));
             });
-            waitFor(()->{boolean[] ready={false};edt(()->ready[0]=app.current().media!=null);return ready[0];});
+            waitFor("page click opened player",()->{boolean[] ready={false};edt(()->ready[0]=app.current().media!=null);return ready[0];});
             AtomicBoolean decoded=new AtomicBoolean();AtomicReference<String> error=new AtomicReference<>();
             edt(()->app.current().media.evidence(Paths.get(output),()->decoded.set(true),error::set));
-            waitFor(()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
-            waitFor(()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''")));
+            waitFor("decoded blue/red HLS frames",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
+            waitFor("page play/pause/seek/volume/mute state",()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''")));
             if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
             edt(()->app.load(app.current(),URI.create("aster:home"),-1));if(js.alive())throw new AssertionError("Navigation left the streaming page alive");
             System.out.println("Native streaming passed: real HTTP JSON, autoplay refused, rendered Play click, HLS master/variant/two segments, actual blue/red H.264 frames, page play Promise, pause/resume/seek/volume/mute/events and navigation cleanup. Bitrate switching, WebRTC and DRM not tested.");
             edt(app::finishSmoke);
-        }catch(Throwable e){e.printStackTrace();try{Files.writeString(Paths.get(output+".log"),e.toString());}catch(Exception ignored){}try{edt(app::finishSmoke);}catch(Exception ignored){}System.exit(1);}
+        }catch(Throwable e){e.printStackTrace();String detail=e.toString();try{ScriptSession js=app.current().script;if(js!=null&&js.alive())detail+="\nPage: "+js.eval("JSON.stringify({autoplay,httpReady,played,pauses,once,mediaError,state:v._media})");MediaPanel media=app.current().media;if(media!=null)detail+="\nNative: "+media.diagnostic();}catch(Exception diagnostic){detail+="\nDiagnostic: "+diagnostic;}System.err.println(detail);try{Files.writeString(Paths.get(output+".log"),detail);}catch(Exception ignored){}try{edt(app::finishSmoke);}catch(Exception ignored){}System.exit(1);}
     },"aster-native-stream-check").start();}
 }

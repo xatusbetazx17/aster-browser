@@ -47,7 +47,16 @@ jobs:
           xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --media-smoke experiments/aster-engine/build/aster-media-frame.png
       - name: Stream real HLS and control it from a page on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-frame.png
+        run: |
+          sudo apt-get install -y pulseaudio libasound2-plugins
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=aster_ci
+          pactl set-default-sink aster_ci
+          cat > experiments/aster-engine/build/alsa-ci.conf <<'EOF'
+          pcm.!default { type pulse }
+          ctl.!default { type pulse }
+          EOF
+          ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-frame.png
       - name: Open the Windows EXE
         if: runner.os == 'Windows'
         shell: pwsh

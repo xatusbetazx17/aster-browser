@@ -96,6 +96,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
         }catch(Throwable e){error(e.toString());}
     }
     void evidence(Path image,Runnable done,java.util.function.Consumer<String> failure) { passed=done;failed=failure;evidence=image;Platform.runLater(()->{if(monitor!=null&&!closed)monitor.start();}); }
+    String diagnostic()throws Exception{CompletableFuture<String> result=new CompletableFuture<>();Platform.runLater(()->result.complete("player="+(player==null?"null":player.getStatus()+", time="+player.getCurrentTime()+", duration="+player.getTotalDuration()+", dimensions="+player.getMedia().getWidth()+"x"+player.getMedia().getHeight())+", frames="+samples+", blue="+gotFirst+", color="+Integer.toHexString(lastColor)+", verified="+verified));return result.get(2,TimeUnit.SECONDS);}
     private void error(String message) { SwingUtilities.invokeLater(()->{if(closed)return;status.setText("Could not play this media: "+message);pause.setEnabled(false);if(listener!=null)listener.accept("error",java.util.Map.of("message",message));if(failed!=null)failed.accept(message);}); }
     static MediaResource sample() throws Exception { Path path=Files.createTempFile("aster-sample-",".mp4");try{Files.write(path,Base64.getMimeDecoder().decode(PreviewMain.resourceText("/sample.mp4.b64")));return MediaResource.file(path);}catch(Exception e){delete(path);throw e;} }
     private static void delete(Path path) { if(path!=null)try{Files.deleteIfExists(path);}catch(Exception e){path.toFile().deleteOnExit();} }
