@@ -42,12 +42,15 @@ public final class ReadingTests {
         rejects(()->DocumentReader.read("hostile.docx",new ByteArrayInputStream(docx("<!DOCTYPE x [<!ENTITY y SYSTEM 'file:///secret'>]><x>&y;</x>"))));
         check(DocumentReader.read("notes.txt",new ByteArrayInputStream("English y español".getBytes(StandardCharsets.UTF_8))).contains("español"),"UTF-8 reader");
         try(ScriptSession script=new ScriptSession()){
-            script.start(Engine.parse(site,"<h1 id='x'>Hello</h1>"));
+            Map<?,?> first=script.start(Engine.parse(site,"<head><style id='sheet'>h1 {color:blue}</style></head><h1 id='x'>Hello</h1>"));
+            check(Engine.parseInteractive(site,first.get("html").toString()).runs.get(0).style.color==0xff0000ff,"Stylesheet lost when scripts start");
             for(int i=0;i<100;i++)check(((Map<?,?>)script.eval("__aster.tick("+(i*50)+")")).get("html")==null,"Idle tick copied full page");
             Map<?,?> changed=(Map<?,?>)script.eval("document.getElementById('x').style.color='red';__aster.tick(5010)");
             check(changed.get("html").toString().contains("color:red"),"Style mutation missed");
             check(((Map<?,?>)script.eval("__aster.tick(5020)")).get("html")==null,"Mutation was repeatedly sent");
             check(((Map<?,?>)script.eval("document.getElementById('x').textContent='Updated';__aster.tick(5030)")).get("html").toString().contains("Updated"),"Text mutation missed");
+            Map<?,?> sheet=(Map<?,?>)script.eval("delete document.getElementById('x').style.color;document.getElementById('sheet').textContent='h1 {color:green}';__aster.tick(5040)");
+            check(Engine.parseInteractive(site,sheet.get("html").toString()).runs.get(0).style.color==0xff008000,"Live stylesheet mutation lost");
         }
         BufferedImage logo=new BufferedImage(80,40,BufferedImage.TYPE_INT_RGB);Graphics2D graphics=logo.createGraphics();graphics.setColor(Color.BLUE);graphics.fillRect(0,0,80,40);graphics.dispose();ByteArrayOutputStream image=new ByteArrayOutputStream();ImageIO.write(logo,"png",image);
         check(PreviewMain.decodeImage(image.toByteArray()).getRGB(5,5)==Color.BLUE.getRGB(),"Actual image decoder");rejects(()->PreviewMain.decodeImage(new byte[]{1,2,3}));

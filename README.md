@@ -23,8 +23,9 @@ WebSocket connections, native controller input, page video controls, progressive
 media and unencrypted HLS playback.** Try `aster:playground`. It uses standalone
 QuickJS and JavaFX media, with no embedded browser engine. This is still an early
 foundation: full web layout, WebRTC, MSE/DASH, EME and Prime Video/Boosteroid
-playback remain unfinished. Android retains the earlier text engine. It runs alongside the
-existing WebKit prototype; the reader/companion have not been ported into this core.
+playback remain unfinished. Android now shares the 0.2 browsing/reading features,
+while desktop scripting/media remain separate. PDF and the AI companion have not
+been brought into this original engine.
 See [preview installation and update limitations](experiments/aster-engine/README.md#try-the-actual-packages).
 
 ## Install or update standalone Aster

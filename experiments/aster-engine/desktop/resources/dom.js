@@ -177,7 +177,12 @@
     const render=(n,depth)=>{
       if(++count>10000 || depth>64) throw new RangeError('DOM render limit');
       if(n.nodeType===3) { size+=n._text.length; if(size>1000000) throw new RangeError('DOM text limit'); return escape(n._text); }
-      const tag=n.tagName.toLowerCase(); if(hidden.has(tag)) return '';
+      const tag=n.tagName.toLowerCase();
+      // Keep the live stylesheet nodes when serializing a scripted page. Escaping
+      // '<' as CSS prevents stylesheet text from closing its HTML element.
+      if(tag==='head') return n.children.filter(c=>c.tagName==='STYLE').map(c=>render(c,depth+1)).join('');
+      if(tag==='style') { const css=n.textContent; size+=css.length; if(size>1000000) throw new RangeError('DOM text limit'); return '<style>'+css.replace(/</g,'\\3c ')+'</style>'; }
+      if(hidden.has(tag)) return '';
       if(!/^[a-z][a-z0-9-]*$/.test(tag)) return '';
       let attrs=''; for(const k of ['href','src','alt','id','class','style','type','controls','width','height','hidden']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
       const css=Object.entries(n.style).map(([k,v])=>k.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+':'+String(v)).join(';');

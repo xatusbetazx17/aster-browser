@@ -30,12 +30,22 @@ def screen():
     return ET.fromstring(raw)
 
 
-def wait_text(text, timeout=90):
+def wait_text(text, timeout=90, recover_system_ui=False):
     deadline = time.monotonic() + timeout
     observed = []
+    system_ui_waits = 0
     while time.monotonic() < deadline:
         root = screen()
         observed = [(n.attrib.get("text", "")[:300], n.attrib.get("content-desc", "")[:300]) for n in root.iter("node") if n.attrib.get("text") or n.attrib.get("content-desc")]
+        # API 26 software emulation can show a boot-time System UI ANR. Allow
+        # two explicit Wait actions at startup only; never dismiss an app ANR.
+        if recover_system_ui and system_ui_waits < 2 and any(t == "System UI isn't responding" for t, _ in observed):
+            wait = next((n for n in root.iter("node") if n.attrib.get("text") == "Wait"), None)
+            if wait is not None:
+                print("Waiting for the emulator's System UI to recover at startup.", flush=True)
+                tap(wait)
+                system_ui_waits += 1
+                continue
         for node in root.iter("node"):
             if text in node.attrib.get("text", "") or text in node.attrib.get("content-desc", ""):
                 return node
@@ -50,7 +60,20 @@ def tap(node):
 
 def menu(label):
     tap(wait_text("Aster menu"))
-    tap(wait_text(label))
+    # Native popup menus scroll on the 480x800 API 26 fixture display.
+    for _ in range(6):
+        root = screen()
+        node = next((n for n in root.iter("node") if n.attrib.get("text") == label), None)
+        if node is not None:
+            tap(node)
+            return
+        scroller = next((n for n in root.iter("node") if n.attrib.get("scrollable") == "true"), None)
+        if scroller is None:
+            break
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", scroller.attrib["bounds"]))
+        x = str((x1 + x2) // 2)
+        adb("shell", "input", "swipe", x, str(y2 - 30), x, str(y1 + 30), "400")
+    raise AssertionError(f"Android menu item was not reachable: {label!r}")
 
 
 def image_fixture():
@@ -104,7 +127,7 @@ def main():
         adb("install", "--no-incremental", "--no-streaming", "-r", str(OUT / "aster-engine-preview.apk"))
         print("APK installed.", flush=True)
         adb("shell", "am", "start", "-W", "-n", PACKAGE + "/io.aster.android.MainActivity")
-        wait_text("Your space to explore.")
+        wait_text("Your space to explore.", recover_system_ui=True)
         print("Native Canvas home page opened.", flush=True)
         (OUT / "aster-android-home.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
         field = wait_text("Website address")
@@ -167,7 +190,7 @@ def main():
         print("Android passed: native Canvas, actual fetched image pixels, real HTTP/link/Back, native form POST, reader controls, bookmark-preserving APK replacement, MediaDrm query.")
     finally:
         server.shutdown()
-        logs = adb("logcat", "-d", "-s", "AndroidRuntime:E")
+        logs = adb("logcat", "-d", "-s", "AndroidRuntime:E", "ActivityManager:E")
         OUT.joinpath("android-runtime.log").write_text(logs, encoding="utf-8")
         if "FATAL EXCEPTION" in logs:
             print(logs[-8000:], flush=True)

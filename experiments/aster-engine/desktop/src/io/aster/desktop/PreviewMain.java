@@ -109,7 +109,7 @@ public final class PreviewMain {
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
     }
-    void dispose() { saveSession();disposed = true;ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
+    void dispose() { if(disposed)return;saveSession();disposed = true;ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
     private static final class RoundButton extends JButton {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {

@@ -53,15 +53,16 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     }
     private void prepare() {
         try {
-            hls=resource.uri.getPath().toLowerCase(java.util.Locale.ROOT).endsWith(".m3u8");ready=false;readyPulses=0;playDeadline=0;
+            hls=resource.uri.getPath().toLowerCase(java.util.Locale.ROOT).endsWith(".m3u8");ready=false;readyPulses=0;playDeadline=0;lastPlayAttempt=0;
             Media media=new Media(resource.uri.toString());player=new MediaPlayer(media);final MediaPlayer created=player;view=new MediaView(player);view.setPreserveRatio(true);
             StackPane root=new StackPane(view);root.setStyle("-fx-background-color: #112622;");view.fitWidthProperty().bind(root.widthProperty());view.fitHeightProperty().bind(root.heightProperty());video.setScene(new Scene(root,640,360));
             monitor=new AnimationTimer(){private long last;public void handle(long now){
                 if(closed||player!=created)return;
                 // JFXPanel must have presented its scene before a short clip starts playing.
-                if(ready&&readyPulses<2&&root.getWidth()>1&&root.getHeight()>1&&++readyPulses==2&&wantPlay){playDeadline=System.nanoTime()+3_000_000_000L;player.play();}
-                // Native seeking is asynchronous. Reconcile a still-requested play after its pause transition.
-                if(wantPlay&&!ended&&System.nanoTime()<playDeadline&&now-lastPlayAttempt>150_000_000L&&(player.getStatus()==MediaPlayer.Status.READY||player.getStatus()==MediaPlayer.Status.PAUSED)){lastPlayAttempt=now;player.play();}
+                if(ready&&readyPulses<2&&root.getWidth()>1&&root.getHeight()>1&&++readyPulses==2&&wantPlay)playDeadline=System.nanoTime()+3_000_000_000L;
+                // One place dispatches play. Let a native pause/seek finish before
+                // resuming; callbacks and requested state can otherwise overlap.
+                if(readyPulses>=2&&wantPlay&&!ended&&System.nanoTime()<playDeadline&&now-lastPlayAttempt>150_000_000L&&(player.getStatus()==MediaPlayer.Status.READY||player.getStatus()==MediaPlayer.Status.PAUSED)){lastPlayAttempt=now;player.play();}
                 if(wantPlay&&!ended&&playDeadline>0&&System.nanoTime()>playDeadline&&(player.getStatus()==MediaPlayer.Status.READY||player.getStatus()==MediaPlayer.Status.PAUSED)){playDeadline=0;error("The decoder did not resume playback after seeking");}
                 if(evidence!=null&&!verified&&now-last>100_000_000L&&media.getWidth()>0&&media.getHeight()>0){last=now;verifyFrame(player.getCurrentTime().toSeconds(),media);}
             }};
@@ -69,7 +70,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
             media.setOnError(()->{if(player==created)error(String.valueOf(media.getError()));});player.setOnError(()->{if(player==created)error(String.valueOf(player.getError()));});player.setOnHalted(()->{if(player==created)error("Media decoder halted");});player.setVolume(desiredVolume);player.setMute(desiredMuted);
             player.setOnReady(()->{if(closed||player!=created)return;ready=true;SwingUtilities.invokeLater(()->{startupTimeout.stop();pause.setEnabled(true);restart.setEnabled(true);});if(!Double.isNaN(pendingSeek)&&!hls){player.seek(Duration.seconds(pendingSeek));pendingSeek=Double.NaN;}report("loadedmetadata");report("canplay");});
             player.setOnPlaying(()->{if(closed||player!=created)return;ended=false;playDeadline=0;report("play");report("playing");});
-            player.setOnPaused(()->{if(player==created&&!wantPlay)report("pause");});player.setOnStalled(()->{if(player==created)report("waiting");});
+            player.setOnPaused(()->{if(player==created){lastPlayAttempt=System.nanoTime();if(wantPlay)playDeadline=System.nanoTime()+3_000_000_000L;else report("pause");}});player.setOnStalled(()->{if(player==created)report("waiting");});
             player.volumeProperty().addListener((o,a,b)->{if(player==created)report("volumechange");});player.muteProperty().addListener((o,a,b)->{if(player==created)report("volumechange");});
             player.statusProperty().addListener((o,a,b)->{if(player==created)SwingUtilities.invokeLater(()->pause.setText(b==MediaPlayer.Status.PLAYING?"Pause":"Play"));});
             player.currentTimeProperty().addListener((o,a,b)->{
@@ -89,7 +90,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     void control(String command,Object value){Platform.runLater(()->{
         if(closed)return;
         switch(command){
-            case "play":wantPlay=true;if(player!=null){if(ended&&hls){restartStream();break;}if(ended){ended=false;player.seek(Duration.ZERO);}if(ready&&readyPulses>=2){playDeadline=System.nanoTime()+3_000_000_000L;player.play();if(player.getStatus()==MediaPlayer.Status.PLAYING)report("playing");}}break;
+            case "play":wantPlay=true;if(player!=null){if(ended&&hls){restartStream();break;}if(ended){ended=false;player.seek(Duration.ZERO);}if(ready&&readyPulses>=2){playDeadline=System.nanoTime()+3_000_000_000L;if(player.getStatus()==MediaPlayer.Status.PLAYING)report("playing");}}break;
             case "restart":if(player!=null&&hls){restartStream();break;}control("seek",0);control("play",null);break;
             case "pause":wantPlay=false;if(player!=null)player.pause();else if(listener!=null)listener.accept("pause",java.util.Map.of("paused",true));break;
             case "volume":desiredVolume=Math.max(0,Math.min(1,((Number)value).doubleValue()));if(player!=null)player.setVolume(desiredVolume);break;

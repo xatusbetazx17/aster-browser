@@ -1,18 +1,19 @@
 # Install or update standalone Aster
 
-Aster must run as its own browser. The active setup path installs the standalone Linux application and does not require Firefox, Chrome or Chromium.
+Aster's original-engine 0.2 preview has [Windows, Linux and Android package instructions](../../experiments/aster-engine/RELEASE_0.2.md#packages-and-updates). The source updater described below continues to install the separate Linux WebKit prototype.
 
 | Device | Guide | Current deliverable |
 | --- | --- | --- |
 | Supported desktop Linux | [Install, update and roll back](linux.md) | Standalone Aster using WebKitGTK |
-| Windows | [Preview and full-browser status](windows.md) | Original-engine text preview with EXE bundle; full browser unfinished |
+| Windows | [Preview and full-browser status](windows.md) | Original-engine 0.2 browsing/reading preview with EXE bundle; full browser unfinished |
 | Android | [Preview and full-browser status](android.md) | Original-engine Canvas APK; full browser and release signing unfinished |
-| Steam Deck / immutable Linux | [Linux platform limits](linux.md#steam-deck-and-immutable-linux) | Standalone package not ready yet |
+| Steam Deck / immutable Linux | [Linux platform limits](linux.md#steam-deck-and-immutable-linux) | Flatpak build available when its CI gate passes; physical Steam Deck validation remains unfinished |
 
 The [original-engine preview](../../experiments/aster-engine/README.md) also has a
 Linux runtime bundle. Its manual update path is separate from the WebKit source
-updater below. It is a basic text browser, without the reader/companion, JavaScript
-or media platform, and does not convert an existing Aster installation.
+updater below. The 0.2 release adds limited images, forms, CSS, search and document
+reading. Desktop adds limited scripting/media. It does not convert an existing
+Aster installation, and PDF, AI and full website compatibility remain unfinished.
 
 ## Reusing the Linux installer
 

@@ -113,6 +113,9 @@ jobs:
           retention-days: 14
   flatpak:
     needs: desktop
+    # Its input artifact is uploaded only after the Ubuntu 22.04 checks pass.
+    # A failure on another OS must not prevent validating the Linux package.
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:

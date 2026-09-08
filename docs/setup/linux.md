@@ -1,10 +1,10 @@
 # Linux: install or update Aster
 
-For the new **Aster original-engine text preview**, use its
-[Linux bundle instructions](../../experiments/aster-engine/README.md#linux-x64-and-steam-deck-desktop-mode).
-It does not embed WebKit or another browser engine, but it does not yet support
-JavaScript, images, video or the full reader/companion. The commands below remain
-the separate, more capable WebKit prototype's setup path.
+For **Aster original-engine 0.2**, use its
+[native Linux and Flatpak instructions](../../experiments/aster-engine/RELEASE_0.2.md#packages-and-updates).
+It has limited images, CSS/forms, scripting/media and Word/text reading without
+embedding WebKit or another browser engine. Full web compatibility, PDF and the AI
+companion remain unfinished. The commands below install the separate WebKit prototype.
 
 The same command performs first installation or updates an installation previously created by this setup tool. Use your normal desktop account. Setup calls `sudo` only for supported system packages.
 
@@ -66,7 +66,12 @@ Rollback does not restore or change browser-profile data. Old release directorie
 
 ## Steam Deck and immutable Linux
 
-A maintained standalone Aster package for SteamOS/immutable Linux is not ready yet. Setup reports that limit and does not unlock the OS image or install a different browser. A future Flatpak or other native package must bundle Aster's own application and be tested on Steam Deck hardware.
+The original-engine 0.2 workflow builds a Flatpak using a common Freedesktop runtime.
+Use it only from a successful Flatpak build/install/window test. This improves
+portability on Flatpak-capable x64 distributions, including the intended SteamOS
+desktop-mode path, but physical Steam Deck controls, audio and graphics remain
+unverified. The source updater below does not install that Flatpak or modify the
+immutable OS image.
 
 ## Existing Git checkouts or old Aster installations
 

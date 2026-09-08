@@ -4,14 +4,17 @@
 widgets and Canvas with Aster's own basic HTML/text renderer, without WebView or
 another browser engine. [Build, install and update instructions](../../experiments/aster-engine/README.md#android-80api-26-or-later)
 describe the APK from successful CI runs and its development-signing limitations.
-The full browser, companion, JavaScript and streaming platform remain unfinished.
+The [0.2 release](../../experiments/aster-engine/RELEASE_0.2.md) adds images, basic CSS/forms,
+search, tabs, saved sessions, native documents/notes/speech and Save As downloads.
+Android 8/API 26 remains the minimum. The full browser, companion, JavaScript and
+streaming platform remain unfinished.
 
 The existing Android Lite source in the legacy v15 package uses Android WebView. It is not a full standalone port of the new application and does not establish the requested engine independence.
 
 ## Installation and updates
 
 The new package is `io.aster.browser.enginepreview`, distributed as a development
-APK, not an AAB/store release. It opens text sites and saves local bookmarks.
+APK, not an AAB/store release. It uses the original 0.2 browsing/reading core and saves local bookmarks.
 It does not upgrade or convert the old Android Lite app. Preserve that app's data
 until a migration plan is implemented. CI APKs use a different development key
 per run; cross-run in-place updates are not supported. Personal builds can retain
@@ -27,7 +30,7 @@ For the eventual Android app, installation/update must use an actual signed Aste
 - Test representative devices and architectures, screen sizes, downloads, audio and lifecycle behavior.
 - Establish codec/DRM integration and service support for protected video inside Aster. A mobile interface or a Prime Video shortcut is not playback verification.
 
-These requirements are not completed by a working text preview. Its actual
+These requirements are not completed by the limited browsing/reading preview. Its actual
 `MediaDrm` device query does not provide EME, a license exchange or Prime Video
 playback. See [the project direction](../../PROJECT_DIRECTION.md) and the available
 [standalone Linux build](linux.md).
