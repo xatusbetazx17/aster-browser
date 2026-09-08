@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -82,6 +84,15 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaises(ValueError) as error:
                 parse_config(raw)
             self.assertNotIn("do-not-print-this", str(error.exception))
+
+    def test_server_error_after_publish_requires_confirmed_state(self):
+        failure = subprocess.CalledProcessError(1, ["gh", "release", "edit"])
+        with patch.object(publisher, "gh", side_effect=failure) as mutation, patch.object(publisher, "api", return_value={"draft": False, "prerelease": True}):
+            publisher.finish_release("test")
+            self.assertEqual(mutation.call_count, 1)
+        with patch.object(publisher, "gh", side_effect=failure), patch.object(publisher, "api", return_value={"draft": True, "prerelease": True}):
+            with self.assertRaises(subprocess.CalledProcessError):
+                publisher.finish_release("test")
 
 
 if __name__ == "__main__":

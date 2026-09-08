@@ -26,6 +26,22 @@ def api(path, data=None):
     return json.loads(gh(*args, data=data))
 
 
+def finish_release(tag, body=None):
+    args = ["release", "edit", tag, "--repo", REPO, "--draft=false", "--prerelease"]
+    if body is not None:
+        args += ["--notes-file", str(body)]
+    try:
+        gh(*args)
+    except subprocess.CalledProcessError:
+        # GitHub can apply the mutation and then return HTTP 500. Read its state
+        # before considering another write; never rebuild or re-upload blindly.
+        actual = api(f"releases/tags/{tag}")
+        expected_body = None if body is None else body.read_text(encoding="utf-8")
+        if actual["draft"] or not actual["prerelease"] or (expected_body is not None and actual["body"] != expected_body):
+            raise
+        print("GitHub reported an error after publishing; the requested release state was confirmed.")
+
+
 def validate_identity(current, previous):
     if current["package"] != "io.aster.browser.enginepreview":
         raise ValueError("Unexpected Android application identity")
@@ -148,7 +164,7 @@ def main():
             gh("release", "create", tag, "--repo", REPO, "--target", commit, "--title", f"Aster {metadata['version']}",
                "--notes-file", str(body), "--prerelease", "--draft")
         gh("release", "upload", tag, *assets, "--repo", REPO, "--clobber")
-        gh("release", "edit", tag, "--repo", REPO, "--draft=false")
+        finish_release(tag)
         # Keep one clearly named prerelease channel for stable download links.
         body.write_text(notes(metadata, signing, apk_name, CHANNEL) + f"\n[This exact version](https://github.com/{REPO}/releases/tag/{tag}).\n", encoding="utf-8")
         if channel is None:
@@ -161,7 +177,7 @@ def main():
             # is uploaded. All historical versioned releases remain available.
             if signing["persistent"] and any(a["name"] == "aster-android-8-plus-test.apk" for a in channel["assets"]):
                 gh("release", "delete-asset", CHANNEL, "aster-android-8-plus-test.apk", "--repo", REPO, "--yes")
-        gh("release", "edit", CHANNEL, "--repo", REPO, "--notes-file", str(body), "--draft=false", "--prerelease")
+        finish_release(CHANNEL, body)
         final = api(f"releases/tags/{CHANNEL}")
         sizes = {a["name"]: a["size"] for a in final["assets"]}
         if any(sizes.get(p.name) != p.stat().st_size for p in packages.iterdir()):
