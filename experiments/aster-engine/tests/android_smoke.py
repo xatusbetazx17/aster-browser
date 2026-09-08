@@ -30,7 +30,7 @@ def screen():
     return ET.fromstring(raw)
 
 
-def wait_text(text, timeout=90, recover_system_ui=False):
+def wait_text(text, timeout=90, recover_system_ui=False, exact=False):
     deadline = time.monotonic() + timeout
     observed = []
     system_ui_waits = 0
@@ -46,10 +46,17 @@ def wait_text(text, timeout=90, recover_system_ui=False):
                 tap(wait)
                 system_ui_waits += 1
                 continue
-        for node in root.iter("node"):
-            # Android themes may capitalize native button labels for display.
-            if text.casefold() in node.attrib.get("text", "").casefold() or text.casefold() in node.attrib.get("content-desc", "").casefold():
+        # Prefer an exact label. For controls, require it: "Submit" must not
+        # select the form destination ending in "/submitted".
+        nodes = list(root.iter("node"))
+        needle = text.casefold()
+        for node in nodes:
+            if needle in (node.attrib.get("text", "").casefold(), node.attrib.get("content-desc", "").casefold()):
                 return node
+        if not exact:
+            for node in nodes:
+                if needle in node.attrib.get("text", "").casefold() or needle in node.attrib.get("content-desc", "").casefold():
+                    return node
         time.sleep(1)
     raise AssertionError(f"Android UI did not show {text!r}; observed: {observed!r}")
 
@@ -167,13 +174,13 @@ def main():
         menu("Back")
         wait_text("Network page rendered by Aster.")
         menu('Read page / Find')
-        wait_text('Save notes')
+        wait_text('Save notes', exact=True)
         wait_text('Network page rendered by Aster.')
         (OUT / 'aster-android-reader.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
-        tap(wait_text('Close'))
+        tap(wait_text('Close', exact=True))
         print('Native reader text and controls opened.', flush=True)
         menu('Page forms')
-        tap(wait_text('Submit'))
+        tap(wait_text('Submit', exact=True))
         wait_text('Native POST reached the server.')
         print('Native form POST submitted successfully.', flush=True)
         menu('Back')
