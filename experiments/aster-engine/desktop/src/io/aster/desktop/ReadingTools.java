@@ -15,7 +15,7 @@ import java.util.prefs.Preferences;
 /** Native reading, selection, document notes and explicitly requested system speech. */
 final class ReadingTools {
     private static Process speech;
-    static void stopSpeech(){if(speech!=null){speech.destroyForcibly();speech=null;}}
+    static synchronized void stopSpeech(){if(speech!=null){speech.destroyForcibly();speech=null;}}
     static void open(Component owner,String title,String text,String identity,Preferences preferences) {
         JDialog dialog=new JDialog((Frame)SwingUtilities.getWindowAncestor(owner),title,false);
         JTextArea content=new JTextArea(text);content.setEditable(false);content.setLineWrap(true);content.setWrapStyleWord(true);
@@ -40,7 +40,7 @@ final class ReadingTools {
         dialog.setSize(950,700);dialog.setLocationRelativeTo(owner);dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);dialog.setVisible(true);
     }
     static String noteKey(String identity){try{byte[] b=MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8));StringBuilder out=new StringBuilder("note-");for(byte v:b)out.append(String.format("%02x",v&255));return out.toString();}catch(Exception e){throw new IllegalStateException(e);}}
-    private static synchronized void speak(String text,String language)throws Exception{
+    static synchronized void speak(String text,String language)throws Exception{
         stopSpeech();if(text.isEmpty())return;
         if(text.length()>16000)text=text.substring(0,16000);
         ProcessBuilder builder;

@@ -16,14 +16,14 @@ A custom interface and browser features can be developed within this standalone 
 - Install and update actual Aster application code while preserving existing user data.
 - Pursue legitimate codec/DRM integration and service testing. Do not replace Aster with an external browser to claim streaming support.
 
-The original-engine app is now the development destination. Its [0.2 release notes](experiments/aster-engine/RELEASE_0.2.md) describe the cross-platform browsing/reading milestone and remaining limits.
+The original-engine app is now the development destination. Its [0.3 release notes](experiments/aster-engine/RELEASE_0.3.md) describe the modern workspace, tab parking, connected reading and concrete streaming/engine blockers.
 
 ## Deliverable status
 
 | Deliverable | Current status |
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
-| Original-engine browsing/reading | 0.2 adds bounded images, CSS/form subsets, search, native Word/text reader, notes/speech, saved sessions and Android Save As |
+| Original-engine browsing/reading | 0.3 adds the dark workspace, docked reading/notes, protected tab parking, lazy restore, phrase search and Android per-tab navigation on top of the 0.2 foundations |
 | Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts/fetch/WebSocket; opt-in, not a complete web platform |
 | Original-engine desktop media/input | Progressive unencrypted files/HLS through JavaFX media, page play/pause/volume/events and file seeking; HLS seeking disabled; XInput/Linux joystick provider with per-visit consent; no WebRTC/MSE/EME |
 | Original-engine desktop file downloads | Implemented: direct HTTP/HTTPS Save As, progress/cancel/retry; two transfers and 2 GiB/file; no login/JavaScript downloads |
@@ -31,7 +31,7 @@ The original-engine app is now the development destination. Its [0.2 release not
 | Word/PDF/text reading and read-aloud | Native reading panel; DOCX body/tables, PDF/DOC via local tools, English/Spanish speech |
 | Local companion | Offline commands/excerpts; optional local GGUF inference and Vosk voice input; not Siri parity |
 | Media and cloud-gaming prerequisites | WebRTC/media settings, permission prompts, fullscreen, runtime capability reporting; no service-level guarantee |
-| Original v15 features inside the standalone app | Incomplete; parking, custom adblock, containers, Lite renderer and plugins still need porting |
+| Original v15 features inside the standalone app | Incomplete; original-engine desktop parking is now implemented, while custom adblock, containers and plugins still need porting |
 | Standalone Windows app | Original-engine text preview and native EXE packaging added; full browser port incomplete |
 | Standalone Android app | Original-engine Canvas app and APK packaging added; full browser port incomplete |
 | SteamOS/Steam Deck package | Not yet validated or shipped |

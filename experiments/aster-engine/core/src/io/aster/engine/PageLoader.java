@@ -16,7 +16,7 @@ public final class PageLoader {
         + "<a href='https://example.com'>Example Domain</a>. Simple pages, images and basic forms work here.</p>"
         + "<h2>Read your way</h2><p>Open the menu to read a page, find text, keep notes or "
         + "open a Word or text document. Read aloud uses an installed English or Spanish voice.</p>"
-        + "<h2>Still growing</h2><p>Aster 0.2 is an independent browser preview. Full web apps, "
+        + "<h2>Still growing</h2><p>Aster 0.3 is an independent browser preview. Full web apps, "
         + "account sign-in, PDF, cloud gaming and protected streaming remain unfinished.</p>"
         + "<p><b>Tip:</b> use Tabs and bookmarks in the menu to keep exploring.</p></body></html>";
 
@@ -71,7 +71,7 @@ public final class PageLoader {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Page request cancelled or timed out.");
             HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
             connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
-            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.2");
+            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.3");
             connection.setRequestProperty("Accept", "text/html,text/plain;q=0.9");
             connection.setRequestProperty("Accept-Encoding", "gzip");
             try {

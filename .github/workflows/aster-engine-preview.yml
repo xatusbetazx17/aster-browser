@@ -145,7 +145,7 @@ jobs:
         run: |
           import os
           from pathlib import Path
-          lines = ['Aster 0.2 development preview', 'Core, browsing and reading checks: passed']
+          lines = ['Aster 0.3 development preview', 'Core, browsing and reading checks: passed']
           for label, key in [('Platform', 'OS'), ('Commit', 'COMMIT'), ('Native window', 'UI'), ('Video decoding', 'VIDEO'), ('HLS and page controls', 'STREAM')]:
               lines.append(label + ': ' + os.environ['ASTER_BUILD_' + key])
           if any(os.environ['ASTER_BUILD_' + key] != 'success' for key in ('VIDEO', 'STREAM')):
@@ -256,7 +256,7 @@ jobs:
           ASTER_ANDROID_BASELINE_APK: experiments/aster-engine/build/android/upgrade-baseline.apk
         run: |
           python experiments/aster-engine/tests/android_smoke.py
-          printf '%s\n' 'Android API 26 browsing, forms, reader and bookmark-preserving APK replacement passed.' > experiments/aster-engine/build/ANDROID-TEST-STATUS.txt
+          printf '%s\n' 'Android API 26 workspace, per-tab navigation, forms, reader and bookmark-preserving APK replacement passed.' > experiments/aster-engine/build/ANDROID-TEST-STATUS.txt
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:

@@ -75,6 +75,7 @@ def desktop(test=False, package=False):
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.DesktopTests", BUILD)
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.ReadingTests", BUILD)
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.WorkspaceTests", BUILD)
     if package:
         image = BUILD / "native/AsterEnginePreview"
         if image.exists():

@@ -46,7 +46,7 @@ Minimum Android 8 / API 26 is exercised in the emulator. The APK has no CPU-spec
 
 Updates replace Aster's application files after you download and run the newer package. They do not run silently in the background. Saved downloads outside the app stay in place. Each versioned release remains available for reference; profile compatibility with downgrades is not promised.
 
-The preview is for testing. Full website compatibility, account sign-in and protected streaming are unfinished. See [features and known limitations](experiments/aster-engine/RELEASE_0.2.md).
+The preview is for testing. Full website compatibility, account sign-in and protected streaming are unfinished. See [features and known limitations](experiments/aster-engine/RELEASE_0.3.md).
 
 ## One-time Android setup for the repository owner
 

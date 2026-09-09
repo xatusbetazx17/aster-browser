@@ -16,13 +16,22 @@ import javax.imageio.ImageIO;
 
 /** Aster's native desktop shell; web pages use only the Aster Java2D renderer. */
 public final class PreviewMain {
-    private static final Color INK = new Color(0x173d38), ACCENT = new Color(0x176b59), PAPER = new Color(0xf7faf8);
-    private final JFrame window = GraphicsEnvironment.isHeadless() ? null : new JFrame("Aster · Original engine preview");
+    private static final Color INK=WorkspaceTheme.TEXT, ACCENT=WorkspaceTheme.ACCENT, PAPER=WorkspaceTheme.PAGE;
+    private final JFrame window = GraphicsEnvironment.isHeadless() ? null : new JFrame("Aster · Independent browser preview");
     final JPanel surface = new JPanel(new BorderLayout());
     final JTabbedPane tabs = new JTabbedPane();
     final JPanel strip = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
     final JTextField address = new JTextField();
     final JLabel status = new JLabel();
+    final JSplitPane workspace=new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    final ReaderDock reader;
+    private final JLabel tabCount=new JLabel("1 live",SwingConstants.CENTER);
+    private final JButton reloadButton=button("↻","Reload (Ctrl+R)",this::reload);
+    private final JPanel findBar=new JPanel(new BorderLayout(8,0));
+    final JTextField findQuery=new JTextField(18);
+    final JLabel findCount=new JLabel();
+    boolean autoPark;
+    private int liveTabLimit;
     private final Preferences preferences;
     private final ExecutorService assets=Executors.newFixedThreadPool(2,r->{Thread t=new Thread(r,"aster-images");t.setDaemon(true);return t;});
     private final ArrayDeque<URI> closedTabs=new ArrayDeque<>();
@@ -45,6 +54,8 @@ public final class PreviewMain {
     private PreviewMain() { this(Preferences.userRoot().node("io/aster/engine-preview")); }
     PreviewMain(Preferences prefs) {
         preferences = prefs;
+        autoPark=prefs.getBoolean("autoPark",false);liveTabLimit=Math.max(2,Math.min(8,prefs.getInt("liveTabLimit",4)));
+        reader=new ReaderDock(prefs,this::closeReader);
         reducedMotion = prefs.getBoolean("reducedMotion", false);
         int percent = prefs.getInt("pageScale", 100);
         pageScale = (percent == 125 || percent == 150 || percent == 200 ? percent : 100) / 100.0;
@@ -66,9 +77,11 @@ public final class PreviewMain {
             protected Insets getContentBorderInsets(int placement) { return new Insets(0,0,0,0); }
         });
         tabs.setBorder(BorderFactory.createEmptyBorder()); tabs.setFocusable(false);
-        tabs.addChangeListener(event -> { for(int i=0;i<tabs.getTabCount();i++){ Tab t=(Tab)tabs.getComponentAt(i); if(t!=current()&&t.controllerAllowed)stopScripts(t); } refreshInternal(current()); sync(); });
+        tabs.addChangeListener(event -> { for(int i=0;i<tabs.getTabCount();i++){ Tab t=(Tab)tabs.getComponentAt(i); if(t!=current()&&t.controllerAllowed)stopScripts(t); }
+            Tab selected=current();if(selected!=null){selected.lastUsed=System.nanoTime();if(selected.parked&&!restoring)resume(selected);}
+            refreshInternal(selected);sync();if(!restoring)rebalanceTabs(); });
         JPanel header = new JPanel(new BorderLayout()); header.setBackground(PAPER);
-        strip.setBackground(new Color(0xe6efeb)); strip.setBorder(BorderFactory.createEmptyBorder(5, 8, 0, 8));
+        strip.setBackground(WorkspaceTheme.CHROME); strip.setBorder(BorderFactory.createEmptyBorder(7, 8, 0, 8));
         add.setText(""); add.setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
         add.setIcon(new Icon() { public int getIconWidth(){return 12;} public int getIconHeight(){return 12;} public void paintIcon(Component c, Graphics g, int x, int y){ g.setColor(INK); g.drawLine(x+1,y+6,x+11,y+6); g.drawLine(x+6,y+1,x+6,y+11); } });
         add.setPreferredSize(new Dimension(30, 30)); strip.add(add);
@@ -81,10 +94,11 @@ public final class PreviewMain {
         JPanel navigation = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)); navigation.setOpaque(false);
         navigation.add(back); navigation.add(forward);
         navigation.add(button("⌂", "Home", () -> load(current(), PageLoader.HOME, -1)));
-        navigation.add(button("↻", "Reload (Ctrl+R)",this::reload));
+        navigation.add(reloadButton);
         toolbar.add(navigation, BorderLayout.WEST);
         address.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
-        address.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0xc6d6cd)), BorderFactory.createEmptyBorder(5, 10, 5, 10)));
+        address.setBackground(WorkspaceTheme.RAISED);address.setForeground(INK);address.setCaretColor(INK);address.setSelectionColor(WorkspaceTheme.LINE);
+        address.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(WorkspaceTheme.LINE), BorderFactory.createEmptyBorder(7, 12, 7, 12)));
         address.setToolTipText("Search with DuckDuckGo or enter a website address"); address.getAccessibleContext().setAccessibleName("Search or website address");
         address.addActionListener(e -> { try { load(current(), target(address.getText()), -1); } catch (IllegalArgumentException ex) { message(ex.getMessage()); } });
         toolbar.add(address, BorderLayout.CENTER);
@@ -96,27 +110,33 @@ public final class PreviewMain {
         status.setBorder(BorderFactory.createEmptyBorder(0, 18, 6, 18)); status.setVisible(false);
         // Only pending navigation and errors occupy space; there is no permanent bottom bar.
         header.add(status, BorderLayout.SOUTH);
-        surface.add(header, BorderLayout.NORTH); surface.add(tabs, BorderLayout.CENTER);
+        workspace.setLeftComponent(tabs);workspace.setRightComponent(null);workspace.setBorder(BorderFactory.createEmptyBorder());workspace.setDividerSize(0);workspace.setResizeWeight(.64);
+        tabs.setMinimumSize(new Dimension(280,180));
+        JPanel center=new JPanel(new BorderLayout());center.add(workspace);buildFindBar();center.add(findBar,BorderLayout.NORTH);
+        surface.add(header, BorderLayout.NORTH);surface.add(sidebar(),BorderLayout.WEST);surface.add(center, BorderLayout.CENTER);
+        surface.addComponentListener(new ComponentAdapter(){public void componentResized(ComponentEvent e){fitReader();}});
         bind("control L", () -> { address.requestFocusInWindow(); address.selectAll(); });
         bind("control S", this::saveCurrentPage); bind("control J", () -> load(current(), URI.create("aster:downloads"), -1));
         bind("control R",this::reload);bind("F5",this::reload);bind("control F",this::findPage);
+        bind("ESCAPE",()->{if(findBar.isVisible()){findBar.setVisible(false);if(current()!=null){current().canvas.findText="";current().canvas.repaint();}}else stopNavigation();});
+        bind("F3",()->findNext(1));bind("shift F3",()->findNext(-1));bind("control shift R",this::readPage);
         bind("control shift T",this::reopenTab);bind("control O",this::openDocument);
         bind("control T", this::newTab); bind("control W", this::closeTab); bind("control D", this::saveBookmark);
         bind("alt LEFT", () -> move(-1)); bind("alt RIGHT", () -> move(1));
         bind("control TAB", () -> cycle(1)); bind("control shift TAB", () -> cycle(-1));
-        bind("F11", () -> { if (window != null) window.setExtendedState(window.getExtendedState() == JFrame.MAXIMIZED_BOTH ? JFrame.NORMAL : JFrame.MAXIMIZED_BOTH); });
+        bind("F11", () -> { if(window!=null){GraphicsDevice screen=window.getGraphicsConfiguration().getDevice();if(screen.getFullScreenWindow()==window)screen.setFullScreenWindow(null);else screen.setFullScreenWindow(window);} });
         if (window != null) { window.setSize(1100, 780); window.setMinimumSize(new Dimension(720, 420)); window.setLocationByPlatform(true); }
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
     }
-    void dispose() { if(disposed)return;saveSession();disposed = true;ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
+    void dispose() { if(disposed)return;reader.close();saveSession();disposed = true;ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
     private static final class RoundButton extends JButton {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {
             Graphics2D g = (Graphics2D) graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setColor(getModel().isPressed() ? new Color(0xc0dbce) : getModel().isRollover() ? new Color(0xdcece3) : Color.WHITE);
-            g.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 16, 16); g.setColor(hasFocus() ? ACCENT : new Color(0xccdcd2));
-            g.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 16, 16); g.dispose(); super.paintComponent(graphics);
+            g.setColor(getModel().isPressed() ? WorkspaceTheme.LINE : getModel().isRollover() ? new Color(0x263747) : WorkspaceTheme.RAISED);
+            g.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 14, 14); g.setColor(hasFocus() ? ACCENT : WorkspaceTheme.LINE);
+            g.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 14, 14); g.dispose(); super.paintComponent(graphics);
         }
     }
     private JButton button(String label, String name, Runnable action) {
@@ -132,6 +152,7 @@ public final class PreviewMain {
         final TabChip chip = new TabChip(this);
         final java.util.List<DownloadRow> downloadRows = new ArrayList<>();
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
+        URI location=PageLoader.HOME;String title="New tab";boolean parked,postPage;long lastUsed=System.nanoTime();
         Future<?> imageTask;int restoreScroll=-1;
         volatile ScriptSession script;
         Future<?> scriptTask;
@@ -143,6 +164,7 @@ public final class PreviewMain {
         final java.util.concurrent.ConcurrentLinkedQueue<String> mediaEvents=new java.util.concurrent.ConcurrentLinkedQueue<>();
         final java.util.concurrent.atomic.AtomicReference<String> mediaTime=new java.util.concurrent.atomic.AtomicReference<>();
         Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); canvas.save = uri -> chooseDownload(uri, DownloadManager.filename(uri, null));
+            canvas.openTab=uri->openLinkTab(uri,false);
             canvas.action=id->scriptCommand(this,"__aster.click("+id+")",true);
             canvas.keys=(type,key)->scriptCommand(this,"__aster.key("+Json.quote(type)+","+Json.quote(key)+","+Json.quote(key)+",false)",false);
         }
@@ -159,7 +181,7 @@ public final class PreviewMain {
                 protected void paintComponent(Graphics graphics) {
                     Graphics2D g = (Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                     g.setComposite(AlphaComposite.SrcOver.derive(hasFocus() ? 1f : alpha));
-                    if (getModel().isRollover() || hasFocus()) { g.setColor(new Color(0xc7ddd2)); g.fillOval(2, 4, 26, 26); }
+                    if (getModel().isRollover() || hasFocus()) { g.setColor(WorkspaceTheme.LINE); g.fillOval(2, 4, 26, 26); }
                     g.setColor(INK); g.setStroke(new BasicStroke(1.6f)); int x = getWidth()/2, y = getHeight()/2;
                     g.drawLine(x-4,y-4,x+4,y+4); g.drawLine(x+4,y-4,x-4,y+4); g.dispose();
                 }
@@ -171,13 +193,15 @@ public final class PreviewMain {
                 public void mouseEntered(MouseEvent e) { hover = true; fade(); }
                 public void mouseExited(MouseEvent e) { Point p = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), TabChip.this); hover = contains(p); fade(); }
                 public void mouseClicked(MouseEvent e) { if (SwingUtilities.isMiddleMouseButton(e)) closeTab(tab); }
+                public void mousePressed(MouseEvent e){popup(e);}public void mouseReleased(MouseEvent e){popup(e);}
+                private void popup(MouseEvent e){if(!e.isPopupTrigger())return;JPopupMenu menu=new JPopupMenu();JMenuItem parkItem=new JMenuItem(tab.parked?"Resume tab":"Park tab to release memory");parkItem.addActionListener(a->{if(tab.parked)resume(tab);else if(!park(tab))message("Finish loading and close page scripts, forms or media before parking this tab.");});menu.add(parkItem);menu.show(e.getComponent(),e.getX(),e.getY());}
             };
             for (Component c : new Component[]{this, select, close}) c.addMouseListener(tracker);
             add(select, BorderLayout.CENTER); add(close, BorderLayout.EAST); update();
         }
         public Dimension getPreferredSize() { return new Dimension(width, 36); }
         void title(String title) { select.setText(plainLabel(title.length() > 20 ? title.substring(0,20) + "…" : title)); select.setToolTipText(plainLabel(title)); select.getAccessibleContext().setAccessibleName(title); close.getAccessibleContext().setAccessibleName("Close tab: " + title); }
-        void update() { boolean selected = current() == tab; select.setSelected(selected); setBackground(selected ? PAPER : new Color(0xe6efeb)); setBorder(BorderFactory.createMatteBorder(0,0,2,1,selected ? ACCENT : new Color(0xcbd9d1))); fade(); }
+        void update() { boolean selected = current() == tab; select.setSelected(selected);select.setForeground(tab.parked?WorkspaceTheme.MUTED:INK);title((tab.parked?"◌ ":"")+tab.title);setBackground(selected ? PAPER : WorkspaceTheme.CHROME); setBorder(BorderFactory.createMatteBorder(0,0,2,1,selected ? ACCENT : WorkspaceTheme.LINE)); fade(); }
         void fade() {
             if (animation != null) animation.stop(); final float end = current() == tab || hover ? 1f : 0f;
             if (reducedMotion || !isShowing()) { alpha = end; close.repaint(); return; }
@@ -196,7 +220,7 @@ public final class PreviewMain {
     private void closeTab() { closeTab(current()); }
     private void closeTab(Tab tab) {
         if(tab == null || tab.closed) return;
-        if(tab.canvas.document!=null){closedTabs.addFirst(tab.canvas.document.uri);while(closedTabs.size()>20)closedTabs.removeLast();}
+        closedTabs.addFirst(tab.location);while(closedTabs.size()>20)closedTabs.removeLast();
         if(tab.imageTask!=null)tab.imageTask.cancel(true);
         stopScripts(tab);
         if(tab.media!=null){tab.media.close();tab.media=null;}
@@ -210,7 +234,7 @@ public final class PreviewMain {
     }
     static String internal(URI uri) {
         String s = uri.toString(); if(s.equals(PageLoader.HOME.toString()) || s.equals("aster:newtab") || s.equals("aster:home")) return "home";
-        for(String page : new String[]{"settings","bookmarks","history","downloads","playground"}) if(s.equals("aster:"+page)) return page;
+        for(String page : new String[]{"settings","bookmarks","history","downloads","playground","compatibility"}) if(s.equals("aster:"+page)) return page;
         return null;
     }
     static URI target(String input) { URI uri; try { uri = URI.create(input.trim()); } catch(IllegalArgumentException e) { return PageLoader.searchOrAddress(input); } return internal(uri) != null ? uri : PageLoader.searchOrAddress(input); }
@@ -220,6 +244,8 @@ public final class PreviewMain {
     }
     void load(Tab tab,URI uri,int historyIndex,byte[] formBody) {
         if(tab == null || tab.closed) return; if(tab.pending != null) tab.pending.cancel(true);
+        tab.pending=null;tab.parked=false;tab.postPage=formBody!=null;tab.canvas.findText="";
+        if(tab.canvas.document==null)tab.canvas.setDocument(Engine.parse(tab.location,"<p>Opening page…</p>"));
         if(tab.imageTask!=null)tab.imageTask.cancel(true);tab.canvas.images.clear();
         stopScripts(tab); tab.setColumnHeaderView(null); tab.original=null;
         if(tab.media!=null){tab.media.close();tab.media=null;}
@@ -241,45 +267,71 @@ public final class PreviewMain {
             });
         } catch(PageLoader.DownloadRequired file) { SwingUtilities.invokeLater(() -> {
             if(!tab.closed && tab.generation == generation && !disposed) showDownloadOffer(tab, file, historyIndex);
-        }); } catch(Exception e) { SwingUtilities.invokeLater(() -> { if(!tab.closed && tab.generation==generation && !disposed) { tab.message="Could not open page: "+e.getMessage(); sync(); } }); } });
+        }); } catch(Exception e) { SwingUtilities.invokeLater(() -> { if(!tab.closed && tab.generation==generation && !disposed) { tab.pending=null;tab.message="Could not open page: "+e.getMessage(); sync(); } }); } });sync();
     }
     private void saveCurrentPage() {
         Tab tab=current();
         if(tab==null || tab.canvas.document==null || internal(tab.canvas.document.uri)!=null) { message("Open a website first, or paste a direct link in Downloads."); return; }
         chooseDownload(tab.canvas.document.uri,DownloadManager.filename(tab.canvas.document.uri,null));
     }
-    private void reload(){Tab t=current();if(t!=null&&t.canvas.document!=null)load(t,t.canvas.document.uri,t.index);}
-    void reopenTab(){if(closedTabs.isEmpty()||tabs.getTabCount()>=20)return;URI uri=closedTabs.removeFirst();newTab();load(current(),uri,-1);}
-    private void findPage(){Tab tab=current();if(tab==null||tab.canvas.document==null)return;
-        String term=JOptionPane.showInputDialog(surface,"Find text on this page",tab.canvas.findText);if(term==null)return;
-        tab.canvas.findText=term;tab.canvas.repaint();tab.canvas.ensureLayout();
-        if(tab.canvas.layout!=null)for(Engine.Draw d:tab.canvas.layout.items)if(d.text.toLowerCase(Locale.ROOT).contains(term.toLowerCase(Locale.ROOT))){tab.canvas.scrollRectToVisible(new Rectangle(0,(int)(d.y*tab.canvas.scale),20,(int)(d.height*tab.canvas.scale)));return;}
-        message("No matching word on this page. Use Read page to search across words.");
+    private void reload(){Tab t=current();if(t==null)return;if(t.pending!=null){stopNavigation();return;}if(t.parked)resume(t);else load(t,t.location,t.index);}
+    void stopNavigation(){Tab t=current();if(t==null||t.pending==null)return;t.generation++;t.pending.cancel(true);t.pending=null;
+        if(t.imageTask!=null)t.imageTask.cancel(true);t.message="Navigation stopped.";sync();}
+    void reopenTab(){if(closedTabs.isEmpty()||tabs.getTabCount()>=20)return;openLinkTab(closedTabs.removeFirst(),true);}
+    void openLinkTab(URI uri,boolean selected){if(tabs.getTabCount()>=20){message("Close a tab before opening another (20 tabs maximum).");return;}
+        Tab tab=new Tab();tabs.addTab("New tab",tab);strip.add(tab.chip,strip.getComponentCount()-1);if(selected)tabs.setSelectedComponent(tab);load(tab,uri,-1);strip.revalidate();strip.repaint();}
+    private void buildFindBar(){findBar.setBorder(BorderFactory.createEmptyBorder(7,14,7,14));findQuery.getAccessibleContext().setAccessibleName("Find on page");findBar.add(findQuery);
+        JPanel actions=new JPanel(new FlowLayout(FlowLayout.RIGHT,5,0));actions.add(findCount);actions.add(button("↑","Previous match (Shift+F3)",()->findNext(-1)));actions.add(button("↓","Next match (F3)",()->findNext(1)));
+        actions.add(button("Close","Close page search",()->{findBar.setVisible(false);if(current()!=null){current().canvas.findText="";current().canvas.repaint();}}));findBar.add(actions,BorderLayout.EAST);
+        findQuery.addActionListener(e->findNext(1));findQuery.getDocument().addDocumentListener(new javax.swing.event.DocumentListener(){public void insertUpdate(javax.swing.event.DocumentEvent e){search();}public void removeUpdate(javax.swing.event.DocumentEvent e){search();}public void changedUpdate(javax.swing.event.DocumentEvent e){search();}private void search(){if(current()!=null){current().canvas.findIndex=-1;findNext(1);}}});
+        WorkspaceTheme.apply(findBar);findBar.setVisible(false);
     }
-    private void readPage(){Tab t=current();if(t!=null&&t.canvas.document!=null)ReadingTools.open(surface,t.canvas.document.title,t.canvas.document.text(),t.canvas.document.uri.toString(),preferences);}
+    private void findPage(){Tab t=current();if(t==null)return;if(t.parked){resume(t);return;}if(internal(t.location)!=null){message("Open a website to search its page text.");return;}findBar.setVisible(true);findQuery.requestFocusInWindow();findQuery.selectAll();}
+    void findNext(int direction){Tab t=current();if(t==null||t.canvas.document==null)return;PageCanvas canvas=t.canvas;canvas.findText=findQuery.getText();canvas.ensureLayout();canvas.search();
+        int count=canvas.findRects.size();if(count==0){findCount.setText(canvas.findText.isEmpty()?"":"No match");canvas.repaint();return;}
+        canvas.findIndex=Math.floorMod(canvas.findIndex+direction,count);Rectangle r=canvas.findRects.get(canvas.findIndex);canvas.scrollRectToVisible(new Rectangle(0,Math.max(0,(int)(r.y*canvas.scale)-24),20,Math.max(32,(int)(r.height*canvas.scale))));findCount.setText((canvas.findIndex+1)+" / "+count);canvas.repaint();}
+    void readPage(){Tab t=current();if(t!=null&&t.canvas.document!=null)showReader(t.title,t.canvas.document.text(),t.location.toString());}
+    void showReader(String title,String text,String identity){reader.showDocument(title,text,identity);workspace.setRightComponent(reader);workspace.setDividerSize(6);fitReader();SwingUtilities.invokeLater(()->workspace.setDividerLocation(.62));}
+    void closeReader(){reader.close();workspace.setRightComponent(null);workspace.setDividerSize(0);workspace.revalidate();}
+    void fitReader(){if(workspace.getRightComponent()==null)return;int orientation=surface.getWidth()>=1050?JSplitPane.HORIZONTAL_SPLIT:JSplitPane.VERTICAL_SPLIT;
+        if(workspace.getOrientation()!=orientation){workspace.setOrientation(orientation);SwingUtilities.invokeLater(()->workspace.setDividerLocation(.52));}}
+    private JPanel sidebar(){JPanel side=new JPanel();side.setLayout(new BoxLayout(side,BoxLayout.Y_AXIS));side.setBackground(WorkspaceTheme.CHROME);side.setBorder(BorderFactory.createEmptyBorder(14,8,12,8));side.setPreferredSize(new Dimension(96,600));
+        JLabel star=new JLabel("✦",SwingConstants.CENTER);star.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,36));star.setForeground(ACCENT);star.setAlignmentX(.5f);star.getAccessibleContext().setAccessibleName("Aster");side.add(star);
+        JLabel name=new JLabel("ASTER");name.setForeground(INK);name.setFont(new Font(Font.SANS_SERIF,Font.BOLD,13));name.setAlignmentX(.5f);side.add(name);side.add(Box.createVerticalStrut(22));
+        String[] labels={"Home","Read","Files","Saved","Downloads","Park"};Runnable[] actions={()->load(current(),PageLoader.HOME,-1),this::readPage,this::openDocument,()->load(current(),URI.create("aster:bookmarks"),-1),()->load(current(),URI.create("aster:downloads"),-1),()->{if(!park(current()))message("Only fully loaded pages without forms, scripts or media can be parked.");}};
+        for(int i=0;i<labels.length;i++){JButton b=button(labels[i],labels[i].equals("Park")?"Park current tab to release memory":labels[i],actions[i]);b.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,13));b.setBorder(BorderFactory.createEmptyBorder(8,2,8,2));b.setAlignmentX(.5f);b.setMaximumSize(new Dimension(80,42));side.add(b);side.add(Box.createVerticalStrut(8));}
+        side.add(Box.createVerticalGlue());tabCount.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,13));tabCount.setForeground(WorkspaceTheme.MUTED);tabCount.setAlignmentX(.5f);side.add(tabCount);side.add(Box.createVerticalStrut(12));
+        JButton settings=button("Settings","Aster settings",()->load(current(),URI.create("aster:settings"),-1));settings.setAlignmentX(.5f);settings.setBorder(BorderFactory.createEmptyBorder(8,3,8,3));side.add(settings);return side;}
+    boolean park(Tab tab){if(tab==null||tab.parked||tab.closed||internal(tab.location)!=null||tab.canvas.document==null||tab.pending!=null||tab.postPage||tab.script!=null||tab.scriptStarting||tab.media!=null)return false;
+        if(!PageForms.parse(tab.location,tab.canvas.document.source).isEmpty())return false;
+        tab.restoreScroll=tab.getVerticalScrollBar().getValue();tab.generation++;if(tab.imageTask!=null){tab.imageTask.cancel(true);tab.imageTask=null;}tab.original=null;tab.canvas.release();tab.setColumnHeaderView(null);tab.parked=true;tab.message="";showParked(tab);sync();return true;}
+    private void showParked(Tab tab){JPanel panel=body("Ready when you are.","This tab is parked. Its page and images have been released from memory.");paragraph(panel,tab.title);paragraph(panel,tab.location.toString());panel.add(button("Resume tab","Reload this parked page",()->resume(tab)));panel.add(Box.createVerticalGlue());tab.setViewportView(panel);}
+    void resume(Tab tab){if(tab==null||!tab.parked)return;load(tab,tab.location,tab.index);}
+    void rebalanceTabs(){if(!autoPark||restoring)return;java.util.List<Tab> live=new ArrayList<>();for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);if(!t.parked&&internal(t.location)==null)live.add(t);}
+        live.sort(Comparator.comparingLong(t->t.lastUsed));int remaining=live.size();for(Tab t:live){if(remaining<=liveTabLimit)break;if(t!=current()&&park(t))remaining--;}}
     private void openDocument(){JFileChooser chooser=new JFileChooser();chooser.setDialogTitle("Open a Word, text or Markdown document");
         if(chooser.showOpenDialog(surface)!=JFileChooser.APPROVE_OPTION)return;File file=chooser.getSelectedFile();
         network.submit(()->{try(java.io.InputStream in=Files.newInputStream(file.toPath())){String text=DocumentReader.read(file.getName(),in);
-            SwingUtilities.invokeLater(()->{if(!disposed)ReadingTools.open(surface,file.getName(),text,file.toURI().toString(),preferences);});
+            SwingUtilities.invokeLater(()->{if(!disposed)showReader(file.getName(),text,file.toURI().toString());});
         }catch(Exception e){SwingUtilities.invokeLater(()->message("Could not read document: "+e.getMessage()));}});
     }
     void saveSession(){if(restoring)return;int count=0,selected=0;
-        for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);Engine.Document d=t.canvas.document;
-            if(d==null||internal(d.uri)!=null)continue;String url=d.uri.toString();if(url.length()>7000)continue;
-            preferences.put("session-url-"+count,url);preferences.putInt("session-scroll-"+count,t.getVerticalScrollBar().getValue());
+        for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);if(internal(t.location)!=null)continue;String url=t.location.toString();if(url.length()>7000)continue;
+            preferences.put("session-url-"+count,url);preferences.put("session-title-"+count,t.title.length()>200?t.title.substring(0,200):t.title);preferences.putInt("session-scroll-"+count,t.parked?Math.max(0,t.restoreScroll):t.getVerticalScrollBar().getValue());
             if(t==current())selected=count;count++;}
+        // An empty startup window does not erase the previous session before Restore is offered.
         if(count>0){preferences.putInt("session-count",count);preferences.putInt("session-selected",selected);}
     }
     void restoreSession(){int count=Math.max(0,Math.min(20,preferences.getInt("session-count",0)));
-        java.util.List<URI> urls=new ArrayList<>();java.util.List<Integer> offsets=new ArrayList<>();
-        for(int i=0;i<count;i++)try{urls.add(PageLoader.address(preferences.get("session-url-"+i,"")));offsets.add(Math.max(0,preferences.getInt("session-scroll-"+i,0)));}catch(IllegalArgumentException ignored){}
+        java.util.List<URI> urls=new ArrayList<>();java.util.List<Integer> offsets=new ArrayList<>();java.util.List<String> titles=new ArrayList<>();
+        for(int i=0;i<count;i++)try{urls.add(PageLoader.address(preferences.get("session-url-"+i,"")));offsets.add(Math.max(0,preferences.getInt("session-scroll-"+i,0)));titles.add(preferences.get("session-title-"+i,"Saved tab"));}catch(IllegalArgumentException ignored){}
         if(urls.isEmpty()){message("No saved browsing session yet.");return;}
-        boolean reuse=tabs.getTabCount()==1&&current().canvas.document!=null&&"home".equals(internal(current().canvas.document.uri));
+        boolean reuse=tabs.getTabCount()==1&&"home".equals(internal(current().location));
         if(tabs.getTabCount()+urls.size()-(reuse?1:0)>20){message("Close some tabs before restoring this session.");return;}
         int selected=preferences.getInt("session-selected",0);restoring=true;
-        try{for(int i=0;i<urls.size();i++){if(i!=0||tabs.getTabCount()!=1||!"home".equals(internal(current().canvas.document.uri)))newTab();Tab t=current();t.restoreScroll=offsets.get(i);load(t,urls.get(i),-1);}
-            int base=tabs.getTabCount()-urls.size();tabs.setSelectedIndex(Math.max(0,Math.min(tabs.getTabCount()-1,base+selected)));}
-        finally{restoring=false;}
+        try{for(int i=0;i<urls.size();i++){if(i!=0||!reuse)newTab();Tab t=current();t.canvas.release();t.location=urls.get(i);t.title=titles.get(i);t.restoreScroll=offsets.get(i);t.history.clear();t.history.add(t.location);t.index=0;t.parked=true;showParked(t);}
+            int base=tabs.getTabCount()-urls.size();tabs.setSelectedIndex(Math.max(base,Math.min(tabs.getTabCount()-1,base+selected)));}
+        finally{restoring=false;}resume(current());sync();
     }
     private void loadImages(Tab tab,Engine.Document document,int generation){
         if(document.scriptsBlocked)return;
@@ -361,7 +413,7 @@ public final class PreviewMain {
     }
     private void scriptControls(Tab tab,Engine.Document document) {
         tab.original=document;
-        JPanel bar=new JPanel(new FlowLayout(FlowLayout.LEFT,8,4)); bar.setBackground(PAPER);
+        JPanel bar=new WrapPanel();bar.setBackground(PAPER);
         tab.runScripts=button("Run JavaScript","Run this page's scripts for this visit",()->{if(tab.script==null)startScripts(tab);else{stopScripts(tab);tab.canvas.setDocument(tab.original);tab.runScripts.setText("Run JavaScript");}});
         tab.runScripts.setEnabled(!document.scriptsBlocked);bar.add(tab.runScripts);
         tab.controllerButton=new JToggleButton("Enable controller");tab.controllerButton.setEnabled(false);tab.controllerButton.addActionListener(e->{tab.controllerAllowed=tab.controllerButton.isSelected();tab.canvas.requestFocusInWindow();});bar.add(tab.controllerButton);
@@ -376,7 +428,8 @@ public final class PreviewMain {
             java.util.List<String> values=ReadingTools.form(surface,form);if(values==null)return;
             try{PageForms.Submission request=form.submit(values);load(tab,request.uri,-1,request.body);}catch(Exception e){message(e.getMessage());}
         }));
-        JLabel label=new JLabel(document.scriptsBlocked ? "Scripts disabled: CSP support pending" : "Experimental · permission resets on navigation");label.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,12));bar.add(label);
+        tab.runScripts.setToolTipText(document.scriptsBlocked?"This page requires a security policy Aster cannot yet enforce. Scripts are disabled.":"Allow this page to run scripts for this visit. Permission resets when you navigate.");
+        WorkspaceTheme.apply(bar);
         tab.setColumnHeaderView(bar);
     }
     private void openMedia(Tab tab,MediaPanel.Source source) {
@@ -477,17 +530,20 @@ public final class PreviewMain {
         if(tab.mediaEvents.size()<64)tab.mediaEvents.add("__aster.mediaUpdate("+id+","+Json.stringify(state)+","+Json.quote(event)+","+(error==null?"null":Json.quote(error))+","+request+");void 0");
     }
     private void completed(Tab tab, Engine.Document document, int historyIndex) {
+        tab.pending=null;tab.location=document.uri;tab.title=document.title;tab.parked=false;
         if(historyIndex>=0) tab.index=historyIndex;
         else { while(tab.history.size()>tab.index+1) tab.history.remove(tab.history.size()-1); tab.history.add(document.uri); if(tab.history.size()>100) tab.history.remove(0); tab.index=tab.history.size()-1; }
         tabs.setTitleAt(tabs.indexOfComponent(tab),plainLabel(document.title)); tab.chip.title(document.title); tab.message=""; sync();
         tab.getVerticalScrollBar().setValue(0);
         if(tab.restoreScroll>=0){int offset=tab.restoreScroll;tab.restoreScroll=-1;SwingUtilities.invokeLater(()->{tab.canvas.ensureLayout();tab.canvas.revalidate();SwingUtilities.invokeLater(()->tab.getVerticalScrollBar().setValue(offset));});}
-        if(!restoring)saveSession();
+        if(!restoring){saveSession();SwingUtilities.invokeLater(this::rebalanceTabs);}
     }
     private void message(String text) { if(current()!=null) current().message=text; status.setText(plainLabel(text)); status.setVisible(!text.isEmpty()); }
     private void sync() {
         Tab tab = current(); if(tab == null) return;
-        if(tab.canvas.document != null && !address.hasFocus()) address.setText(tab.canvas.document.uri.toString());
+        if(!address.hasFocus())address.setText(tab.location.toString());
+        reloadButton.setText(tab.pending==null?"↻":"×");reloadButton.getAccessibleContext().setAccessibleName(tab.pending==null?"Reload (Ctrl+R)":"Stop loading (Escape)");
+        int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;tabCount.setText((tabs.getTabCount()-parked)+" live");tabCount.setToolTipText(parked+" parked · "+tabs.getTabCount()+" total tabs");
         message(tab.message); back.setEnabled(tab.index>0); forward.setEnabled(tab.index+1<tab.history.size());
         for(Component c:strip.getComponents()) if(c instanceof TabChip) ((TabChip)c).update();
     }
@@ -502,11 +558,16 @@ public final class PreviewMain {
     private void menu() {
         JPopupMenu popup=new JPopupMenu(); JPanel grid=new JPanel(new GridLayout(0,2,8,8)); grid.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
         for(String page:new String[]{"bookmarks","history","downloads","settings","playground"}) { JButton b=button(capitalize(page),"Open "+page,()->{ popup.setVisible(false); load(current(),URI.create("aster:"+page),-1); }); b.setPreferredSize(new Dimension(112,76)); grid.add(b); }
-        String[] labels={"Read page","Open document","Restore session","Reopen tab"};Runnable[] commands={this::readPage,this::openDocument,this::restoreSession,this::reopenTab};
+        String[] labels={"Read page","Open document","Restore session","Reopen tab","Site support"};Runnable[] commands={this::readPage,this::openDocument,this::restoreSession,this::reopenTab,()->load(current(),URI.create("aster:compatibility"),-1)};
         for(int i=0;i<labels.length;i++){Runnable command=commands[i];JButton b=button(labels[i],labels[i],()->{popup.setVisible(false);command.run();});b.setPreferredSize(new Dimension(112,76));grid.add(b);}
-        popup.add(grid); popup.show(surface,Math.max(0,surface.getWidth()-260),88);
+        WorkspaceTheme.apply(grid);popup.add(grid); popup.show(surface,Math.max(0,surface.getWidth()-260),88);
     }
     private static String capitalize(String s) { return s.substring(0,1).toUpperCase(Locale.ROOT)+s.substring(1); }
+    private static final class WrapPanel extends JPanel {
+        WrapPanel(){super(new FlowLayout(FlowLayout.LEFT,8,4));}
+        public Dimension getPreferredSize(){int width=getParent()==null?600:Math.max(240,getParent().getWidth());int x=8,height=8,row=0;
+            for(Component c:getComponents())if(c.isVisible()){Dimension d=c.getPreferredSize();if(x>8&&x+d.width+8>width){height+=row+4;x=8;row=0;}x+=d.width+8;row=Math.max(row,d.height);}return new Dimension(width,height+row);}
+    }
     private static final class PagePanel extends JPanel implements Scrollable {
         public Dimension getPreferredScrollableViewportSize() { return new Dimension(800,600); }
         public int getScrollableUnitIncrement(Rectangle r,int axis,int direction) { return 28; }
@@ -516,23 +577,24 @@ public final class PreviewMain {
     }
     private JPanel body(String title, String description) {
         JPanel panel = new PagePanel(); panel.setLayout(new BoxLayout(panel,BoxLayout.Y_AXIS)); panel.setBackground(PAPER); panel.setBorder(BorderFactory.createEmptyBorder(28,32,28,32));
-        JLabel brand=new JLabel("A S T E R"); brand.setForeground(ACCENT); brand.setFont(new Font(Font.SANS_SERIF,Font.BOLD,14)); brand.setAlignmentX(Component.LEFT_ALIGNMENT); panel.add(brand); panel.add(Box.createVerticalStrut(18));
+        JLabel brand=new JLabel("A S T E R   /   YOUR WORKSPACE"); brand.putClientProperty("aster.accent",Boolean.TRUE);brand.setForeground(ACCENT); brand.setFont(new Font(Font.SANS_SERIF,Font.BOLD,14)); brand.setAlignmentX(Component.LEFT_ALIGNMENT); panel.add(brand); panel.add(Box.createVerticalStrut(18));
         JLabel heading=new JLabel(title); heading.setForeground(INK); heading.setFont(new Font(Font.SANS_SERIF,Font.BOLD,28)); heading.setAlignmentX(Component.LEFT_ALIGNMENT); panel.add(heading); panel.add(Box.createVerticalStrut(10));
         paragraph(panel,description); return panel;
     }
     private void paragraph(JPanel panel,String text) { JTextArea label=new JTextArea(text,2,36); label.setLineWrap(true); label.setWrapStyleWord(true); label.setEditable(false); label.setFocusable(false); label.setOpaque(false); label.setForeground(INK); label.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,15)); label.setAlignmentX(Component.LEFT_ALIGNMENT); label.setMaximumSize(new Dimension(Integer.MAX_VALUE,70)); panel.add(label); panel.add(Box.createVerticalStrut(16)); }
     private JPanel internalPage(Tab tab,String page) {
-        JPanel panel=body(page.equals("home") ? "Your space to explore." : capitalize(page), page.equals("home") ? "A first look at Aster's own engine. Start with a simple text website." : "Aster tools · on this computer");
+        JPanel panel=body(page.equals("home") ? "Your space to explore." : capitalize(page), page.equals("home") ? "Browse, read and keep your ideas together." : "Aster tools · on this computer");
         if(page.equals("home")) {
-            JPanel links=new JPanel(new GridLayout(2,3,8,8)); links.setOpaque(false); links.setAlignmentX(Component.LEFT_ALIGNMENT); links.setMaximumSize(new Dimension(Integer.MAX_VALUE,130));
-            String[][] targets={{"Example website","https://example.com"},{"Bookmarks","aster:bookmarks"},{"History","aster:history"},{"Settings","aster:settings"},{"Downloads","aster:downloads"},{"Aster project","https://github.com/xatusbetazx17/aster-browser"}};
+            JPanel links=new JPanel(new GridLayout(3,2,10,10)); links.setOpaque(false); links.setAlignmentX(Component.LEFT_ALIGNMENT); links.setMaximumSize(new Dimension(Integer.MAX_VALUE,180));links.setPreferredSize(new Dimension(560,180));
+            String[][] targets={{"DuckDuckGo search","https://html.duckduckgo.com/html/"},{"Example website","https://example.com"},{"Your bookmarks","aster:bookmarks"},{"Recent pages","aster:history"},{"Try the playground","aster:playground"},{"Website compatibility","aster:compatibility"}};
             for(String[] item:targets) links.add(button(item[0],item[0],()->load(tab,target(item[1]),-1))); panel.add(links); panel.add(Box.createVerticalStrut(24));
             JPanel reading=new JPanel(new FlowLayout(FlowLayout.LEFT));reading.setOpaque(false);reading.setAlignmentX(Component.LEFT_ALIGNMENT);reading.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
-            reading.add(button("Open document","Open Word, text or Markdown",this::openDocument));reading.add(button("Continue previous session","Restore saved tabs and reading positions",this::restoreSession));panel.add(reading);
+            reading.add(button("Open document","Open Word, text or Markdown",this::openDocument));reading.add(button("Restore tabs","Restore saved tabs and reading positions",this::restoreSession));panel.add(reading);
             JPanel awareness=new JPanel(new FlowLayout(FlowLayout.LEFT,16,0)); awareness.setOpaque(false); awareness.setAlignmentX(Component.LEFT_ALIGNMENT); awareness.setMaximumSize(new Dimension(Integer.MAX_VALUE,120));
-            final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(new Color(0xdbe7df)); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
-            ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel("Open tabs · "+bookmarkCount()+" bookmarks · "+visits.size()+" recent visits")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
-            paragraph(panel,"Try Menu → Playground for page scripts, keyboard/controller input and a sample video. Full web apps, live cloud gaming and Prime Video are still unfinished.");
+            final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(WorkspaceTheme.LINE); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
+            int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;
+            ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel((count-parked)+" live · "+parked+" parked · "+bookmarkCount()+" saved")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
+            paragraph(panel,"Aster 0.3 preview · Simple websites and reading are ready to try. Netflix, Prime Video and cloud gaming still need engine work. Check Website compatibility before testing a service.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -562,16 +624,29 @@ public final class PreviewMain {
             zoom.addActionListener(e->{ pageScale=Integer.parseInt(zoom.getSelectedItem().toString().replace("%",""))/100.0; preferences.putInt("pageScale",(int)Math.round(pageScale*100)); for(int i=0;i<tabs.getTabCount();i++){ PageCanvas canvas=((Tab)tabs.getComponentAt(i)).canvas; canvas.scale=pageScale; canvas.layoutWidth=-1; canvas.revalidate();canvas.repaint(); } }); panel.add(zoom); panel.add(Box.createVerticalStrut(18));
             JCheckBox motion=new JCheckBox("Reduce motion",reducedMotion); motion.setOpaque(false); motion.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,15)); motion.addActionListener(e->{ reducedMotion=motion.isSelected(); preferences.putBoolean("reducedMotion",reducedMotion); sync(); }); panel.add(motion); panel.add(Box.createVerticalStrut(18));
             paragraph(panel,"Tab close buttons appear when selected, hovered, or focused with the keyboard. Ctrl+Tab switches tabs; Ctrl+W closes the current tab.");
+            JCheckBox parking=new JCheckBox("Park older background tabs",autoPark);parking.setOpaque(false);parking.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,15));parking.addActionListener(e->{autoPark=parking.isSelected();preferences.putBoolean("autoPark",autoPark);rebalanceTabs();});panel.add(parking);
+            JComboBox<Integer> limit=new JComboBox<>(new Integer[]{2,3,4,5,6,7,8});limit.setSelectedItem(liveTabLimit);limit.getAccessibleContext().setAccessibleName("Maximum live website tabs before parking");limit.setMaximumSize(new Dimension(180,34));limit.setAlignmentX(Component.LEFT_ALIGNMENT);limit.addActionListener(e->{liveTabLimit=(Integer)limit.getSelectedItem();preferences.putInt("liveTabLimit",liveTabLimit);rebalanceTabs();});panel.add(limit);panel.add(Box.createVerticalStrut(12));
+            paragraph(panel,"Parking releases a page and its images, then reloads it when selected. Active tabs and pages with forms, running scripts or media stay live. Restore tabs opens only the selected saved website.");
+        } else if(page.equals("compatibility")) {
+            paragraph(panel,"This preview uses Aster's own page renderer. A familiar interface does not yet mean full modern-web compatibility.");
+            paragraph(panel,"Available to test: simple HTML and CSS, images, same-site basic forms, downloads, bookmarks, reading and notes. Desktop also has a limited JavaScript runtime and unencrypted MP4/HLS playback.");
+            paragraph(panel,"Netflix and Prime Video: unsupported. Aster still needs login sessions, a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
+            paragraph(panel,"Cloud gaming: unsupported. WebRTC transport, real-time audio/video, complete graphics and input APIs, and service acceptance must work together. The playground only demonstrates local controller input.");
+            paragraph(panel,"Check the release notes for tested platforms and known issues. An unsupported page may load incompletely, even when some text is visible.");
+            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.3.md"),-1)));
         }
-        panel.add(Box.createVerticalGlue()); return panel;
+        panel.add(Box.createVerticalGlue());WorkspaceTheme.apply(panel); return panel;
     }
     private static String plainLabel(String text) { return "\u200b"+text; }
     static final class PageCanvas extends JPanel implements Scrollable {
         final Map<URI,BufferedImage> images=new HashMap<>();String findText="";
+        int findIndex=-1;String searched="";Engine.Layout searchedLayout;
+        final java.util.List<Rectangle> findRects=new ArrayList<>();final Set<Engine.Draw> foundDraws=new HashSet<>();
         private final Map<String,Font> fonts=new HashMap<>();
         private Font cachedFont(Engine.Style style){String key=style.size+":"+style.bold+":"+style.italic+":"+style.pre;return fonts.computeIfAbsent(key,k->font(style));}
         Engine.Document document; Engine.Layout layout; int layoutWidth = -1; double scale = 1;
         java.util.function.Consumer<URI> navigate = uri -> { };
+        java.util.function.Consumer<URI> openTab = uri -> { };
         java.util.function.Consumer<URI> save = uri -> { };
         java.util.function.IntConsumer action = id -> { };
         java.util.function.BiConsumer<String,String> keys = (type,key) -> { };
@@ -586,10 +661,13 @@ public final class PreviewMain {
                     if(!e.isPopupTrigger() || layout==null) return;
                     URI uri=layout.hit((float)(e.getX()/scale),(float)(e.getY()/scale)); if(uri==null)return;
                     JPopupMenu menu=new JPopupMenu(); JMenuItem open=new JMenuItem("Open link"); open.addActionListener(event->navigate.accept(uri)); menu.add(open);
+                    JMenuItem background=new JMenuItem("Open link in new tab");background.addActionListener(event->openTab.accept(uri));menu.add(background);
                     JMenuItem download=new JMenuItem("Save link as…"); download.addActionListener(event->save.accept(uri)); menu.add(download); menu.show(PageCanvas.this,e.getX(),e.getY());
                 }
                 public void mouseClicked(MouseEvent e) {
-                    if (SwingUtilities.isLeftMouseButton(e) && layout != null) { requestFocusInWindow();int id=layout.actionAt((float)(e.getX()/scale),(float)(e.getY()/scale));if(id>0){action.accept(id);return;}URI uri = layout.hit((float)(e.getX()/scale), (float)(e.getY()/scale)); if (uri != null) navigate.accept(uri); }
+                    if(layout==null)return;URI uri=layout.hit((float)(e.getX()/scale),(float)(e.getY()/scale));
+                    if(uri!=null&&(SwingUtilities.isMiddleMouseButton(e)||SwingUtilities.isLeftMouseButton(e)&&(e.isControlDown()||e.isMetaDown()))){openTab.accept(uri);return;}
+                    if (SwingUtilities.isLeftMouseButton(e)) { requestFocusInWindow();int id=layout.actionAt((float)(e.getX()/scale),(float)(e.getY()/scale));if(id>0){action.accept(id);return;}if(uri!=null)navigate.accept(uri); }
                 }
             });
             addMouseMotionListener(new MouseMotionAdapter() { public void mouseMoved(MouseEvent e) {
@@ -598,7 +676,14 @@ public final class PreviewMain {
                 setToolTipText(uri == null ? null : uri.toString());
             }});
         }
-        void setDocument(Engine.Document doc) { document = doc; layout = null; layoutWidth = -1; getAccessibleContext().setAccessibleDescription(doc.text()); revalidate(); repaint(); }
+        void setDocument(Engine.Document doc) { document = doc; layout = null; layoutWidth = -1;findIndex=-1; getAccessibleContext().setAccessibleDescription(doc.text()); revalidate(); repaint(); }
+        void release(){document=null;layout=null;layoutWidth=-1;images.clear();fonts.clear();findRects.clear();foundDraws.clear();searchedLayout=null;getAccessibleContext().setAccessibleDescription("Parked page");}
+        void search(){if(layout==searchedLayout&&findText.equals(searched))return;searchedLayout=layout;searched=findText;findIndex=-1;findRects.clear();foundDraws.clear();if(layout==null||findText.trim().isEmpty())return;
+            StringBuilder text=new StringBuilder();int[] starts=new int[layout.items.size()];for(int i=0;i<starts.length;i++){starts[i]=text.length();text.append(layout.items.get(i).text).append(' ');}
+            java.util.regex.Matcher matches=java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(findText.trim().replaceAll("\\s+"," ")),java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE).matcher(text);
+            while(matches.find()&&findRects.size()<1000){int at=Arrays.binarySearch(starts,matches.start());if(at<0)at=Math.max(0,-at-2);Rectangle rect=null;
+                for(int i=at;i<starts.length&&starts[i]<matches.end();i++){Engine.Draw d=layout.items.get(i);foundDraws.add(d);Rectangle r=new Rectangle((int)d.x,(int)d.y,(int)Math.ceil(d.width),(int)Math.ceil(d.height));rect=rect==null?r:rect.union(r);}if(rect!=null)findRects.add(rect);}
+        }
         static Font font(Engine.Style s) { return new Font(s.pre ? Font.MONOSPACED : Font.SANS_SERIF, (s.bold ? Font.BOLD : 0) | (s.italic ? Font.ITALIC : 0), Math.round(s.size)); }
         void ensureLayout() {
             if (document != null && (layout == null || layoutWidth != getWidth())) {
@@ -609,7 +694,7 @@ public final class PreviewMain {
             }
         }
         protected void paintComponent(Graphics graphics) {
-            super.paintComponent(graphics); ensureLayout(); if (layout == null) return;
+            super.paintComponent(graphics); ensureLayout(); if (layout == null) return;search();
             Graphics2D g = (Graphics2D) graphics.create(); g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.scale(scale, scale); Rectangle clip = g.getClipBounds();
             for (int i=layout.firstVisible(clip==null?0:clip.y);i<layout.items.size();i++) {Engine.Draw draw=layout.items.get(i);
@@ -618,7 +703,7 @@ public final class PreviewMain {
                 if(draw.image!=null){BufferedImage bitmap=images.get(draw.image);
                     if(bitmap!=null){double fit=Math.min(draw.width/bitmap.getWidth(),draw.height/bitmap.getHeight());g.drawImage(bitmap,(int)draw.x,(int)draw.y,(int)(bitmap.getWidth()*fit),(int)(bitmap.getHeight()*fit),null);continue;}
                     g.setColor(new Color(0xe8eeec));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
-                if(!findText.isEmpty()&&draw.text.toLowerCase(Locale.ROOT).contains(findText.toLowerCase(Locale.ROOT))){g.setColor(new Color(0xffe38a));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
+                if(foundDraws.contains(draw)){g.setColor(new Color(0xffe38a));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
                 g.setFont(cachedFont(draw.style)); g.setColor(new Color(draw.style.color, true));
                 g.drawString(draw.text, draw.x, draw.y + draw.style.size);
                 if (draw.link != null) g.drawLine((int) draw.x, (int) (draw.y + draw.style.size + 2), (int) (draw.x + draw.width), (int) (draw.y + draw.style.size + 2));

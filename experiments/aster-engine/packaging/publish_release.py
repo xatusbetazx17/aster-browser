@@ -109,7 +109,7 @@ def notes(metadata, signing, apk_name, tag):
         "This test APK cannot promise an in-place update from another CI run. Do not uninstall an older app containing data you need.")
     return f"""Aster {metadata['version']} — experimental original engine, built from `{metadata['commit']}`.
 
-These downloads include the 0.2 browsing/reading features and the new packaging changes. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
+These downloads include the 0.3 dark workspace, integrated desktop reader/notes, real tab parking, lazy tab restoration, phrase search and improved Android navigation, plus the earlier browsing/reading features. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
 
 | Device | Download | Install or update |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ Linux uses the same `io.aster.browser.EnginePreview` application and `preview` b
 
 Older Qt/Chromium kits, WebKit builds and differently signed Android test APKs are separate installations. Their data is not automatically converted. Close Aster before updating; downloads already saved outside the application remain in place. Updates are initiated by downloading a newer package; there is no background auto-updater.
 
-See [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
+See [workspace features and the remaining engine roadmap](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.3.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
 """
 
 

@@ -1,8 +1,9 @@
 # Aster original engine preview
 
-**Version 0.2:** see [the browsing/reading release notes and package guide](RELEASE_0.2.md)
-for shared images, the CSS/form subset, search, reading/notes/speech, saved sessions,
-Android Save As and the new Linux Flatpak build. Full web compatibility remains unfinished.
+**Version 0.3:** see [the workspace release notes and remaining engine work](RELEASE_0.3.md)
+for the dark Aster interface, integrated reader/notes, real tab parking, lazy session
+restoration, phrase search and Android tab navigation. The [0.2 browsing and reading
+features](RELEASE_0.2.md) remain included. Full web compatibility is unfinished.
 
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
@@ -31,8 +32,8 @@ or silently remove that prototype's reader and local companion.
 | Layout | Text, headings, paragraphs, lists, basic table text, preformatted lines, Unicode, word wrapping |
 | Typography | Bold, italic, inherited size/color; inline `font-size` in px, six-digit hex `color`, bold/italic declarations |
 | Images | Bounded same-origin PNG/JPEG/GIF decoding; alternative text on unsupported or failed resources |
-| Desktop UI | Rectangular tabs with individual close buttons, hover/close animations, adjacent new-tab button, rounded controls, flat internal pages, up to 20 tabs and 30 persisted bookmarks |
-| Android UI | Up to 12 tabs, search, native forms, document reader, notes/speech, Save As, bookmarks and saved sessions |
+| Desktop UI | Dark workspace and sidebar, integrated reader/notes, real tab parking, lazy restoration, phrase find and background link tabs; up to 20 tabs and 30 persisted bookmarks |
+| Android UI | Dark native home, visible navigation and reader controls, per-tab Back/Forward history, up to 12 tabs, forms, notes/speech, Save As, bookmarks and saved sessions |
 | Network | Platform TLS validation; no certificate bypass, cookies or embedded URL credentials; desktop adds bounded same-origin scripts/fetch/WebSocket and explicitly requested media |
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
@@ -47,7 +48,9 @@ ignored. There is no standards-compliance, daily-driver security or all-sites cl
 
 ## Desktop interface update
 
-The Windows/Linux original-engine application now includes:
+The [0.3 workspace update](RELEASE_0.3.md) adds a dark sidebar, docked reading/notes,
+resource-releasing parked tabs, lazy restoration and phrase search to these existing
+Windows/Linux controls:
 
 - Rectangular tabs with an individual vector close button. Selected and hovered tabs
   reveal the close button; keyboard focus reveals it too. Hover fades take 120 ms;
