@@ -39,7 +39,10 @@ final class ScriptSession implements AutoCloseable {
             if(source==null)throw new IOException("Aster DOM bootstrap missing");
             ByteArrayOutputStream bytes=new ByteArrayOutputStream(); byte[] buffer=new byte[8192];int n;while((n=source.read(buffer))!=-1)bytes.write(buffer,0,n);
             eval(new String(bytes.toByteArray(),StandardCharsets.UTF_8));
+            eval("globalThis.__asterNativeLineEnding="+Json.quote(System.lineSeparator())+";void 0");
+            eval(PreviewMain.resourceText("/web-body.js"));
             eval(PreviewMain.resourceText("/web.js"));
+            eval(PreviewMain.resourceText("/xhr.js"));
         } catch(Exception e) { close(); throw e; }
     }
     synchronized Object eval(String code) throws IOException { return command(1,code); }
@@ -69,7 +72,8 @@ final class ScriptSession implements AutoCloseable {
             if(page==null||SiteData.origin(page).isEmpty())throw new SecurityException("Website data is unavailable for this origin");
             Object parsed=Json.parse(raw);if(!(parsed instanceof Map))throw new SecurityException("Invalid site-data request");
             Map<?,?> request=(Map<?,?>)parsed;String operation=Objects.toString(request.get("op"),"");Object result;
-            if(operation.equals("cookie-get"))result=siteData.documentCookie(page);
+            if(operation.equals("url-resolve")){Object value=request.get("value");if(!(value instanceof String)||((String)value).length()>8192)throw new SecurityException("Invalid URL");result=PageNetwork.target(page,(String)value,false).toASCIIString();}
+            else if(operation.equals("cookie-get"))result=siteData.documentCookie(page);
             else if(operation.equals("cookie-set")){Object value=request.get("value");if(!(value instanceof String))throw new SecurityException("Invalid cookie value");siteData.setDocumentCookie(page,(String)value);result=null;}
             else {
                 String area=Objects.toString(request.get("area"),"");if(!area.equals("local")&&!area.equals("session"))throw new SecurityException("Invalid storage area");

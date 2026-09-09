@@ -1,6 +1,6 @@
 # Aster original engine preview
 
-**Version 0.4:** see [website sessions, storage, measurements and remaining service blockers](RELEASE_0.4.md). Shared cookies now connect native navigation, basic forms and resources on desktop/Android. Desktop adds bounded local/session storage and authenticated same-origin fetch. The [0.3 workspace](RELEASE_0.3.md) and [0.2 browsing/reading](RELEASE_0.2.md) remain included. Full web compatibility is unfinished.
+**Version 0.5:** see [web request compatibility and remaining service blockers](RELEASE_0.5.md). Desktop adds CORS-governed HTTP APIs, Request/Blob/File/FormData, URLSearchParams and asynchronous XHR with progressive responses. Desktop/Android query links now preserve their path. The [0.4 sessions/storage](RELEASE_0.4.md), [0.3 workspace](RELEASE_0.3.md) and [0.2 browsing/reading](RELEASE_0.2.md) remain included. Full web compatibility is unfinished.
 
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
@@ -31,7 +31,7 @@ or silently remove that prototype's reader and local companion.
 | Images | Bounded same-origin PNG/JPEG/GIF decoding; alternative text on unsupported or failed resources |
 | Desktop UI | Dark workspace and sidebar, integrated reader/notes, real tab parking, lazy restoration, phrase find and background link tabs; up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Dark native home, visible navigation and reader controls, per-tab Back/Forward history, up to 12 tabs, forms, notes/speech, Save As, bookmarks and saved sessions |
-| Network | Platform TLS validation; restricted origin-isolated cookies; no certificate bypass or embedded URL credentials; desktop adds bounded same-origin scripts/fetch/WebSocket and explicitly requested media |
+| Network | Platform TLS validation; restricted origin-isolated cookies; no certificate bypass or embedded URL credentials; desktop adds same-origin scripts/WebSocket and bounded CORS-governed fetch/XHR and explicitly requested media |
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
@@ -109,7 +109,7 @@ node creation/appending/removal, click listeners, keydown/keyup, title changes,
 DOMContentLoaded/load, Promises, timers, requestAnimationFrame and gamepad snapshots.
 Aster reparses text snapshots for its own renderer. This is not a complete DOM,
 HTML parser, CSS engine or event model. Scripts execute after initial parsing;
-modules, inline HTML event attributes, XHR, storage events/IndexedDB, JavaScript form handling and canvas/WebGL
+modules, inline HTML event attributes, storage events/IndexedDB, JavaScript form handling and canvas/WebGL
 are not implemented. Native forms are available separately. The network and media bindings below are subsets. Keyboard
 code/repeat and default-action behavior are preliminary; there is no pointer lock.
 Pages with a CSP header or meta policy refuse scripts until policy support exists.
@@ -129,20 +129,25 @@ process isolation. This remains an opt-in development preview for controlled pag
 
 ### Page networking
 
-Opt-in desktop scripts can use `fetch(url, options)` with a URL string, GET/HEAD/
-POST/PUT/PATCH/DELETE/OPTIONS, string or ArrayBuffer/view bodies, `Headers`, and
-`Response.text()`, `.json()`, `.arrayBuffer()` and `.clone()`. HTTP 4xx/5xx responses
-resolve normally; transport and policy errors reject. `AbortController` cancels
-pending work. UTF-8 `TextEncoder`/`TextDecoder` and `atob`/`btoa` are included.
+Opt-in desktop scripts use `fetch` and asynchronous `XMLHttpRequest` through the
+same Java HTTP broker. The [0.5 implementation and limits](RELEASE_0.5.md) cover
+CORS preflights/response checks, redirect taint, credential/header filtering,
+Request construction/cloning, URLSearchParams, Blob/File/FormData uploads,
+progressive response delivery, cancellation and bounded gzip/deflate decoding.
+Headers arrive before the body completes; body promises finish or fail with the
+transfer. XHR exposes partial UTF-8 text and text/JSON/ArrayBuffer/Blob responses.
 
-Connections and redirects must stay on the page's origin. Fetch defaults to same-origin credentials; `include` uses the same restricted jar and `omit` skips both sending and accepting cookies. Cross-origin CORS,
-full site/CORS credentials, service workers, streaming request/response bodies, compressed
-responses, `Request`/`Blob`/`FormData`, manual redirects and a complete URL API are
-not implemented. Browser-controlled headers cannot be supplied by scripts and
-Set-Cookie response headers are withheld. Four HTTP requests may run per page;
-request bodies are limited to 256 KiB, responses to 1 MiB, redirects to five and
-the total fetch lifetime to 15 seconds. Abort, navigation and Stop JavaScript
-cancel network work.
+Default credentials remain same-origin. Cross-origin cookies are refused even
+with `include`, while CORS still enforces that mode's stricter origin/credential
+response headers. Script-provided Authorization needs explicit preflight permission
+and is removed when a redirect changes origin. Set-Cookie is never exposed to JS.
+
+Four HTTP requests may run per page; bodies are limited to 256 KiB outgoing and
+1 MiB decoded incoming, redirects to five and total lifetime to 15 seconds.
+`no-cors`, complete URL parsing, HTTP response caching, service workers,
+ReadableStream, Blob URLs, DOM FormData extraction, synchronous XHR, XML and
+non-UTF-8 response decoding remain unavailable. Scripts and automatic assets on
+CSP pages remain disabled. Android has no JavaScript bindings for these APIs yet.
 
 `WebSocket` uses actual WS/WSS handshakes, protocols, open/message/error/close
 events, text and ArrayBuffer messages, send buffering and closing handshakes.

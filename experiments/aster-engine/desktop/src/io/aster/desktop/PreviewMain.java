@@ -604,7 +604,7 @@ public final class PreviewMain {
             final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(WorkspaceTheme.LINE); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
             int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;
             ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel((count-parked)+" live · "+parked+" parked · "+bookmarkCount()+" saved")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
-            paragraph(panel,"Aster 0.4 preview · Simple websites and reading are ready to try. Netflix, Prime Video and cloud gaming still need engine work. Check Website compatibility before testing a service.");
+            paragraph(panel,"Aster 0.5 preview · Simple websites and reading are ready to try. Netflix, Prime Video and cloud gaming still need engine work. Check Website compatibility before testing a service.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -644,7 +644,7 @@ public final class PreviewMain {
             paragraph(panel,"Netflix and Prime Video: unsupported. Aster now has basic website sessions but still needs a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
             paragraph(panel,"Cloud gaming: unsupported. WebRTC transport, real-time audio/video, complete graphics and input APIs, and service acceptance must work together. The playground only demonstrates local controller input.");
             paragraph(panel,"Check the release notes for tested platforms and known issues. An unsupported page may load incompletely, even when some text is visible.");
-            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.4.md"),-1)));
+            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.5.md"),-1)));
         }
         panel.add(Box.createVerticalGlue());WorkspaceTheme.apply(panel); return panel;
     }

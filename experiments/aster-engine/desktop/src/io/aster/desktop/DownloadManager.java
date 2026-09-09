@@ -89,7 +89,7 @@ final class DownloadManager implements AutoCloseable {
                 transfer.check(deadline);
                 HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
                 connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(10000);
-                connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.4");
+                connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.5");
                 connection.setRequestProperty("Accept", "*/*"); connection.setRequestProperty("Accept-Encoding", "identity");
                 transfer.context.prepare(connection);
                 try {

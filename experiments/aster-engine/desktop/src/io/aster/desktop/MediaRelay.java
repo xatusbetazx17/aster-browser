@@ -83,7 +83,7 @@ final class MediaRelay implements AutoCloseable {
             URI uri=item.uri;SiteData.Request context=data.request(page,false,exchange.getRequestMethod());
             for(int redirects=0;;redirects++){
                 if(redirects>5)throw new IOException("Too many media redirects");validate(uri);c=(HttpURLConnection)uri.toURL().openConnection();active.add(c);
-                c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");c.setRequestProperty("User-Agent","AsterEnginePreview/0.4");
+                c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");c.setRequestProperty("User-Agent","AsterEnginePreview/0.5");
                 if(range!=null&&!item.playlist)c.setRequestProperty("Range",range);if(exchange.getRequestMethod().equals("HEAD")&&!item.playlist)c.setRequestMethod("HEAD");
                 context.prepare(c);int code=c.getResponseCode();context.receive(c);if(!Arrays.asList(301,302,303,307,308).contains(code))break;
                 String location=c.getHeaderField("Location");if(location==null)throw new IOException("Media redirect lacks a destination");uri=resolve(uri,location);active.remove(c);c.disconnect();c=null;

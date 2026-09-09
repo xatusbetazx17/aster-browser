@@ -160,7 +160,7 @@
   root.parentNode=document;
   Object.assign(globalThis,{window:globalThis,self:globalThis,document,EventTarget:Target,Event:AsterEvent,KeyboardEvent:AsterEvent,MouseEvent:AsterEvent,Node,HTMLElement:Node,HTMLMediaElement,HTMLVideoElement:HTMLMediaElement,HTMLAudioElement:HTMLMediaElement,
     addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),dispatchEvent:win.dispatchEvent.bind(win),
-    navigator:Object.freeze({userAgent:'AsterEnginePreview/0.2 QuickJS',getGamepads:()=>nativePads()}),
+    navigator:Object.freeze({userAgent:'AsterEnginePreview/0.5 QuickJS',getGamepads:()=>nativePads()}),
     performance:Object.freeze({now:()=>clock}),console:Object.freeze({log:(...args)=>warn(args.join(' ')),warn:(...args)=>warn(args.join(' ')),error:(...args)=>warn(args.join(' '))})});
   function schedule(fn,ms,repeat,args) {
     if(typeof fn!=='function') throw new TypeError('Timer callback must be a function');

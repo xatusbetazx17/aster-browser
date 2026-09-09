@@ -45,8 +45,19 @@ public final class PageLoader {
     }
     public static URI link(URI base, String href) {
         if (href == null) return null;
-        try { URI uri = base.resolve(href.trim()).normalize(); validate(uri); return uri; }
+        try { URI uri = resolve(base,href.trim()).normalize(); validate(uri); return uri; }
         catch (IllegalArgumentException e) { return null; }
+    }
+    /** Preserve the current path for empty/query-only references (URI.resolve differs here). */
+    public static URI resolve(URI base,String reference) {
+        URI ref=URI.create(reference);
+        if(!ref.isAbsolute()&&ref.getRawAuthority()==null&&"".equals(ref.getRawPath())){
+            String text=base.toString().split("#",2)[0];
+            if(ref.getRawQuery()!=null)text=text.split("\\?",2)[0]+"?"+ref.getRawQuery();
+            if(ref.getRawFragment()!=null)text+="#"+ref.getRawFragment();
+            return URI.create(text);
+        }
+        return base.resolve(ref);
     }
     /** A response intended for explicit saving, not HTML rendering. No file is written here. */
     public static final class DownloadRequired extends IOException {
@@ -75,7 +86,7 @@ public final class PageLoader {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Page request cancelled or timed out.");
             HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
             connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
-            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.4");
+            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.5");
             connection.setRequestProperty("Accept", "text/html,text/plain;q=0.9");
             connection.setRequestProperty("Accept-Encoding", "gzip");
             request.method(formBody==null?"GET":"POST");request.prepare(connection);

@@ -10,9 +10,9 @@ Windows setup and Linux Flatpak replace an older original-engine installation wh
 
 Aster is being developed as a **standalone browser with its own interface and page engine**. The original-engine Windows/Linux/Android application is the destination for new development. It opens directly as Aster and embeds no Chrome, Firefox, WebKit or WebView. The older Linux WebKit prototype remains available separately.
 
-**Status: experimental.** The independent engine is a limited implementation, not a complete modern browser. The 0.4 engine milestone adds shared website cookies, desktop web storage and reproducible renderer measurements. The included 0.3 workspace provides the dark Aster interface, integrated reading/notes, tab parking, lazy restoration and better Android navigation on top of images, basic CSS/forms and document tools, with Windows/Linux bundles, an Android 8+ APK and a Flatpak build. Full web compatibility, protected streaming, production signing and validated Steam Deck support remain unfinished.
+**Status: experimental.** The independent engine is a limited implementation, not a complete modern browser. The 0.5 engine milestone adds desktop CORS-governed HTTP APIs, common request/file/form bodies, asynchronous XMLHttpRequest and progressive response delivery. The 0.4 website sessions, desktop storage and renderer measurements remain included. The included 0.3 workspace provides the dark Aster interface, integrated reading/notes, tab parking, lazy restoration and better Android navigation on top of images, basic CSS/forms and document tools, with Windows/Linux bundles, an Android 8+ APK and a Flatpak build. Full web compatibility, protected streaming, production signing and validated Steam Deck support remain unfinished.
 
-Read [Aster 0.4 features, streaming blockers and the remaining engine roadmap](experiments/aster-engine/RELEASE_0.4.md).
+Read [Aster 0.5 features, streaming blockers and the remaining engine roadmap](experiments/aster-engine/RELEASE_0.5.md).
 
 Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 
@@ -27,8 +27,8 @@ provides regular-user downloads and the actual verification status of each platf
 The original-engine Windows/Linux desktop preview includes animated tabs, flat
 internal pages and [working direct file downloads](experiments/aster-engine/README.md#download-files-on-windowslinux) with Save As, progress and cancellation.
 
-**The desktop now has opt-in JavaScript/DOM interaction, same-origin fetch and
-WebSocket connections, native controller input, page video controls, progressive
+**The desktop now has opt-in JavaScript/DOM interaction, CORS-governed fetch/XHR and
+same-origin WebSocket connections, native controller input, page video controls, progressive
 media and unencrypted HLS playback.** Try `aster:playground`. It uses standalone
 QuickJS and JavaFX media, with no embedded browser engine. This is still an early
 foundation: full web layout, WebRTC, MSE/DASH, EME and Prime Video/Boosteroid

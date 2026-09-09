@@ -16,15 +16,15 @@ A custom interface and browser features can be developed within this standalone 
 - Install and update actual Aster application code while preserving existing user data.
 - Pursue legitimate codec/DRM integration and service testing. Do not replace Aster with an external browser to claim streaming support.
 
-The original-engine app is now the development destination. Its [0.4 release notes](experiments/aster-engine/RELEASE_0.4.md) describe shared website sessions, desktop storage, measured layout and concrete streaming/engine blockers.
+The original-engine app is now the development destination. Its [0.5 release notes](experiments/aster-engine/RELEASE_0.5.md) describe desktop CORS-governed requests, common body types, asynchronous XHR and concrete streaming/engine blockers.
 
 ## Deliverable status
 
 | Deliverable | Current status |
 | --- | --- |
 | Standalone Linux Aster with WebKit | Implemented prototype: tabs, navigation, bookmarks, find, zoom, downloads |
-| Original-engine browsing/reading | 0.4 adds shared cookies, desktop web storage and measured layout; 0.3 adds the dark workspace, docked reading/notes, protected tab parking, lazy restore, phrase search and Android per-tab navigation on top of the 0.2 foundations |
-| Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts/fetch/WebSocket; opt-in, not a complete web platform |
+| Original-engine browsing/reading | 0.5 adds desktop HTTP API compatibility and correct query navigation; 0.4 adds shared cookies, desktop web storage and measured layout; 0.3 adds the dark workspace, docked reading/notes, protected tab parking, lazy restore, phrase search and Android per-tab navigation on top of the 0.2 foundations |
+| Original-engine desktop scripting | Standalone QuickJS, small Aster DOM/event bridge, same-origin classic scripts/WebSocket, CORS-governed fetch/XHR and common body types; opt-in, not a complete web platform |
 | Original-engine desktop media/input | Progressive unencrypted files/HLS through JavaFX media, page play/pause/volume/events and file seeking; HLS seeking disabled; XInput/Linux joystick provider with per-visit consent; no WebRTC/MSE/EME |
 | Original-engine desktop file downloads | Implemented: direct HTTP/HTTPS Save As, progress/cancel/retry; two transfers and 2 GiB/file; origin-scoped login cookies; no JavaScript/blob downloads |
 | Managed Linux code installation and updates | Implemented, with file verification and rollback |

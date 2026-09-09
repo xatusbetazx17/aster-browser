@@ -27,7 +27,7 @@ public final class PageAssets {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Asset load cancelled or timed out.");
             HttpURLConnection c = (HttpURLConnection) target.toURL().openConnection();
             c.setConnectTimeout(5000); c.setReadTimeout(5000); c.setInstanceFollowRedirects(false);
-            c.setRequestProperty("User-Agent", "AsterEnginePreview/0.4"); c.setRequestProperty("Accept-Encoding", image ? "identity" : "gzip");
+            c.setRequestProperty("User-Agent", "AsterEnginePreview/0.5"); c.setRequestProperty("Accept-Encoding", image ? "identity" : "gzip");
             request.prepare(c);
             try {
                 int code = c.getResponseCode();request.receive(c);
