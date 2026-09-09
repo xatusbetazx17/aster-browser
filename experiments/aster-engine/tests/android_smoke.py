@@ -185,11 +185,16 @@ def main():
         wait_text('Network page rendered by Aster.')
         menu('Site protection')
         wait_text('requests blocked for this origin this session.')
+        editor = wait_text('Custom blocked hostnames', exact=True)
+        if editor.attrib.get('focused') == 'true' or editor.attrib.get('text') != '127.0.0.1':
+            raise AssertionError('Opening protection stole focus for editing or changed saved rules')
         activity = ET.tostring(screen(), encoding='unicode')
         if '1 requests blocked for this origin this session.' not in activity or Fixture.image_requests != before_images:
             raise AssertionError('Android blocking did not prevent the actual image request')
         tap(wait_text('Allow requests on this site', exact=True))
         wait_text('Protection settings saved.')
+        if wait_text('Allow requests on this site', exact=True).attrib.get('checked') != 'true':
+            raise AssertionError('Native protection site switch did not become checked')
         tap(wait_text('Reload', exact=True))
         wait_text('Network page rendered by Aster.')
         deadline = time.monotonic() + 10

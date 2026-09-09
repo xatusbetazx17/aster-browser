@@ -146,7 +146,12 @@ public final class MainActivity extends Activity {
         TextView label=new TextView(this);label.setText("Your blocked hostnames · one per line");body.addView(label);
         EditText rules=new EditText(this);rules.setMinLines(3);rules.setMaxLines(5);rules.setTextSize(14);rules.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);rules.setText(protection.custom());rules.setContentDescription("Custom blocked hostnames");body.addView(rules);
         Button save=new Button(this);save.setText("Save hostname rules");save.setAllCaps(false);save.setOnClickListener(v->{try{protection.custom(rules.getText().toString());persist.run();rules.setText(protection.custom());}catch(IllegalArgumentException e){result.setText(e.getMessage());}});body.addView(save);body.addView(result);
-        new AlertDialog.Builder(this).setTitle("Site protection").setView(holder).setPositiveButton("Done",null).setNeutralButton("Reload",(d,w)->{if(document!=null&&!uri.equals(PageLoader.HOME))load(uri,index);}).show();
+        // A custom dialog otherwise focuses its first EditText and can open the
+        // IME while the person is selecting a site toggle or Reload. Keep the
+        // panel focused until the rule editor is deliberately selected.
+        body.setFocusableInTouchMode(true);body.requestFocus();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Site protection").setView(holder).setPositiveButton("Done",null).setNeutralButton("Reload",(d,w)->{if(document!=null&&!uri.equals(PageLoader.HOME))load(uri,index);}).create();
+        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);dialog.show();
     }
     private void load(URI uri, int historyIndex) {
         load(uri,historyIndex,null);
