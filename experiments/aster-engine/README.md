@@ -1,9 +1,6 @@
 # Aster original engine preview
 
-**Version 0.3:** see [the workspace release notes and remaining engine work](RELEASE_0.3.md)
-for the dark Aster interface, integrated reader/notes, real tab parking, lazy session
-restoration, phrase search and Android tab navigation. The [0.2 browsing and reading
-features](RELEASE_0.2.md) remain included. Full web compatibility is unfinished.
+**Version 0.4:** see [website sessions, storage, measurements and remaining service blockers](RELEASE_0.4.md). Shared cookies now connect native navigation, basic forms and resources on desktop/Android. Desktop adds bounded local/session storage and authenticated same-origin fetch. The [0.3 workspace](RELEASE_0.3.md) and [0.2 browsing/reading](RELEASE_0.2.md) remain included. Full web compatibility is unfinished.
 
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
@@ -34,12 +31,12 @@ or silently remove that prototype's reader and local companion.
 | Images | Bounded same-origin PNG/JPEG/GIF decoding; alternative text on unsupported or failed resources |
 | Desktop UI | Dark workspace and sidebar, integrated reader/notes, real tab parking, lazy restoration, phrase find and background link tabs; up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Dark native home, visible navigation and reader controls, per-tab Back/Forward history, up to 12 tabs, forms, notes/speech, Save As, bookmarks and saved sessions |
-| Network | Platform TLS validation; no certificate bypass, cookies or embedded URL credentials; desktop adds bounded same-origin scripts/fetch/WebSocket and explicitly requested media |
+| Network | Platform TLS validation; restricted origin-isolated cookies; no certificate bypass or embedded URL credentials; desktop adds bounded same-origin scripts/fetch/WebSocket and explicitly requested media |
 | Desktop downloads | User-selected Save As, direct HTTP/HTTPS transfers, progress, cancel/retry, two active transfers, 2 GiB/file |
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
 | Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS; page play/pause/volume/mute/events and file seeking. HLS seeking is disabled. JavaFX Media without JavaFX WebView |
-| Not implemented | Modern HTML recovery, full DOM/CSS/box layout, complex selectors, advanced forms, storage/cookies, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
+| Not implemented | Modern HTML recovery, full DOM/CSS/box layout, complex selectors, advanced forms, full cookie/site/storage semantics, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
@@ -112,7 +109,7 @@ node creation/appending/removal, click listeners, keydown/keyup, title changes,
 DOMContentLoaded/load, Promises, timers, requestAnimationFrame and gamepad snapshots.
 Aster reparses text snapshots for its own renderer. This is not a complete DOM,
 HTML parser, CSS engine or event model. Scripts execute after initial parsing;
-modules, inline HTML event attributes, XHR, cookies/storage, JavaScript form handling and canvas/WebGL
+modules, inline HTML event attributes, XHR, storage events/IndexedDB, JavaScript form handling and canvas/WebGL
 are not implemented. Native forms are available separately. The network and media bindings below are subsets. Keyboard
 code/repeat and default-action behavior are preliminary; there is no pointer lock.
 Pages with a CSP header or meta policy refuse scripts until policy support exists.
@@ -126,6 +123,10 @@ go through a separate validated Java broker. **This is not an OS
 sandbox**: protection against a native runtime exploit still requires platform
 process isolation. This remains an opt-in development preview for controlled pages.
 
+### Website sessions and storage
+
+[0.4 session policy](RELEASE_0.4.md#boundaries-of-the-session-implementation) documents persistent/session cookies, synchronous desktop local/session storage, quotas, HttpOnly protections and Clear website data. Parent-domain cookies, third-party state, storage events and multi-process locking are unfinished. These foundations do not establish real-service login or playback.
+
 ### Page networking
 
 Opt-in desktop scripts can use `fetch(url, options)` with a URL string, GET/HEAD/
@@ -134,8 +135,8 @@ POST/PUT/PATCH/DELETE/OPTIONS, string or ArrayBuffer/view bodies, `Headers`, and
 resolve normally; transport and policy errors reject. `AbortController` cancels
 pending work. UTF-8 `TextEncoder`/`TextDecoder` and `atob`/`btoa` are included.
 
-Connections and redirects must stay on the page's origin. Cross-origin CORS,
-credentials/cookies, service workers, streaming request/response bodies, compressed
+Connections and redirects must stay on the page's origin. Fetch defaults to same-origin credentials; `include` uses the same restricted jar and `omit` skips both sending and accepting cookies. Cross-origin CORS,
+full site/CORS credentials, service workers, streaming request/response bodies, compressed
 responses, `Request`/`Blob`/`FormData`, manual redirects and a complete URL API are
 not implemented. Browser-controlled headers cannot be supplied by scripts and
 Set-Cookie response headers are withheld. Four HTTP requests may run per page;
@@ -146,7 +147,7 @@ cancel network work.
 `WebSocket` uses actual WS/WSS handshakes, protocols, open/message/error/close
 events, text and ArrayBuffer messages, send buffering and closing handshakes.
 Its endpoint must match the page's host, port and security (HTTP→WS, HTTPS→WSS).
-There are no login cookies or cross-origin sockets. Four connections, 256 KiB per
+Origin-scoped cookies are sent on the handshake; response Set-Cookie and cross-origin sockets are unsupported. Four connections, 256 KiB per
 message/send buffer and bounded event queues prevent unbounded buffering in a
 background page. Only `binaryType='arraybuffer'` is supported, including as the
 preview default; Blob delivery is absent. Closing the page aborts every socket.
@@ -175,7 +176,7 @@ byte ranges to the decoder. HLS master/variant playlists are rewritten so every
 segment remains under Aster's URL validation. Remote media no longer has to finish
 downloading first. TLS is validated; HTTPS downgrade, mixed media, cross-origin
 playlist resources/redirects, encrypted HLS and unsupported playlist tags are
-refused. No keys are fetched and no login cookies are sent. The unguessable decoder
+refused. No keys are fetched. Applicable same-origin cookies are sent by the Java broker. The unguessable decoder
 URLs are not exposed to scripts, and requests from webpage origins are refused.
 
 Limits: 128 KiB/playlist, 2,048 distinct HLS resources, 64 MiB per resource/range
@@ -221,10 +222,10 @@ being offered in the save dialog. Transferred bytes are staged beside the chosen
 destination; completion uses an exclusive new filename. Filesystems without hard
 links use an exclusive-copy fallback during finalization.
 
-This is direct GET downloading: there are no login cookies, authentication headers,
+This is direct GET downloading: origin-isolated login cookies are supported, but no explicit authentication headers,
 POST-generated files, JavaScript/blob URLs, pause/resume or cross-restart transfer
 recovery. The Save As offer and the transfer use separate requests, so a one-use
-URL may fail when fetched again. Android 0.2 supplies a separate native Save As path; see the release notes for its limits.
+URL may fail when fetched again. Android supplies a separate native Save As path; see the release notes for its limits.
 
 ## Try the actual packages
 

@@ -11,6 +11,9 @@ import java.util.concurrent.*;
 /** One page, one QuickJS process. No remote Java objects cross this boundary. */
 final class ScriptSession implements AutoCloseable {
     private final Process process;
+    private final SiteData siteData;
+    private final SiteData.Storage sessionStorage;
+    private URI page;
     private final DataInputStream input;
     private final DataOutputStream output;
     private volatile boolean closed;
@@ -23,6 +26,10 @@ final class ScriptSession implements AutoCloseable {
         return base.resolve("native").resolve(System.getProperty("os.name").startsWith("Windows")?"aster-script-host.exe":"aster-script-host");
     }
     ScriptSession() throws Exception {
+        this(new SiteData(),new SiteData.Storage());
+    }
+    ScriptSession(SiteData data,SiteData.Storage session)throws Exception{
+        siteData=data;sessionStorage=session;
         Path path=host(); if(!Files.isRegularFile(path))throw new IOException("This build does not include the Aster script host");
         ProcessBuilder builder=new ProcessBuilder(path.toString());
         // A fixed executable path and binary pipes; page text is never a shell argument.
@@ -43,21 +50,46 @@ final class ScriptSession implements AutoCloseable {
         ScheduledFuture<?> timeout=watchdog.schedule(this::close,2,TimeUnit.SECONDS);
         try {
             output.writeByte(kind); output.writeInt(bytes.length); output.write(bytes); output.flush();
-            int length=input.readInt(); if(length<0||length>2*1024*1024)throw new IOException("Script response size limit");
+            int length=input.readInt(),requests=0,rpcBytes=0;
+            while(length<0){
+                int size=length&0x7fffffff;if(size>262144||++requests>1024||(rpcBytes+=size)>4*1024*1024)throw new IOException("Site-data RPC limit");
+                byte[] request=new byte[size];input.readFully(request);
+                byte[] answer=siteRequest(new String(request,StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
+                if(answer.length>262144||(rpcBytes+=answer.length)>4*1024*1024)throw new IOException("Site-data response limit");
+                output.writeInt(answer.length);output.write(answer);output.flush();length=input.readInt();
+            } if(length<0||length>2*1024*1024)throw new IOException("Script response size limit");
             byte[] response=new byte[length];input.readFully(response);Object value=Json.parse(new String(response,StandardCharsets.UTF_8));
             if(value instanceof Map && ((Map<?,?>)value).containsKey("error"))throw new IOException(String.valueOf(((Map<?,?>)value).get("error")));
             return value;
         } catch(Exception e) { close(); throw new IOException("JavaScript stopped: "+e.getMessage(),e); }
         finally { timeout.cancel(false); }
     }
+    private String siteRequest(String raw){
+        try{
+            if(page==null||SiteData.origin(page).isEmpty())throw new SecurityException("Website data is unavailable for this origin");
+            Object parsed=Json.parse(raw);if(!(parsed instanceof Map))throw new SecurityException("Invalid site-data request");
+            Map<?,?> request=(Map<?,?>)parsed;String operation=Objects.toString(request.get("op"),"");Object result;
+            if(operation.equals("cookie-get"))result=siteData.documentCookie(page);
+            else if(operation.equals("cookie-set")){Object value=request.get("value");if(!(value instanceof String))throw new SecurityException("Invalid cookie value");siteData.setDocumentCookie(page,(String)value);result=null;}
+            else {
+                String area=Objects.toString(request.get("area"),"");if(!area.equals("local")&&!area.equals("session"))throw new SecurityException("Invalid storage area");
+                String key=request.get("key") instanceof String?(String)request.get("key"):null,value=request.get("value") instanceof String?(String)request.get("value"):null;
+                if(!Arrays.asList("get","set","remove","keys","clear").contains(operation))throw new SecurityException("Invalid storage operation");
+                result=siteData.storage(sessionStorage,area.equals("local"),page,operation,key,value);
+            }
+            Map<String,Object> response=new LinkedHashMap<>();response.put("value",result);return Json.stringify(response);
+        }catch(Exception e){return Json.stringify(Map.of("error",e instanceof IllegalArgumentException?"QuotaExceededError":"SecurityError","message","Website data operation refused"));}
+    }
     @SuppressWarnings("unchecked") Map<String,Object> start(Engine.Document document) throws IOException {
         if(document.scriptsBlocked)throw new IOException("Pages with Content Security Policy await Aster's policy implementation; scripts remain disabled");
-        network=new PageNetwork(document.uri);
+        if(page!=null)throw new IOException("Script session already has an origin");
+        page=document.uri;network=new PageNetwork(document.uri,siteData);
         Object value=eval("__aster.init("+Json.quote(document.source)+","+Json.quote(document.uri.toString())+")");
+        eval(PreviewMain.resourceText("/storage.js"));
         List<Object> scripts=(List<Object>)value; int total=0;
         for(Object item:scripts) {
             Map<String,Object> script=(Map<String,Object>)item; String src=String.valueOf(script.get("src"));
-            String code=src.isEmpty()?String.valueOf(script.get("code")):ResourceLoader.script(document.uri,src);
+            String code=src.isEmpty()?String.valueOf(script.get("code")):ResourceLoader.script(document.uri,src,siteData);
             total+=code.length(); if(total>1_000_000)throw new IOException("Combined script source exceeds 1 MB");
             eval(code+"\n;void 0;");
         }

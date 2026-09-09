@@ -6,7 +6,7 @@ import java.nio.charset.*;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
 
-/** Bounded page navigation, native form POST and same-origin stylesheets. No cookies or external handlers. */
+/** Bounded page navigation, native form POST and same-origin stylesheets. Explicit profile cookies; no external handlers. */
 public final class PageLoader {
     public static final URI HOME = URI.create("aster://welcome");
     public static final String WELCOME = "<html><head><title>Aster · Engine preview</title></head><body>"
@@ -16,7 +16,7 @@ public final class PageLoader {
         + "<a href='https://example.com'>Example Domain</a>. Simple pages, images and basic forms work here.</p>"
         + "<h2>Read your way</h2><p>Open the menu to read a page, find text, keep notes or "
         + "open a Word or text document. Read aloud uses an installed English or Spanish voice.</p>"
-        + "<h2>Still growing</h2><p>Aster 0.3 is an independent browser preview. Full web apps, "
+        + "<h2>Still growing</h2><p>Aster 0.4 is an independent browser preview. Full web apps, "
         + "account sign-in, PDF, cloud gaming and protected streaming remain unfinished.</p>"
         + "<p><b>Tip:</b> use Tabs and bookmarks in the menu to keep exploring.</p></body></html>";
 
@@ -62,6 +62,10 @@ public final class PageLoader {
         return load(initial,null);
     }
     public static Engine.Document load(URI initial,byte[] formBody) throws IOException {
+        return load(initial,formBody,new SiteData(),null);
+    }
+    public static Engine.Document load(URI initial,byte[] formBody,SiteData data,SiteData.Request request) throws IOException {
+        if(request==null)request=data.request(initial,true,formBody==null?"GET":"POST");
         if (HOME.equals(initial)) return Engine.parse(HOME, WELCOME);
         if(formBody!=null&&formBody.length>65536)throw new IOException("Form too large.");
         boolean form=formBody!=null;
@@ -71,15 +75,16 @@ public final class PageLoader {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Page request cancelled or timed out.");
             HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
             connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
-            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.3");
+            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.4");
             connection.setRequestProperty("Accept", "text/html,text/plain;q=0.9");
             connection.setRequestProperty("Accept-Encoding", "gzip");
+            request.method(formBody==null?"GET":"POST");request.prepare(connection);
             try {
                 if(formBody!=null){connection.setRequestMethod("POST");connection.setDoOutput(true);
                     connection.setRequestProperty("Content-Type","application/x-www-form-urlencoded");
                     connection.setRequestProperty("Origin",uri.getScheme()+"://"+uri.getRawAuthority());
                     connection.setFixedLengthStreamingMode(formBody.length);try(OutputStream out=connection.getOutputStream()){out.write(formBody);}}
-                int code = connection.getResponseCode();
+                int code = connection.getResponseCode();request.receive(connection);
                 if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                     String target = connection.getHeaderField("Location");
                     URI next = target == null ? null : link(uri, target);
@@ -96,7 +101,7 @@ public final class PageLoader {
                         (disposition != null && disposition.split(";", 2)[0].trim().equalsIgnoreCase("attachment")))
                     throw new DownloadRequired(uri, mime, disposition, connection.getContentLengthLong());
                 if (connection.getContentLengthLong() > Engine.MAX_SOURCE) throw new IOException("Page exceeds the preview's 1 MB download limit.");
-                byte[] data;
+                byte[] pageBytes;
                 String encoding=connection.getContentEncoding();
                 if(encoding!=null&&!encoding.equalsIgnoreCase("identity")&&!encoding.equalsIgnoreCase("gzip"))throw new IOException("Unsupported page content encoding.");
                 try (InputStream raw=connection.getInputStream();InputStream input = "gzip".equalsIgnoreCase(encoding)?new GZIPInputStream(raw):raw; ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
@@ -106,21 +111,21 @@ public final class PageLoader {
                         if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Page request cancelled or timed out.");
                         bytes.write(buffer, 0, n);
                     }
-                    data = bytes.toByteArray();
+                    pageBytes = bytes.toByteArray();
                 }
                 Charset charset = StandardCharsets.UTF_8;
                 for (String parameter : type.split(";")) if (parameter.trim().toLowerCase(Locale.ROOT).startsWith("charset=")) {
                     String value = parameter.trim().substring(8).replace("\"", "").trim();
                     try { charset = Charset.forName(value); } catch (IllegalArgumentException ignored) { }
                 }
-                String source = new String(data, charset);
+                String source = new String(pageBytes, charset);
                 if (mime.equals("text/plain")) source = "<pre>" + escape(source) + "</pre>";
                 boolean csp=connection.getHeaderField("Content-Security-Policy")!=null;
                 for(PageMarkup.Tag t:PageMarkup.tags(source))if(t.name.equals("meta")&&t.attrs.getOrDefault("http-equiv","").equalsIgnoreCase("content-security-policy"))csp=true;
                 StringBuilder css=new StringBuilder();
                 if(!csp&&mime.equals("text/html"))for(URI sheet:PageMarkup.stylesheets(uri,source)){
                     if(Thread.currentThread().isInterrupted()||System.nanoTime()>deadline)break;
-                    try{css.append(new String(PageAssets.fetch(uri,sheet,false),StandardCharsets.UTF_8)).append('\n');}catch(IOException ignored){/* Page content remains usable when styling fails. */}
+                    try{css.append(new String(PageAssets.fetch(uri,sheet,false,data.request(uri,false,"GET")),StandardCharsets.UTF_8)).append('\n');}catch(IOException ignored){/* Page content remains usable when styling fails. */}
                 }
                 Engine.Document document=Engine.parse(uri, source,css.toString());
                 return csp ? document.blockScripts() : document;

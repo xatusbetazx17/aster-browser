@@ -72,10 +72,12 @@ def desktop(test=False, package=False):
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.ScriptTests")
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.NetworkTests")
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.MediaRelayTests")
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.SiteDataTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.DesktopTests", BUILD)
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.ReadingTests", BUILD)
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.WorkspaceTests", BUILD)
+        run("java", "-Djava.awt.headless=true", "-jar", jar, "--benchmark", BUILD / "BENCHMARK.json")
     if package:
         image = BUILD / "native/AsterEnginePreview"
         if image.exists():

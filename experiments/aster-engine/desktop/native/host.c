@@ -87,6 +87,25 @@ static void send_value(JSContext *ctx, JSValue value) {
     if(allocated) JS_FreeCString(ctx,allocated);
     JS_FreeValue(ctx,json);
 }
+/* Synchronous, framed RPC to the parent. The parent binds the real page origin;
+ * this function has no filesystem, networking or arbitrary native entry point. */
+static JSValue site_request(JSContext *ctx, JSValueConst self, int argc, JSValueConst *argv) {
+    (void)self;
+    if(argc!=1 || !JS_IsString(argv[0]))return JS_ThrowTypeError(ctx,"Expected one site-data request");
+    size_t length;const char *request=JS_ToCStringLen(ctx,&length,argv[0]);
+    if(!request)return JS_EXCEPTION;
+    if(length>262144){JS_FreeCString(ctx,request);return JS_ThrowRangeError(ctx,"Site-data request limit");}
+    uint32_t frame=(uint32_t)length|0x80000000u;
+    unsigned char header[4]={(unsigned char)(frame>>24),(unsigned char)(frame>>16),(unsigned char)(frame>>8),(unsigned char)frame};
+    int ok=fwrite(header,1,4,stdout)==4 && fwrite(request,1,length,stdout)==length && fflush(stdout)==0;
+    JS_FreeCString(ctx,request);
+    if(!ok || fread(header,1,4,stdin)!=4)return JS_ThrowInternalError(ctx,"Site-data pipe closed");
+    uint32_t size=((uint32_t)header[0]<<24)|((uint32_t)header[1]<<16)|((uint32_t)header[2]<<8)|header[3];
+    if(size>262144)return JS_ThrowRangeError(ctx,"Site-data response limit");
+    char *response=malloc((size_t)size+1);if(!response)return JS_ThrowOutOfMemory(ctx);
+    if(fread(response,1,size,stdin)!=size){free(response);return JS_ThrowInternalError(ctx,"Site-data response ended");}
+    response[size]=0;JSValue value=JS_NewStringLen(ctx,response,size);free(response);return value;
+}
 int main(void) {
 #ifdef _WIN32
     _setmode(_fileno(stdin),_O_BINARY); _setmode(_fileno(stdout),_O_BINARY);
@@ -94,7 +113,8 @@ int main(void) {
     JSRuntime *rt=JS_NewRuntime(); if(!rt) return 1;
     JS_SetMemoryLimit(rt,32*1024*1024); JS_SetMaxStackSize(rt,1024*1024); JS_SetInterruptHandler(rt,interrupted,NULL);
     JSContext *ctx=JS_NewContext(rt); if(!ctx) { JS_FreeRuntime(rt); return 1; }
-    JSValue global=JS_GetGlobalObject(ctx); JS_SetPropertyStr(ctx,global,"__asterReadGamepads",JS_NewCFunction(ctx,gamepads,"__asterReadGamepads",0)); JS_FreeValue(ctx,global);
+    JSValue global=JS_GetGlobalObject(ctx); JS_SetPropertyStr(ctx,global,"__asterReadGamepads",JS_NewCFunction(ctx,gamepads,"__asterReadGamepads",0));
+    JS_SetPropertyStr(ctx,global,"__asterSiteRequest",JS_NewCFunction(ctx,site_request,"__asterSiteRequest",1));JS_FreeValue(ctx,global);
     int kind; unsigned char header[4];
     while((kind=fgetc(stdin))!=EOF) {
         if(fread(header,1,4,stdin)!=4) break;

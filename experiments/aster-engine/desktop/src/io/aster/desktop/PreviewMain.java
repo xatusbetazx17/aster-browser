@@ -33,6 +33,8 @@ public final class PreviewMain {
     boolean autoPark;
     private int liveTabLimit;
     private final Preferences preferences;
+    final SiteData siteData;
+    private final ScheduledExecutorService siteWriter=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"aster-site-data");t.setDaemon(true);return t;});
     private final ExecutorService assets=Executors.newFixedThreadPool(2,r->{Thread t=new Thread(r,"aster-images");t.setDaemon(true);return t;});
     private final ArrayDeque<URI> closedTabs=new ArrayDeque<>();
     private boolean restoring;
@@ -43,7 +45,7 @@ public final class PreviewMain {
     private final JButton add = button("+", "New tab (Ctrl+T)", this::newTab);
     private boolean disposed;
     private final ExecutorService scripts = Executors.newFixedThreadPool(2,r->{Thread t=new Thread(r,"aster-page-scripts");t.setDaemon(true);return t;});
-    final DownloadManager downloads = new DownloadManager(transfer -> SwingUtilities.invokeLater(this::updateDownloads));
+    final DownloadManager downloads;
     java.util.function.Function<String, Path> destinationChooser = this::chooseDestination;
     boolean reducedMotion;
     double pageScale;
@@ -51,9 +53,15 @@ public final class PreviewMain {
         final URI uri; final String title;
         Visit(URI uri, String title) { this.uri = uri; this.title = title; }
     }
-    private PreviewMain() { this(Preferences.userRoot().node("io/aster/engine-preview")); }
-    PreviewMain(Preferences prefs) {
-        preferences = prefs;
+    private PreviewMain() { this(Preferences.userRoot().node("io/aster/engine-preview"),openSiteData()); }
+    private static SiteData openSiteData(){
+        try{return new SiteData(Paths.get(System.getProperty("user.home"),".aster-engine-preview","site-data.bin"));}
+        catch(Exception e){SwingUtilities.invokeLater(()->JOptionPane.showMessageDialog(null,"Saved website data could not be opened. This window will keep website data only until it closes.","Website data",JOptionPane.WARNING_MESSAGE));return new SiteData();}
+    }
+    PreviewMain(Preferences prefs) {this(prefs,new SiteData());}
+    PreviewMain(Preferences prefs,SiteData data) {
+        preferences = prefs;siteData=data;downloads=new DownloadManager(transfer->SwingUtilities.invokeLater(this::updateDownloads),DownloadManager.MAX_BYTES,data);
+        siteWriter.scheduleWithFixedDelay(()->{try{siteData.flush();}catch(Exception e){SwingUtilities.invokeLater(()->{if(!disposed)message("Website data could not be saved. Check your profile folder and available disk space.");});}},2,2,TimeUnit.SECONDS);
         autoPark=prefs.getBoolean("autoPark",false);liveTabLimit=Math.max(2,Math.min(8,prefs.getInt("liveTabLimit",4)));
         reader=new ReaderDock(prefs,this::closeReader);
         reducedMotion = prefs.getBoolean("reducedMotion", false);
@@ -129,7 +137,7 @@ public final class PreviewMain {
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
     }
-    void dispose() { if(disposed)return;reader.close();saveSession();disposed = true;ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
+    void dispose() { if(disposed)return;reader.close();saveSession();disposed = true;siteWriter.shutdownNow();try{siteData.flush();}catch(Exception e){System.err.println("Website data could not be saved on exit.");}ReadingTools.stopSpeech(); downloads.close(); network.shutdownNow();assets.shutdownNow(); for(int i=0;i<tabs.getTabCount();i++){Tab t=(Tab)tabs.getComponentAt(i);stopScripts(t);if(t.media!=null)t.media.close();} scripts.shutdownNow(); for (Component c : strip.getComponents()) if (c instanceof TabChip) ((TabChip)c).stop();MediaPanel.shutdown(); }
     private static final class RoundButton extends JButton {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {
@@ -154,6 +162,7 @@ public final class PreviewMain {
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
         URI location=PageLoader.HOME;String title="New tab";boolean parked,postPage;long lastUsed=System.nanoTime();
         Future<?> imageTask;int restoreScroll=-1;
+        final SiteData.Storage sessionStorage=new SiteData.Storage();
         volatile ScriptSession script;
         Future<?> scriptTask;
         javax.swing.Timer scriptTimer; boolean scriptBusy,controllerAllowed,scriptStarting;
@@ -256,8 +265,9 @@ public final class PreviewMain {
             tab.canvas.setDocument(doc); tab.setViewportView(internalPage(tab,page)); completed(tab,doc,historyIndex); return;
         }
         tab.message = "Opening " + uri + "…"; sync();
+        SiteData.Request siteRequest=siteData.request(tab.location,true,formBody==null?"GET":"POST");
         tab.pending = network.submit(() -> { try {
-            Engine.Document document = PageLoader.load(uri,formBody);
+            Engine.Document document = PageLoader.load(uri,formBody,siteData,siteRequest);
             SwingUtilities.invokeLater(() -> { if(tab.closed || tab.generation != generation || disposed) return;
                 tab.canvas.setDocument(document); tab.setViewportView(tab.canvas);
                 visits.add(0,new Visit(document.uri,document.title)); if(visits.size()>200) visits.remove(visits.size()-1);
@@ -337,7 +347,7 @@ public final class PreviewMain {
         if(document.scriptsBlocked)return;
         java.util.List<URI> sources=new ArrayList<>();for(Engine.Run r:document.runs)if(r.image!=null&&PageAssets.sameOrigin(document.uri,r.image)&&!sources.contains(r.image)&&sources.size()<8)sources.add(r.image);
         tab.imageTask=assets.submit(()->{long bytes=0;for(URI source:sources){if(Thread.currentThread().isInterrupted())return;
-            try{BufferedImage decoded=decodeImage(PageAssets.fetch(document.uri,source,true));long size=(long)decoded.getWidth()*decoded.getHeight()*4;
+            try{BufferedImage decoded=decodeImage(PageAssets.fetch(document.uri,source,true,siteData.request(document.uri,false,"GET")));long size=(long)decoded.getWidth()*decoded.getHeight()*4;
                 if(bytes+size>8*1024*1024)break;bytes+=size;
                 SwingUtilities.invokeLater(()->{if(!disposed&&!tab.closed&&tab.generation==generation){tab.canvas.images.put(source,decoded);tab.canvas.repaint();}});
             }catch(Exception ignored){/* Keep the image description when a bounded decode fails. */}
@@ -370,7 +380,7 @@ public final class PreviewMain {
         paragraph(panel,"From "+file.uri.getHost()+" · "+(file.length<0 ? "Size not provided" : DownloadManager.bytes(file.length)));
         paragraph(panel,"Choose where to save this file. Aster will not open it automatically.");
         panel.add(button("Save as…","Choose destination for "+filename,()->chooseDownload(file.uri,filename)));
-        if(MediaRelay.supported(file.uri))panel.add(button("Play in Aster","Play this unencrypted media inside Aster",()->openMedia(tab,()->MediaResource.remote(file.uri,file.uri))));
+        if(MediaRelay.supported(file.uri))panel.add(button("Play in Aster","Play this unencrypted media inside Aster",()->openMedia(tab,()->MediaResource.remote(file.uri,file.uri,siteData))));
         panel.add(Box.createVerticalGlue()); tab.setViewportView(panel); completed(tab,doc,historyIndex);
     }
     private void updateDownloads() {
@@ -419,7 +429,7 @@ public final class PreviewMain {
         tab.controllerButton=new JToggleButton("Enable controller");tab.controllerButton.setEnabled(false);tab.controllerButton.addActionListener(e->{tab.controllerAllowed=tab.controllerButton.isSelected();tab.canvas.requestFocusInWindow();});bar.add(tab.controllerButton);
         tab.controllerButton.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));tab.controllerButton.setBackground(PAPER);tab.controllerButton.setFocusPainted(false);
         if("playground".equals(internal(document.uri)))bar.add(button("Play sample","Play Aster's bundled sample video",()->openMedia(tab,MediaPanel::sample)));
-        else if(!document.media.isEmpty())bar.add(button("Play media","Play this page's first direct media source",()->openMedia(tab,()->MediaResource.remote(document.uri,document.media.get(0)))));
+        else if(!document.media.isEmpty())bar.add(button("Play media","Play this page's first direct media source",()->openMedia(tab,()->MediaResource.remote(document.uri,document.media.get(0),siteData))));
         bar.add(button("Read page","Read, select text, make notes or read aloud",this::readPage));
         java.util.List<PageForms.Form> forms=PageForms.parse(document.uri,document.source);
         if(!forms.isEmpty())bar.add(button("Forms","Fill this page's native forms",()->{
@@ -446,7 +456,7 @@ public final class PreviewMain {
         tab.scriptTask=scripts.submit(()->{
             ScriptSession session=null;
             try {
-                session=new ScriptSession();final ScriptSession created=session;
+                session=new ScriptSession(siteData,tab.sessionStorage);final ScriptSession created=session;
                 SwingUtilities.invokeAndWait(()->{if(disposed||tab.closed||tab.generation!=generation||!tab.scriptStarting)created.close();else tab.script=created;});
                 if(!session.alive())return;
                 Map<String,Object> snapshot=session.start(original); final ScriptSession started=session;
@@ -505,7 +515,7 @@ public final class PreviewMain {
                 if(tab.media!=null){int old=tab.mediaId;tab.media.close();tab.mediaTime.set(null);if(old>0&&old!=id)mediaReply(tab,old,"emptied",Map.of("paused",true,"readyState",0),null,0);}
                 tab.mediaId=id;tab.mediaSource=canonical;ScriptSession owner=tab.script;final URI source=uri;
                 try{
-                    tab.media=new MediaPanel(sample?MediaPanel::sample:()->MediaResource.remote(tab.original.uri,source),()->{
+                    tab.media=new MediaPanel(sample?MediaPanel::sample:()->MediaResource.remote(tab.original.uri,source,siteData),()->{
                         if(tab.script==owner){mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0),null,0);tab.media=null;tab.mediaId=0;tab.mediaTime.set(null);tab.mediaSource="";tab.setViewportView(tab.canvas);}
                     },(event,state)->{
                         if(!owner.alive())return;Map<String,Object> copy=new LinkedHashMap<>(state);copy.put("src",canonical);
@@ -594,7 +604,7 @@ public final class PreviewMain {
             final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(WorkspaceTheme.LINE); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
             int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;
             ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel((count-parked)+" live · "+parked+" parked · "+bookmarkCount()+" saved")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
-            paragraph(panel,"Aster 0.3 preview · Simple websites and reading are ready to try. Netflix, Prime Video and cloud gaming still need engine work. Check Website compatibility before testing a service.");
+            paragraph(panel,"Aster 0.4 preview · Simple websites and reading are ready to try. Netflix, Prime Video and cloud gaming still need engine work. Check Website compatibility before testing a service.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -627,15 +637,21 @@ public final class PreviewMain {
             JCheckBox parking=new JCheckBox("Park older background tabs",autoPark);parking.setOpaque(false);parking.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,15));parking.addActionListener(e->{autoPark=parking.isSelected();preferences.putBoolean("autoPark",autoPark);rebalanceTabs();});panel.add(parking);
             JComboBox<Integer> limit=new JComboBox<>(new Integer[]{2,3,4,5,6,7,8});limit.setSelectedItem(liveTabLimit);limit.getAccessibleContext().setAccessibleName("Maximum live website tabs before parking");limit.setMaximumSize(new Dimension(180,34));limit.setAlignmentX(Component.LEFT_ALIGNMENT);limit.addActionListener(e->{liveTabLimit=(Integer)limit.getSelectedItem();preferences.putInt("liveTabLimit",liveTabLimit);rebalanceTabs();});panel.add(limit);panel.add(Box.createVerticalStrut(12));
             paragraph(panel,"Parking releases a page and its images, then reloads it when selected. Active tabs and pages with forms, running scripts or media stay live. Restore tabs opens only the selected saved website.");
+            panel.add(button("Clear website data","Sign out of websites and clear their saved data",()->{if(JOptionPane.showConfirmDialog(surface,"Clear cookies and website storage, and return open tabs to Home? Bookmarks, reader notes and downloaded files stay saved.","Clear website data",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)clearWebsiteData();}));
         } else if(page.equals("compatibility")) {
             paragraph(panel,"This preview uses Aster's own page renderer. A familiar interface does not yet mean full modern-web compatibility.");
             paragraph(panel,"Available to test: simple HTML and CSS, images, same-site basic forms, downloads, bookmarks, reading and notes. Desktop also has a limited JavaScript runtime and unencrypted MP4/HLS playback.");
-            paragraph(panel,"Netflix and Prime Video: unsupported. Aster still needs login sessions, a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
+            paragraph(panel,"Netflix and Prime Video: unsupported. Aster now has basic website sessions but still needs a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
             paragraph(panel,"Cloud gaming: unsupported. WebRTC transport, real-time audio/video, complete graphics and input APIs, and service acceptance must work together. The playground only demonstrates local controller input.");
             paragraph(panel,"Check the release notes for tested platforms and known issues. An unsupported page may load incompletely, even when some text is visible.");
-            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.3.md"),-1)));
+            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.4.md"),-1)));
         }
         panel.add(Box.createVerticalGlue());WorkspaceTheme.apply(panel); return panel;
+    }
+    void clearWebsiteData(){
+        for(DownloadManager.Transfer transfer:downloads.snapshot())if(!transfer.finished())transfer.cancel();
+        for(int i=0;i<tabs.getTabCount();i++){Tab tab=(Tab)tabs.getComponentAt(i);stopScripts(tab);tab.sessionStorage.clear();load(tab,PageLoader.HOME,-1);}
+        siteData.clear();try{siteData.flush();message("Website data cleared. Bookmarks and notes are preserved.");}catch(Exception e){message("Website data cleared in memory, but its saved file could not be updated.");}
     }
     private static String plainLabel(String text) { return "\u200b"+text; }
     static final class PageCanvas extends JPanel implements Scrollable {
@@ -763,6 +779,7 @@ public final class PreviewMain {
         });
     }
     public static void main(String[] args) throws Exception {
+        if(args.length>0&&args[0].equals("--benchmark")){EngineBenchmark.run(Paths.get(args.length>1?args[1]:"aster-benchmark.json"));return;}
         if (args.length > 0 && args[0].equals("--render-test")) { renderTest(args.length > 1 ? args[1] : "aster-engine.png"); return; }
         if(args.length>0&&(args[0].equals("--media-smoke")||args[0].equals("--stream-smoke"))){
             if(args.length<2)throw new IllegalArgumentException("--media-smoke requires an output image path");

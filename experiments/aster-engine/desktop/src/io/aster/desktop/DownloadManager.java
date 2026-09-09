@@ -1,6 +1,7 @@
 package io.aster.desktop;
 
 import io.aster.engine.PageLoader;
+import io.aster.engine.SiteData;
 import java.io.*;
 import java.net.*;
 import java.nio.file.*;
@@ -9,19 +10,20 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.regex.*;
 
-/** Bounded, user-initiated direct downloads. No cookies, shell execution or automatic opening. */
+/** Bounded, user-initiated direct downloads. No shell execution or automatic opening. */
 final class DownloadManager implements AutoCloseable {
     static final long MAX_BYTES = 2L * 1024 * 1024 * 1024;
     enum State { STARTING, DOWNLOADING, FINALIZING, CANCELLING, COMPLETE, CANCELLED, FAILED }
     final class Transfer {
         final URI source;
+        final SiteData.Request context;
         final Path target;
         volatile State state = State.STARTING;
         volatile long received, total = -1;
         volatile String error = "";
         private volatile boolean cancelled;
         private long lastNotice;
-        Transfer(URI source, Path target) { this.source = source; this.target = target; }
+        Transfer(URI source, Path target) { this.source = source; this.target = target;this.context=siteData.request(source,false,"GET"); }
         boolean finished() { return state == State.COMPLETE || state == State.CANCELLED || state == State.FAILED; }
         synchronized void cancel() {
             if (finished()) return;
@@ -44,9 +46,11 @@ final class DownloadManager implements AutoCloseable {
     });
     private final Consumer<Transfer> listener;
     private final long limit;
+    private final SiteData siteData;
     private boolean closed;
     DownloadManager(Consumer<Transfer> listener) { this(listener, MAX_BYTES); }
-    DownloadManager(Consumer<Transfer> listener, long limit) { this.listener = listener; this.limit = limit; }
+    DownloadManager(Consumer<Transfer> listener, long limit) { this(listener,limit,new SiteData()); }
+    DownloadManager(Consumer<Transfer> listener,long limit,SiteData data){this.listener=listener;this.limit=limit;this.siteData=data;}
     synchronized Transfer start(URI source, Path target) throws IOException {
         PageLoader.validate(source);
         if (closed) throw new IOException("The download manager is closed.");
@@ -85,10 +89,11 @@ final class DownloadManager implements AutoCloseable {
                 transfer.check(deadline);
                 HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
                 connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(10000);
-                connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.1");
+                connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.4");
                 connection.setRequestProperty("Accept", "*/*"); connection.setRequestProperty("Accept-Encoding", "identity");
+                transfer.context.prepare(connection);
                 try {
-                    int code = connection.getResponseCode();
+                    int code = connection.getResponseCode();transfer.context.receive(connection);
                     if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                         if (redirects >= 5) throw new IOException("Download redirected more than five times.");
                         uri = redirect(uri, connection.getHeaderField("Location")); continue;

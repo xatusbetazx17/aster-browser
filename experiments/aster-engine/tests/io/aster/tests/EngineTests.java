@@ -52,6 +52,15 @@ public final class EngineTests {
             for (Engine.Draw item : layout.items) check(!item.text.equals("\ud83d") && item.x + item.width <= 76, "split surrogate or horizontal overflow");
             check(layout.items.get(layout.items.size() - 1).y > layout.items.get(0).y, "pre newline");
         });
+        test("Bounded width caching preserves layout across styles, Unicode and cache saturation", () -> {
+            StringBuilder html=new StringBuilder("<p>repeat repeat <b>repeat</b> <i>repeat</i> 🌎 🌎</p><pre>a\tb\nline</pre>");
+            for(int i=0;i<5000;i++)html.append("word中").append(i).append(' ');
+            html.append("<a href='/end'>repeat repeat</a>");Engine.Document document=doc(html.toString());
+            int[] calls={0};Engine.Measure measure=(text,style)->{calls[0]++;return text.codePointCount(0,text.length())*style.size*(style.bold?.7f:.5f);};
+            Engine.Layout baseline=Engine.layout(document,320,measure,false);int before=calls[0];calls[0]=0;Engine.Layout cached=Engine.layout(document,320,measure);
+            check(calls[0]<before,"Repeated measurements not reduced");check(baseline.height==cached.height&&baseline.items.size()==cached.items.size(),"Cache changed page geometry");
+            for(int i=0;i<baseline.items.size();i++){Engine.Draw a=baseline.items.get(i),b=cached.items.get(i);check(a.text.equals(b.text)&&a.style==b.style&&a.x==b.x&&a.y==b.y&&a.width==b.width&&Objects.equals(a.link,b.link),"Cache changed a draw");}
+        });
         test("Parser size, depth and entity work bounds", () -> {
             rejects(() -> doc(String.join("", Collections.nCopies(70, "<div>"))));
             rejects(() -> doc(new String(new char[Engine.MAX_SOURCE + 1])));

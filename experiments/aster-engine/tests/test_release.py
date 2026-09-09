@@ -26,6 +26,7 @@ class ReleaseTests(unittest.TestCase):
             (folder / "VERSION.json").write_text(json.dumps(metadata))
         for platform in ("Windows", "Linux"):
             folder = root / ("aster-engine-" + platform)
+            (folder / "BENCHMARK.json").write_text(json.dumps({"schema": 1, "commit": metadata["commit"], "results": [{"identical_geometry": True}] * 6}))
             (folder / "BUILD-STATUS.txt").write_text("Core, browsing and reading checks: passed\nNative window: success\nVideo decoding: success\nHLS and page controls: " + ("failure" if platform == "Windows" else "success"))
         files = {"Windows": ["aster-windows-x64-setup.exe", "aster-engine-windows-x64.zip", "WINDOWS-SETUP-STATUS.txt"],
             "Linux": ["aster-engine-linux-x64.tar.gz"], "Linux-Flatpak": ["aster-linux-x64.flatpak", "FLATPAK-UPDATE-STATUS.txt"],
@@ -46,6 +47,17 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(result[2], "aster-android-8-plus.apk")
             self.assertIn("aster-windows-x64-setup.exe", (root / "output/SHA256SUMS.txt").read_text())
             self.assertIn("failure", (root / "output/WINDOWS-BUILD-STATUS.txt").read_text())
+
+    def test_wrong_benchmark_revision_blocks_publication(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            metadata, _ = self.fixture(root / "input")
+            report = root / "input/aster-engine-Linux/BENCHMARK.json"
+            data = json.loads(report.read_text())
+            data["commit"] = "b" * 40
+            report.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "same-source renderer"):
+                publisher.assemble(root / "input", root / "output", metadata["commit"])
 
     def test_missing_upgrade_evidence_blocks_all_packages(self):
         with tempfile.TemporaryDirectory() as temporary:

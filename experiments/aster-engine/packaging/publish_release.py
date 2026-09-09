@@ -69,6 +69,10 @@ def assemble(artifacts, output, commit, previous=None):
             raise ValueError("A desktop package did not pass browsing and native window checks")
         if folder == linux and ("Video decoding: success" not in status or "HLS and page controls: success" not in status):
             raise ValueError("The Linux media checks must pass before publication")
+    for folder in (windows, linux):
+        benchmark = json.loads((folder / "BENCHMARK.json").read_text())
+        if benchmark.get("schema") != 1 or benchmark.get("commit") != commit or len(benchmark.get("results", [])) != 6 or not all(r.get("identical_geometry") for r in benchmark["results"]):
+            raise ValueError("Missing same-source renderer measurements")
     for marker in (windows / "WINDOWS-SETUP-STATUS.txt", flatpak / "FLATPAK-UPDATE-STATUS.txt", android / "ANDROID-TEST-STATUS.txt"):
         if not marker.is_file() or not marker.read_text().strip():
             raise ValueError("Missing successful package installation/update check: " + marker.name)
@@ -91,6 +95,8 @@ def assemble(artifacts, output, commit, previous=None):
         "FLATPAK-UPDATE-STATUS.txt": flatpak / "FLATPAK-UPDATE-STATUS.txt",
         "ANDROID-TEST-STATUS.txt": android / "ANDROID-TEST-STATUS.txt",
         "VERSION.json": windows / "VERSION.json",
+        "WINDOWS-BENCHMARK.json": windows / "BENCHMARK.json",
+        "LINUX-BENCHMARK.json": linux / "BENCHMARK.json",
     }
     for name, source in files.items():
         if not source.is_file() or source.stat().st_size == 0:
@@ -109,7 +115,7 @@ def notes(metadata, signing, apk_name, tag):
         "This test APK cannot promise an in-place update from another CI run. Do not uninstall an older app containing data you need.")
     return f"""Aster {metadata['version']} — experimental original engine, built from `{metadata['commit']}`.
 
-These downloads include the 0.3 dark workspace, integrated desktop reader/notes, real tab parking, lazy tab restoration, phrase search and improved Android navigation, plus the earlier browsing/reading features. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
+These downloads add restricted website cookies/sessions on desktop and Android, synchronous desktop local/session storage, Clear website data and measured complex-text layout improvements. The 0.3 dark workspace, reading/notes and tab parking remain included. WINDOWS-BENCHMARK.json and LINUX-BENCHMARK.json contain the scoped renderer results; they do not compare Aster with other browsers. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
 
 | Device | Download | Install or update |
 | --- | --- | --- |
@@ -117,13 +123,13 @@ These downloads include the 0.3 dark workspace, integrated desktop reader/notes,
 | Linux x64 with Flatpak | [Download Linux Flatpak]({base}/aster-linux-x64.flatpak) | Open with your software installer, or run `flatpak install --user --or-update ./aster-linux-x64.flatpak`. |
 | Android 8+ | [Download Android APK]({base}/{apk_name}) | {android_update} |
 
-Windows includes Java; no separate Java installation is required. The Windows package is unsigned and Windows may display an unknown-publisher warning. Windows video/HLS remains unreliable; read WINDOWS-BUILD-STATUS.txt. Full web compatibility, logins and protected streaming are unfinished.
+Windows includes Java; no separate Java installation is required. The Windows package is unsigned and Windows may display an unknown-publisher warning. Windows video/HLS remains unreliable; read WINDOWS-BUILD-STATUS.txt. Basic session fixtures now pass; full web compatibility, advanced account flows, Netflix, Prime Video and cloud gaming remain unfinished.
 
 Linux uses the same `io.aster.browser.EnginePreview` application and `preview` branch for replacements. Its Flatpak profile stays separate from the native tarball profile. Flatpak is intended to cover many desktop distributions, including immutable systems with Flatpak support; every Linux distribution/CPU/device has not been verified. Desktop packages are x64 only.
 
 Older Qt/Chromium kits, WebKit builds and differently signed Android test APKs are separate installations. Their data is not automatically converted. Close Aster before updating; downloads already saved outside the application remain in place. Updates are initiated by downloading a newer package; there is no background auto-updater.
 
-See [workspace features and the remaining engine roadmap](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.3.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
+See [website sessions, measurements and the remaining engine roadmap](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.4.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
 """
 
 

@@ -38,9 +38,11 @@ public final class Engine {
         public final String source;
         public final boolean scriptsBlocked;
         public final List<URI> media;
+        private final boolean complexText;
         public String css = "";
         Document(URI uri, String title, List<Run> runs, String source, boolean scriptsBlocked, List<URI> media) {
             this.uri = uri; this.title = title; this.runs = Collections.unmodifiableList(runs);
+            boolean complex=false;for(Run run:runs){if(complexText(run.text)){complex=true;break;}}this.complexText=complex;
             this.source = source; this.scriptsBlocked = scriptsBlocked; this.media = Collections.unmodifiableList(media);
         }
         public Document blockScripts() { Document d=new Document(uri,title,runs,source,true,media);d.css=css;return d; }
@@ -248,6 +250,31 @@ public final class Engine {
         return out.toString();
     }
     public interface Measure { float width(String text, Style style); }
+    private static boolean complexText(String text){for(int i=0;i<text.length();i++)if(text.charAt(i)>127)return true;return false;}
+    private static final class WidthCache implements Measure {
+        final Measure delegate;
+        final Map<Style,Map<String,Float>> styles=new IdentityHashMap<>();
+        final Map<String,Map<String,Float>> equivalent=new HashMap<>();
+        Style last;Map<String,Float> recent;
+        int entries,characters;
+        WidthCache(Measure delegate){this.delegate=delegate;}
+        public float width(String text,Style style){
+            // Native ASCII font metrics are already cheap; caching them costs more.
+            if(!complexText(text))return delegate.width(text,style);
+            Map<String,Float> words;
+            if(style==last)words=recent;else{
+                words=styles.get(style);
+                if(words==null&&styles.size()<1024){String key=style.size+":"+style.color+":"+style.bold+":"+style.italic+":"+style.pre;words=equivalent.get(key);if(words==null){words=new HashMap<>();equivalent.put(key,words);}styles.put(style,words);}
+                last=style;recent=words;
+            }
+            Float previous=words==null?null:words.get(text);if(previous!=null)return previous;
+            float measured=delegate.width(text,style);
+            if(words!=null&&text.length()<=128&&entries<4096&&characters+text.length()<=32768){
+                words.put(text,measured);entries++;characters+=text.length();
+            }
+            return measured;
+        }
+    }
     private static float dimension(String raw,float fallback){try{float value=Float.parseFloat(raw);return Float.isFinite(value)?Math.max(16,Math.min(1600,value)):fallback;}catch(Exception e){return fallback;}}
     public static final class Draw {
         public final String text; public final Style style; public final URI link;
@@ -272,6 +299,11 @@ public final class Engine {
         public int actionAt(float x,float y) { for(int i=firstVisible(y);i<items.size();i++){Draw d=items.get(i);if(d.y>y)break;if(d.action>0 && x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height)return d.action;} return -1; }
     }
     public static Layout layout(Document doc, float viewportWidth, Measure measure) {
+        return layout(doc,viewportWidth,measure,true);
+    }
+    /** The uncached path is retained for geometry verification and measured baselines. */
+    public static Layout layout(Document doc,float viewportWidth,Measure measure,boolean cacheWidths) {
+        if(cacheWidths&&doc.complexText)measure=new WidthCache(measure);
         float right = Math.max(100, Math.min(10_000, viewportWidth)) - 24, x = 24, y = 24, line = 25;
         List<Draw> items = new ArrayList<>();
         boolean pendingSpace = false;

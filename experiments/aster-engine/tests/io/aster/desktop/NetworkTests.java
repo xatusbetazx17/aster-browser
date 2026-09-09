@@ -40,7 +40,7 @@ public final class NetworkTests {
                 js.eval("result=null;fetch('/redirect',{method:'POST',body:'erase-me'}).then(async r=>result=[r.redirected,r.url,await r.text()]);void 0");await(js,"result!==null");check(Boolean.TRUE.equals(js.eval("result[0] && result[1].endsWith('/echo') && result[2]==='GET:'")),"303 method/body redirect rules failed");
                 js.eval("result=null;fetch('/missing').then(async r=>result=[r.ok,r.status,await r.text()]);void 0");await(js,"result!==null");check(Boolean.TRUE.equals(js.eval("!result[0]&&result[1]===404&&result[2]==='gone'")),"HTTP error was not exposed as a Response");
                 js.eval("result=null;fetch('/binary').then(r=>r.arrayBuffer()).then(b=>result=[...new Uint8Array(b)].join(','));void 0");await(js,"result==='0,1,2,255,128'");
-                for(String code:new String[]{"fetch('/large')","fetch('/cross')","fetch('file:///etc/passwd')","fetch('/echo',{headers:{Cookie:'no'}})","fetch('/echo',{method:'TRACE'})","fetch('/echo',{credentials:'include'})","fetch('/redirect',{redirect:'error'})"}){
+                for(String code:new String[]{"fetch('/large')","fetch('/cross')","fetch('file:///etc/passwd')","fetch('/echo',{headers:{Cookie:'no'}})","fetch('/echo',{method:'TRACE'})","fetch('/echo',{credentials:'invalid'})","fetch('/redirect',{redirect:'error'})"}){
                     js.eval("failure=null;"+code+".catch(e=>failure=e.name);void 0");await(js,"failure==='TypeError'");
                 }
                 int before=echoRequests.get();js.eval("var c=new AbortController();c.abort();failure=null;fetch('/echo',{signal:c.signal}).catch(e=>failure=e.name);void 0");await(js,"failure==='AbortError'");check(before==echoRequests.get(),"Already aborted fetch made an HTTP request");

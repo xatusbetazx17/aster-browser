@@ -67,7 +67,7 @@
     if(pending.size>=16)throw new TypeError('Too many pending fetch requests');
     if(typeof input!=='string')throw new TypeError('This preview fetch accepts a URL string');
     if(init.mode&&init.mode!=='same-origin'&&init.mode!=='cors')throw new TypeError('Unsupported fetch mode');
-    if(init.credentials&&init.credentials!=='omit'&&init.credentials!=='same-origin')throw new TypeError('Credentialed fetch is not implemented');
+    if(init.credentials&&!['omit','same-origin','include'].includes(init.credentials))throw new TypeError('Invalid credentials mode');
     if(init.redirect&&init.redirect!=='follow'&&init.redirect!=='error')throw new TypeError('Manual redirects are not implemented');
     for(const key of ['integrity','keepalive'])if(init[key])throw new TypeError(key+' is not implemented');
     const method=String(init.method||'GET').toUpperCase(),headers=new Headers(init.headers);
@@ -79,7 +79,7 @@
     return new Promise((resolve,reject)=>{
       const abort=()=>{if(!pending.delete(id))return;reject(signal.reason);enqueue({kind:'abort',id});};
       pending.set(id,{resolve,reject,signal,abort});if(signal)signal.addEventListener('abort',abort,{once:true});
-      try{enqueue({kind:'fetch',id,url:input,method,headers:Object.fromEntries(headers),body:base64(body),redirect:init.redirect||'follow'});}catch(e){pending.delete(id);if(signal)signal.removeEventListener('abort',abort);reject(e);}
+      try{enqueue({kind:'fetch',id,url:input,method,headers:Object.fromEntries(headers),body:base64(body),redirect:init.redirect||'follow',credentials:init.credentials||'same-origin'});}catch(e){pending.delete(id);if(signal)signal.removeEventListener('abort',abort);reject(e);}
     });
   }
   class WebSocket extends EventTarget {

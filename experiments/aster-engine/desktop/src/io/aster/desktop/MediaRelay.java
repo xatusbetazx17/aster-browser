@@ -1,6 +1,7 @@
 package io.aster.desktop;
 
 import io.aster.engine.PageLoader;
+import io.aster.engine.SiteData;
 import com.sun.net.httpserver.*;
 import java.io.*;
 import java.net.*;
@@ -14,6 +15,7 @@ import java.util.regex.*;
 final class MediaRelay implements AutoCloseable {
     private static final Set<String> TAGS=new HashSet<>(Arrays.asList("EXTM3U","EXTINF","EXT-X-VERSION","EXT-X-TARGETDURATION","EXT-X-MEDIA-SEQUENCE","EXT-X-ENDLIST","EXT-X-PLAYLIST-TYPE","EXT-X-DISCONTINUITY","EXT-X-DISCONTINUITY-SEQUENCE","EXT-X-INDEPENDENT-SEGMENTS","EXT-X-PROGRAM-DATE-TIME","EXT-X-BYTERANGE","EXT-X-STREAM-INF","EXT-X-MEDIA","EXT-X-MAP","EXT-X-START","EXT-X-I-FRAME-STREAM-INF","EXT-X-I-FRAMES-ONLY"));
     private final URI page,initial;
+    private final SiteData data;
     private final HttpServer server;
     private final ExecutorService workers=new ThreadPoolExecutor(4,4,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->{Thread t=new Thread(r,"aster-media-relay");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     private final String token=UUID.randomUUID().toString();
@@ -25,7 +27,10 @@ final class MediaRelay implements AutoCloseable {
     private volatile boolean closed;
     private static final class Item{final URI uri;final boolean playlist;Item(URI uri,boolean playlist){this.uri=uri;this.playlist=playlist;}}
     MediaRelay(URI page,URI initial)throws IOException{
-        this.page=page;this.initial=initial;validate(initial);
+        this(page,initial,new SiteData());
+    }
+    MediaRelay(URI page,URI initial,SiteData data)throws IOException{
+        this.data=data;this.page=page;this.initial=initial;validate(initial);
         if(!supported(initial))throw new IOException("Use a direct MP4, M4A, MP3, WAV or unencrypted M3U8 URL");
         server=HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0),8);server.setExecutor(workers);server.createContext("/",this::serve);
         entry=URI.create(register(initial,initial.getPath().toLowerCase(Locale.ROOT).endsWith(".m3u8")));server.start();
@@ -75,12 +80,12 @@ final class MediaRelay implements AutoCloseable {
             if(!exchange.getRequestMethod().equals("GET")&&!exchange.getRequestMethod().equals("HEAD"))throw new IOException("Media relay method refused");
             Item item;synchronized(this){item=items.get(exchange.getRequestURI().toString());}if(item==null)throw new IOException("Unknown media source");
             String range=request.getFirst("Range");if(range!=null&&!range.matches("bytes=(?:[0-9]{1,12}-[0-9]{0,12}|-[0-9]{1,12})"))throw new IOException("Invalid media byte range");
-            URI uri=item.uri;
+            URI uri=item.uri;SiteData.Request context=data.request(page,false,exchange.getRequestMethod());
             for(int redirects=0;;redirects++){
                 if(redirects>5)throw new IOException("Too many media redirects");validate(uri);c=(HttpURLConnection)uri.toURL().openConnection();active.add(c);
-                c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");c.setRequestProperty("User-Agent","AsterEnginePreview/0.3");
+                c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");c.setRequestProperty("User-Agent","AsterEnginePreview/0.4");
                 if(range!=null&&!item.playlist)c.setRequestProperty("Range",range);if(exchange.getRequestMethod().equals("HEAD")&&!item.playlist)c.setRequestMethod("HEAD");
-                int code=c.getResponseCode();if(!Arrays.asList(301,302,303,307,308).contains(code))break;
+                context.prepare(c);int code=c.getResponseCode();context.receive(c);if(!Arrays.asList(301,302,303,307,308).contains(code))break;
                 String location=c.getHeaderField("Location");if(location==null)throw new IOException("Media redirect lacks a destination");uri=resolve(uri,location);active.remove(c);c.disconnect();c=null;
             }
             int code=c.getResponseCode();if(code!=200&&code!=206)throw new IOException("Media returned HTTP "+code);

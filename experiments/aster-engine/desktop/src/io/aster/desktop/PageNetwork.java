@@ -1,6 +1,7 @@
 package io.aster.desktop;
 
 import io.aster.engine.PageLoader;
+import io.aster.engine.SiteData;
 import java.io.*;
 import java.net.*;
 import java.net.http.*;
@@ -16,6 +17,7 @@ final class PageNetwork implements AutoCloseable {
     private static final ExecutorService HTTP_THREADS=Executors.newFixedThreadPool(4,r->{Thread t=new Thread(r,"aster-http-client");t.setDaemon(true);return t;});
     private static final HttpClient CLIENT=HttpClient.newBuilder().executor(HTTP_THREADS).connectTimeout(Duration.ofSeconds(8)).followRedirects(HttpClient.Redirect.NEVER).build();
     private final URI page;
+    private final SiteData siteData;
     private final ExecutorService workers=Executors.newFixedThreadPool(4,r->{Thread t=new Thread(r,"aster-page-fetch");t.setDaemon(true);return t;});
     private final ScheduledExecutorService deadlines=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"aster-network-deadline");t.setDaemon(true);return t;});
     private final Map<Integer,Transfer> fetches=new HashMap<>();
@@ -24,7 +26,8 @@ final class PageNetwork implements AutoCloseable {
     private int queuedBytes;
     private boolean closed;
     private String fatal;
-    PageNetwork(URI page){this.page=page;}
+    PageNetwork(URI page){this(page,new SiteData());}
+    PageNetwork(URI page,SiteData data){this.page=page;this.siteData=data;}
     static URI target(URI page,String raw,boolean socket) throws IOException {
         try {
             URI uri=page.resolve(raw);String scheme=uri.getScheme();
@@ -48,13 +51,16 @@ final class PageNetwork implements AutoCloseable {
                     URI uri=target(page,string(command,"url"),false);
                     Transfer t=new Transfer(id);fetches.put(id,t);
                     t.deadline=deadlines.schedule(()->t.fail("Fetch exceeded 15 seconds"),15,TimeUnit.SECONDS);
-                    t.work=workers.submit(()->fetch(t,uri,command));break;
+                    SiteData.Request context=siteData.request(page,false,string(command,"method"));
+                    t.work=workers.submit(()->fetch(t,uri,command,context));break;
                 }
                 case "abort": {Transfer t=fetches.remove(id);if(t!=null)t.cancel();break;}
                 case "ws-open": {
                     if(sockets.size()>=4||sockets.containsKey(id))throw new IOException("At most four WebSockets may run per page");
                     URI uri=target(page,string(command,"url"),true);SocketPeer peer=new SocketPeer(id);sockets.put(id,peer);
                     WebSocket.Builder builder=CLIENT.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(8)).header("Origin",origin(page));
+                    URI http=URI.create((uri.getScheme().equalsIgnoreCase("wss")?"https":"http")+uri.toString().substring(uri.getScheme().length()));
+                    String cookie=siteData.request(page,false,"GET").header(http);if(!cookie.isEmpty())builder.header("Cookie",cookie);
                     Object protocols=command.get("protocols");
                     if(!(protocols instanceof List)||((List<?>)protocols).size()>16)throw new IOException("Invalid WebSocket protocols");
                     List<?> list=(List<?>)protocols;String[] rest=new String[Math.max(0,list.size()-1)];
@@ -72,8 +78,10 @@ final class PageNetwork implements AutoCloseable {
         }
     }
     static String origin(URI u){return u.getScheme().toLowerCase(Locale.ROOT)+"://"+u.getRawAuthority();}
-    private void fetch(Transfer t,URI uri,Map<String,Object> command){
+    private void fetch(Transfer t,URI uri,Map<String,Object> command,SiteData.Request context){
         try {
+            String credentials=Objects.toString(command.get("credentials"),"same-origin");
+            if(!Arrays.asList("omit","same-origin","include").contains(credentials))throw new IOException("Invalid credentials mode");
             String method=string(command,"method").toUpperCase(Locale.ROOT);
             if(!Arrays.asList("GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS").contains(method))throw new IOException("Unsupported fetch method");
             byte[] bytes=Base64.getDecoder().decode(string(command,"body"));if(bytes.length>SEND_LIMIT)throw new IOException("Fetch body exceeds 256 KiB");
@@ -88,14 +96,15 @@ final class PageNetwork implements AutoCloseable {
             }
             for(int redirects=0;redirects<=5;redirects++){
                 uri=target(page,uri.toString(),false);
-                HttpRequest.Builder builder=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).header("User-Agent","AsterEnginePreview/0.3").header("Accept-Encoding","identity");
+                HttpRequest.Builder builder=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).header("User-Agent","AsterEnginePreview/0.4").header("Accept-Encoding","identity");
+                context.method(method);String cookie=context.header(uri);if(!credentials.equals("omit")&&!cookie.isEmpty())builder.header("Cookie",cookie);
                 headers.forEach(builder::header);if(!method.equals("GET")&&!method.equals("HEAD"))builder.header("Origin",origin(page));
                 HttpRequest request=builder.method(method,bytes.length==0?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofByteArray(bytes)).build();
                 if(t.cancelled)return;
                 HttpResponse<InputStream> response=CLIENT.send(request,HttpResponse.BodyHandlers.ofInputStream());
                 t.stream=response.body();if(t.cancelled){t.stream.close();return;}
                 try(InputStream input=response.body()){
-                    int code=response.statusCode();
+                    int code=response.statusCode();if(!credentials.equals("omit"))context.receive(uri,response.headers().map());
                     if(Arrays.asList(301,302,303,307,308).contains(code)&&response.headers().firstValue("location").isPresent()){
                         if("error".equals(command.get("redirect")))throw new IOException("Fetch redirect refused by request policy");
                         uri=target(page,uri.resolve(response.headers().firstValue("location").get()).toString(),false);

@@ -28,6 +28,8 @@ public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private Future<?> pending;
     private SharedPreferences preferences;
+    private static SiteData profileData;
+    private SiteData siteData;
     private Engine.Document document;
     private ReadingTools reading;
     private final ExecutorService assets=Executors.newSingleThreadExecutor();private Future<?> images;
@@ -40,6 +42,9 @@ public final class MainActivity extends Activity {
     public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
         preferences = getSharedPreferences("aster-engine-preview", MODE_PRIVATE);
+        String dataWarning="";
+        if(profileData==null)try{profileData=new SiteData(new File(getFilesDir(),"website-data/site-data.bin").toPath());}catch(Exception e){profileData=new SiteData();dataWarning="Saved website data could not be opened. This session keeps it in memory only.";}
+        siteData=profileData;
         reading=new ReadingTools(this,preferences);tabs.add(new MobileTab());
         for(int i=0;i<Math.min(12,preferences.getInt("session-count",0));i++)try{MobileTab t=new MobileTab();t.uri=PageLoader.address(preferences.getString("session-url-"+i,""));t.title=preferences.getString("session-title-"+i,"Saved tab");t.scroll=Math.max(0,preferences.getInt("session-scroll-"+i,0));previousTabs.add(t);}catch(IllegalArgumentException ignored){}
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
@@ -77,7 +82,7 @@ public final class MainActivity extends Activity {
         root.setFocusableInTouchMode(true); root.requestFocus();
         URI start = PageLoader.HOME;
         if (savedState != null) try { start = PageLoader.address(savedState.getString("address", PageLoader.HOME.toString())); } catch (IllegalArgumentException ignored) { }
-        load(start, -1);
+        load(start, -1);if(!dataWarning.isEmpty())say(dataWarning);
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private android.graphics.drawable.GradientDrawable round(int color){android.graphics.drawable.GradientDrawable shape=new android.graphics.drawable.GradientDrawable();shape.setColor(color);shape.setCornerRadius(dp(12));return shape;}
@@ -88,7 +93,7 @@ public final class MainActivity extends Activity {
         body.addView(homeText("✦  A S T E R",16,ACCENT));body.addView(homeText("Your space to explore.",28,INK));body.addView(homeText("Browse, read and keep your ideas together.",16,0xffa5b4c6));
         String[] titles={"Search with DuckDuckGo","Example website","Your bookmarks","Open document","Restore saved tabs"};Runnable[] actions={()->load(URI.create("https://html.duckduckgo.com/html/"),-1),()->load(URI.create("https://example.com"),-1),this::openBookmarks,this::openDocument,this::restoreTabs};
         for(int i=0;i<titles.length;i++){Button b=control(titles[i],titles[i],actions[i]);b.setBackground(round(0xff1b2633));LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(52));params.bottomMargin=dp(10);body.addView(b,params);}
-        body.addView(homeText("Independent engine · 0.3 preview",15,ACCENT));body.addView(homeText("Simple pages and reading are ready to try. Netflix, Prime Video and cloud gaming remain unsupported. Streaming support in the menu explains the remaining work.",15,0xffa5b4c6));holder.addView(body);return holder;}
+        body.addView(homeText("Independent engine · 0.4 preview",15,ACCENT));body.addView(homeText("Simple pages and reading are ready to try. Netflix, Prime Video and cloud gaming remain unsupported. Streaming support in the menu explains the remaining work.",15,0xffa5b4c6));holder.addView(body);return holder;}
     private void updateNavigation(){navBack.setEnabled(index>0);navForward.setEnabled(index+1<history.size());tabButton.setText("Tabs · "+tabs.size());tabButton.setContentDescription("Show tabs");}
     private void openDocument(){Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("*/*");startActivityForResult(intent,41);}
     private void stopLoading(){if(pending==null)return;generation++;pending.cancel(true);pending=null;if(images!=null)images.cancel(true);say("Navigation stopped.");}
@@ -108,8 +113,9 @@ public final class MainActivity extends Activity {
         menu.getMenu().add("Streaming support").setOnMenuItemClickListener(item -> {
             new AlertDialog.Builder(this).setTitle("Aster streaming support").setMessage(DrmProbe.report()).setPositiveButton("OK", null).show(); return true;
         });
+        menu.getMenu().add("Clear website data").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setTitle("Clear website data").setMessage("Sign out of websites and clear their cookies? Bookmarks and reader notes stay saved.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{stopLoading();if(download!=null)download.cancel(true);siteData.clear();try{siteData.flush();}catch(Exception e){say("Website data could not be cleared on disk.");}load(PageLoader.HOME,-1);}).show();return true;});
         menu.getMenu().add("About this preview").setOnMenuItemClickListener(item -> {
-            new AlertDialog.Builder(this).setTitle("Aster 0.3 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, login sessions, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
+            new AlertDialog.Builder(this).setTitle("Aster 0.4 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
         }); menu.show();
     }
     private void move(int delta) { int next = index + delta; if (next >= 0 && next < history.size()) load(history.get(next), next); }
@@ -120,9 +126,11 @@ public final class MainActivity extends Activity {
         if (pending != null) pending.cancel(true);
         if(images!=null)images.cancel(true);bitmaps.clear();
         final int request = ++generation; say("Opening " + uri + "…");
+        SiteData.Request siteRequest=siteData.request(document==null?null:document.uri,true,formBody==null?"GET":"POST");
         pending = network.submit(() -> {
             try {
-                Engine.Document result = PageLoader.load(uri,formBody);
+                Engine.Document result = PageLoader.load(uri,formBody,siteData,siteRequest);
+                String warning="";try{siteData.flush();}catch(Exception e){warning="Website data could not be saved to this device.";}final String storageWarning=warning;
                 runOnUiThread(() -> {
                     if (isDestroyed() || request != generation) return;
                     pending=null;document = result;
@@ -131,7 +139,7 @@ public final class MainActivity extends Activity {
                         while (history.size() > index + 1) history.remove(history.size() - 1);
                         history.add(result.uri); if (history.size() > 100) history.remove(0); index = history.size() - 1;
                     }
-                    address.setText(result.uri.toString());say("");setTitle(result.title);updateNavigation();homePage.setVisibility(result.uri.equals(PageLoader.HOME)?View.VISIBLE:View.GONE);scroll.setVisibility(result.uri.equals(PageLoader.HOME)?View.GONE:View.VISIBLE);
+                    address.setText(result.uri.toString());say(storageWarning);setTitle(result.title);updateNavigation();homePage.setVisibility(result.uri.equals(PageLoader.HOME)?View.VISIBLE:View.GONE);scroll.setVisibility(result.uri.equals(PageLoader.HOME)?View.GONE:View.VISIBLE);
                     MobileTab tab=tabs.get(selectedTab);tab.uri=result.uri;tab.title=result.title;
                     page.reset();int offset=restoreScroll;restoreScroll=0;scroll.post(()->{if(request==generation){scroll.scrollTo(0,offset);saveTabs();}});loadImages(result,request);
                 });
@@ -150,7 +158,7 @@ public final class MainActivity extends Activity {
         if(doc.scriptsBlocked)return;List<URI> sources=new ArrayList<>();
         for(Engine.Run r:doc.runs)if(r.image!=null&&PageAssets.sameOrigin(doc.uri,r.image)&&!sources.contains(r.image)&&sources.size()<8)sources.add(r.image);
         images=assets.submit(()->{long total=0;for(URI source:sources){if(Thread.currentThread().isInterrupted())return;
-            try{byte[] bytes=PageAssets.fetch(doc.uri,source,true);BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+            try{byte[] bytes=PageAssets.fetch(doc.uri,source,true,siteData.request(doc.uri,false,"GET"));BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
                 if(options.outWidth<1||options.outHeight<1||(long)options.outWidth*options.outHeight>2_000_000)continue;
                 long size=(long)options.outWidth*options.outHeight*4;if(total+size>8*1024*1024)break;total+=size;
                 Bitmap image=BitmapFactory.decodeByteArray(bytes,0,bytes.length);if(image==null)continue;
@@ -179,7 +187,7 @@ public final class MainActivity extends Activity {
     private void saveDownload(URI source,android.net.Uri destination){
         download=transfers.submit(()->{File staged=null;boolean complete=false;
             try{staged=File.createTempFile("aster-download-",".part",getCacheDir());
-                try(OutputStream output=new FileOutputStream(staged)){FileTransfer.save(source,output,(received,total)->runOnUiThread(()->{if(!isDestroyed())say("Downloading · "+(received/1024)+" KiB"+(total>0?" / "+(total/1024)+" KiB":""));}));}
+                try(OutputStream output=new FileOutputStream(staged)){FileTransfer.save(source,output,(received,total)->runOnUiThread(()->{if(!isDestroyed())say("Downloading · "+(received/1024)+" KiB"+(total>0?" / "+(total/1024)+" KiB":""));}),siteData.request(source,false,"GET"));}
                 if(Thread.currentThread().isInterrupted())throw new IOException("Download cancelled.");
                 try(InputStream input=new FileInputStream(staged);OutputStream output=getContentResolver().openOutputStream(destination,"w")){
                     if(output==null)throw new IOException("Destination is unavailable.");byte[] buffer=new byte[32768];int n;
@@ -210,6 +218,7 @@ public final class MainActivity extends Activity {
     public void onBackPressed() { if (index > 0) move(-1); else super.onBackPressed(); }
     protected void onSaveInstanceState(Bundle out) { if (document != null) out.putString("address", document.uri.toString()); super.onSaveInstanceState(out); }
     protected void onPause(){saveTabs();super.onPause();}
+    protected void onStop(){try{siteData.flush();}catch(Exception e){say("Website data could not be saved.");}super.onStop();}
     protected void onDestroy() { generation++; if (pending != null) pending.cancel(true);if(images!=null)images.cancel(true);if(download!=null)download.cancel(true);transfers.shutdownNow();assets.shutdownNow();reading.close(); network.shutdownNow(); super.onDestroy(); }
 
     private final class PageView extends View {

@@ -103,6 +103,8 @@ class Fixture(BaseHTTPRequestHandler):
         html = "<title>Second fixture</title><h1>Second fixture</h1><p>Link navigation worked.</p>" if self.path == "/second" else "<title>First fixture</title><a href='/second'>Open second fixture</a><p>Network page rendered by Aster.</p>"
         if self.path != '/second':
             html += "<img src='/image.png' width='80' height='40' alt='Aster image fixture'><form action='/submitted' method='post'><input name='q' value='android8'></form>"
+        if "login=android8" in self.headers.get("Cookie", ""):
+            html += "<p>Session cookie restored.</p>"
         body = html.encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=UTF-8")
@@ -116,6 +118,7 @@ class Fixture(BaseHTTPRequestHandler):
             raise AssertionError(f'Incorrect native form submission: {self.path} {data!r}')
         body = b'<h1>Android form submitted</h1><p>Native POST reached the server.</p>'
         self.send_response(200)
+        self.send_header('Set-Cookie', 'login=android8; Path=/; HttpOnly; Max-Age=3600')
         self.send_header('Content-Type', 'text/html')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
@@ -200,6 +203,8 @@ def main():
         print('Native form POST submitted successfully.', flush=True)
         menu('Back')
         wait_text('Network page rendered by Aster.')
+        wait_text("Session cookie restored.")
+        print("Native POST established a real website session.", flush=True)
         menu("Bookmark this page")
         wait_text("Bookmark saved on this device.")
         adb("shell", "am", "force-stop", PACKAGE)
@@ -213,11 +218,23 @@ def main():
         menu("Open bookmark")
         tap(wait_text("First fixture"))
         wait_text("Network page rendered by Aster.")
+        wait_text("Session cookie restored.")
+        print("Persistent website cookie survived process restart and APK replacement.", flush=True)
         menu("Streaming support")
         wait_text("Device Widevine:")
         report = screen()
         OUT.joinpath("drm-device-report.xml").write_text(ET.tostring(report, encoding="unicode"), encoding="utf-8")
         OUT.joinpath("aster-android-drm.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
+        tap(wait_text("OK", exact=True))
+        menu("Clear website data")
+        tap(wait_text("Clear", exact=True))
+        wait_text("Your space to explore.")
+        menu("Open bookmark")
+        tap(wait_text("First fixture"))
+        wait_text("Network page rendered by Aster.")
+        if "Session cookie restored." in ET.tostring(screen(), encoding="unicode"):
+            raise AssertionError("Clear website data kept the login session")
+        print("Clear website data signed out while preserving the bookmark.", flush=True)
         print("Android passed: native Canvas, actual fetched image pixels, real HTTP/link/Back, native form POST, reader controls, bookmark-preserving APK replacement, MediaDrm query.")
     finally:
         server.shutdown()

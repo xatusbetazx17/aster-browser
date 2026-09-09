@@ -16,6 +16,9 @@ public final class PageAssets {
     }
     private static int port(URI u) { return u.getPort() >= 0 ? u.getPort() : "https".equalsIgnoreCase(u.getScheme()) ? 443 : 80; }
     public static byte[] fetch(URI page, URI target, boolean image) throws IOException {
+        return fetch(page,target,image,new SiteData().request(page,false,"GET"));
+    }
+    public static byte[] fetch(URI page,URI target,boolean image,SiteData.Request request)throws IOException{
         PageLoader.validate(page); PageLoader.validate(target);
         if (!sameOrigin(page, target)) throw new IOException("This preview loads same-origin page assets only.");
         int limit = image ? IMAGE_LIMIT : 65536;
@@ -24,9 +27,10 @@ public final class PageAssets {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Asset load cancelled or timed out.");
             HttpURLConnection c = (HttpURLConnection) target.toURL().openConnection();
             c.setConnectTimeout(5000); c.setReadTimeout(5000); c.setInstanceFollowRedirects(false);
-            c.setRequestProperty("User-Agent", "Aster/0.2"); c.setRequestProperty("Accept-Encoding", image ? "identity" : "gzip");
+            c.setRequestProperty("User-Agent", "AsterEnginePreview/0.4"); c.setRequestProperty("Accept-Encoding", image ? "identity" : "gzip");
+            request.prepare(c);
             try {
-                int code = c.getResponseCode();
+                int code = c.getResponseCode();request.receive(c);
                 if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                     URI next = PageLoader.link(target, c.getHeaderField("Location"));
                     if (!sameOrigin(page, next)) throw new IOException("Cross-origin asset redirect refused.");

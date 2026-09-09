@@ -18,7 +18,7 @@ final class Json {
         for(int i=0;i<s.length();i++) { char c=s.charAt(i); switch(c) {
             case '"': b.append("\\\""); break; case '\\': b.append("\\\\"); break;
             case '\n': b.append("\\n"); break; case '\r': b.append("\\r"); break; case '\t': b.append("\\t"); break;
-            default: if(c<32 || Character.isSurrogate(c) || c==0x2028 || c==0x2029) b.append(String.format(Locale.ROOT,"\\u%04x",(int)c)); else b.append(c);
+            default: if(c<32 || Character.isSurrogate(c) || c==0x2028 || c==0x2029) { b.append("\\u");for(int shift=12;shift>=0;shift-=4)b.append("0123456789abcdef".charAt((c>>shift)&15)); } else b.append(c);
         }} return b.append('"').toString();
     }
     static Object parse(String text) { Parser p=new Parser(text); Object v=p.value(0); p.space(); if(p.i!=text.length()) throw new IllegalArgumentException("Trailing protocol data"); return v; }

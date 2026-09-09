@@ -145,7 +145,7 @@ jobs:
         run: |
           import os
           from pathlib import Path
-          lines = ['Aster 0.3 development preview', 'Core, browsing and reading checks: passed']
+          lines = ['Aster 0.4 development preview', 'Core, browsing and reading checks: passed']
           for label, key in [('Platform', 'OS'), ('Commit', 'COMMIT'), ('Native window', 'UI'), ('Video decoding', 'VIDEO'), ('HLS and page controls', 'STREAM')]:
               lines.append(label + ': ' + os.environ['ASTER_BUILD_' + key])
           if any(os.environ['ASTER_BUILD_' + key] != 'success' for key in ('VIDEO', 'STREAM')):
@@ -164,6 +164,7 @@ jobs:
             experiments/aster-engine/build/*.tar.gz
             experiments/aster-engine/build/*.png
             experiments/aster-engine/build/*.log
+            experiments/aster-engine/build/BENCHMARK.json
             experiments/aster-engine/build/BUILD-STATUS.txt
             experiments/aster-engine/build/SHA256SUMS.txt
             experiments/aster-engine/build/aster-windows-x64-setup.exe
