@@ -79,6 +79,10 @@ on installed symbol fonts. Focusable controls, accessible names, saved reading
 sizes, reduced motion, notes, downloads and tab parking remain available. The
 interface continues to identify this as a preview and exposes service limits.
 
+The Android protection dialog keeps focus on its panel until the rule editor is
+selected. Opening it to review activity or allow a site does not automatically
+open the keyboard and move the controls.
+
 ## Verification and efficiency
 
 `ProtectionTests` counts requests reaching real local servers, including a
@@ -105,6 +109,14 @@ does not prove that Aster is the faster overall browser.
 Dependency downloads retry one transient transport failure while retaining
 mandatory pinned hashes. A checksum mismatch remains a hard failure. Package
 status headings now read the actual version metadata.
+
+A Windows check also exposed the previous UTF-8 decoder exceeding the script
+command budget on a valid 1 MiB response. It now collects UTF-16 units and builds
+strings in bounded chunks instead of making a string call for every byte.
+Large responses, supplementary Unicode across chunk boundaries, partial UTF-8,
+invalid sequences, BOM handling and fatal errors are exercised. The 500 ms script
+budget, 1 MiB body limit and 32 MiB script heap remain unchanged. This is an
+efficiency correction to Aster's decoder, not a competing-browser benchmark.
 
 ## Work still required
 

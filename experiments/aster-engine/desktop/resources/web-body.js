@@ -18,17 +18,22 @@
     decode(value=new Uint8Array(),options={}){
       const incoming=bytes(value);if(incoming.length>1048576)throw new RangeError('Text decoding limit');
       if(!this._stream){this._pending=new Uint8Array();this._bom=false;}
-      const b=new Uint8Array(this._pending.length+incoming.length);b.set(this._pending);b.set(incoming,this._pending.length);this._pending=new Uint8Array();this._stream=!!options.stream;let text='';
-      const invalid=()=>{if(this.fatal){this._stream=false;throw new TypeError('Invalid UTF-8');}return '\ufffd';};
-      for(let i=0;i<b.length;){const start=i,first=b[i++];if(first<128){text+=String.fromCharCode(first);continue;}
+      const b=new Uint8Array(this._pending.length+incoming.length);b.set(this._pending);b.set(incoming,this._pending.length);this._pending=new Uint8Array();this._stream=!!options.stream;
+      // Buffer UTF-16 units and construct bounded string chunks. One native
+      // String call per byte can exhaust a page's command budget on large bodies.
+      const units=new Uint16Array(b.length);let used=0;
+      const invalid=()=>{if(this.fatal){this._stream=false;throw new TypeError('Invalid UTF-8');}return 0xfffd;};
+      for(let i=0;i<b.length;){const start=i,first=b[i++];if(first<128){units[used++]=first;continue;}
         let count=first>=0xc2&&first<=0xdf?1:first>=0xe0&&first<=0xef?2:first>=0xf0&&first<=0xf4?3:0;
-        if(!count){text+=invalid();continue;}let cp=first&((1<<(6-count))-1),valid=true;
+        if(!count){units[used++]=invalid();continue;}let cp=first&((1<<(6-count))-1),valid=true;
         for(let j=0;j<count;j++){const c=b[i];
           if(c===undefined&&this._stream){this._pending=b.slice(start);i=b.length;valid=false;break;}
           if(c===undefined||(c&0xc0)!==0x80||(j===0&&((first===0xe0&&c<0xa0)||(first===0xed&&c>=0xa0)||(first===0xf0&&c<0x90)||(first===0xf4&&c>=0x90)))){valid=false;break;}cp=(cp<<6)|(c&63);i++;
         }
-        if(this._pending.length)break;text+=valid?String.fromCodePoint(cp):invalid();
+        if(this._pending.length)break;if(!valid)cp=invalid();
+        if(cp<0x10000)units[used++]=cp;else{cp-=0x10000;units[used++]=0xd800+(cp>>10);units[used++]=0xdc00+(cp&1023);}
       }
+      const parts=[];for(let i=0;i<used;i+=4096)parts.push(String.fromCharCode.apply(null,units.subarray(i,Math.min(i+4096,used))));let text=parts.join('');
       if(text&&!this._bom){this._bom=true;if(!this.ignoreBOM&&text.charCodeAt(0)===0xfeff)text=text.slice(1);}return text;
     }
   }
