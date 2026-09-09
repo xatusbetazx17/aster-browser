@@ -1,0 +1,296 @@
+name: Aster original engine preview
+
+on:
+  push:
+    branches: ['codex/aster-webkit-desktop']
+    paths:
+      - 'experiments/aster-engine/**'
+      - '.github/workflows/aster-engine-preview.yml'
+  pull_request:
+    paths:
+      - 'experiments/aster-engine/**'
+      - '.github/workflows/aster-engine-preview.yml'
+  workflow_dispatch:
+    inputs:
+      android_api:
+        description: 'Emulator API: 26 supports lightweight software testing; 35 needs suitable virtualization'
+        type: choice
+        options: ['26', '35']
+        default: '26'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aster-engine-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ASTER_BUILD_NUMBER: ${{ github.run_number }}
+  ASTER_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  desktop:
+    # Codex pushes have their own build/publication run; do not duplicate it on PR #1.
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'codex/aster-webkit-desktop' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: Linux
+          - os: ubuntu-24.04
+            artifact: Linux-ubuntu24
+          - os: windows-latest
+            artifact: Windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test original parser, layout, HTTP and Java2D; build native package
+        id: package
+        run: |
+          python -m unittest discover -s experiments/aster-engine/tests -p test_release.py
+          python experiments/aster-engine/build.py desktop --test --package
+      - name: Build and exercise the Windows install/update EXE
+        id: windows_setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./experiments/aster-engine/packaging/build_windows_setup.ps1
+          ./experiments/aster-engine/tests/windows_setup.ps1
+      - name: Open the Linux native application
+        id: linux_ui
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --smoke experiments/aster-engine/build/aster-window.png
+      - name: Decode and display actual Linux video frames
+        id: linux_video
+        if: runner.os == 'Linux'
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
+            sudo apt-get install -y libgtk-3-0 libavcodec58 libavformat58 libavutil56 libasound2
+          else
+            sudo apt-get install -y libgtk-3-0t64 libavcodec60 libavformat60 libavutil58 libasound2t64
+          fi
+          xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --media-smoke experiments/aster-engine/build/aster-media-frame.png
+      - name: Stream real HLS and control it from a page on Linux
+        id: linux_stream
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y pulseaudio libasound2-plugins
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=aster_ci
+          pactl set-default-sink aster_ci
+          cat > experiments/aster-engine/build/alsa-ci.conf <<'EOF'
+          pcm.!default { type pulse }
+          ctl.!default { type pulse }
+          EOF
+          ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-frame.png
+          ALSA_CONFIG_PATH="$PWD/experiments/aster-engine/build/alsa-ci.conf" xvfb-run -a experiments/aster-engine/build/native/AsterEnginePreview/bin/AsterEnginePreview --stream-smoke experiments/aster-engine/build/aster-stream-repeat.png
+      - name: Open the Windows EXE
+        id: windows_ui
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $asterOutput = Join-Path $PWD 'experiments/aster-engine/build/aster-window.png'
+          $asterProcess = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--smoke', $asterOutput) -PassThru
+          if (-not $asterProcess.WaitForExit(30000)) { $asterProcess.Kill(); throw 'Aster window did not finish its smoke check' }
+          if ($asterProcess.ExitCode -ne 0 -or -not (Test-Path $asterOutput)) { throw 'Aster EXE smoke check failed' }
+      - name: Decode and display actual Windows video frames
+        id: windows_video
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-media-frame.png'
+          $asterVideo = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--media-smoke', $asterFrame) -PassThru
+          if (-not $asterVideo.WaitForExit(40000)) { $asterVideo.Kill(); throw 'Aster video did not finish its playback check' }
+          if ($asterVideo.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) {
+            if (Test-Path "$asterFrame.log") { Get-Content -LiteralPath "$asterFrame.log" }
+            throw 'Aster EXE did not decode the test video'
+          }
+      - name: Stream real HLS and control it from a page on Windows
+        id: windows_stream
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.windows_ui.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          Get-Service AudioEndpointBuilder, Audiosrv | Format-Table Name, Status, StartType
+          Get-CimInstance Win32_SoundDevice | Select-Object Name, Status
+          $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-stream-frame.png'
+          $asterDecoder = "$asterFrame.decoder.log"
+          $asterStream = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--stream-smoke', $asterFrame) -RedirectStandardError $asterDecoder -PassThru
+          if (-not $asterStream.WaitForExit(90000)) { $asterStream.Kill(); throw 'Aster streaming check timed out' }
+          if ($asterStream.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) {
+            if (Test-Path "$asterFrame.log") { Get-Content -LiteralPath "$asterFrame.log" }
+            if (Test-Path $asterDecoder) { Get-Content -LiteralPath $asterDecoder -Tail 100 }
+            throw 'Aster EXE streaming and page media controls failed'
+          }
+      - name: Record the package verification results
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        shell: python
+        env:
+          ASTER_BUILD_OS: ${{ runner.os }}
+          ASTER_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          ASTER_BUILD_UI: ${{ runner.os == 'Windows' && steps.windows_ui.outcome || steps.linux_ui.outcome }}
+          ASTER_BUILD_VIDEO: ${{ runner.os == 'Windows' && steps.windows_video.outcome || steps.linux_video.outcome }}
+          ASTER_BUILD_STREAM: ${{ runner.os == 'Windows' && steps.windows_stream.outcome || steps.linux_stream.outcome }}
+        run: |
+          import json, os
+          from pathlib import Path
+          version = json.loads(Path('experiments/aster-engine/build/VERSION.json').read_text())['version']
+          lines = ['Aster ' + version + ' development preview', 'Core, browsing and reading checks: passed']
+          for label, key in [('Platform', 'OS'), ('Commit', 'COMMIT'), ('Native window', 'UI'), ('Video decoding', 'VIDEO'), ('HLS and page controls', 'STREAM')]:
+              lines.append(label + ': ' + os.environ['ASTER_BUILD_' + key])
+          if any(os.environ['ASTER_BUILD_' + key] != 'success' for key in ('VIDEO', 'STREAM')):
+              lines.append('A failed media check remains a failed workflow. This package is not verified for media playback.')
+          else:
+              lines.append('Media fixtures passed; protected streaming and full website compatibility remain unsupported.')
+          Path('experiments/aster-engine/build/BUILD-STATUS.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+      - uses: actions/upload-artifact@v7.0.1
+        # Preserve a usable Windows browsing preview and its failure evidence.
+        # Linux input artifacts continue to require all native checks to pass.
+        if: ${{ success() || (failure() && runner.os == 'Windows' && steps.package.outcome == 'success' && steps.windows_ui.outcome == 'success' && steps.windows_setup.outcome == 'success') }}
+        with:
+          name: aster-engine-${{ matrix.artifact }}
+          path: |
+            experiments/aster-engine/build/*.zip
+            experiments/aster-engine/build/*.tar.gz
+            experiments/aster-engine/build/*.png
+            experiments/aster-engine/build/*.log
+            experiments/aster-engine/build/BENCHMARK.json
+            experiments/aster-engine/build/BUILD-STATUS.txt
+            experiments/aster-engine/build/SHA256SUMS.txt
+            experiments/aster-engine/build/aster-windows-x64-setup.exe
+            experiments/aster-engine/build/WINDOWS-SETUP-STATUS.txt
+            experiments/aster-engine/build/VERSION.json
+          retention-days: 14
+  flatpak:
+    needs: desktop
+    # Its input artifact is uploaded only after the Ubuntu 22.04 checks pass.
+    # A failure on another OS must not prevent validating the Linux package.
+    if: ${{ always() && !cancelled() && (github.event_name != 'pull_request' || github.head_ref != 'codex/aster-webkit-desktop') }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: aster-engine-Linux
+          path: experiments/aster-engine/build
+      - name: Install the common Linux runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb dbus-x11
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+      - name: Package and verify the Flatpak application
+        run: |
+          mkdir -p experiments/aster-engine/build/native
+          tar -xzf experiments/aster-engine/build/aster-engine-linux-x64.tar.gz -C experiments/aster-engine/build/native
+          python experiments/aster-engine/packaging/build_flatpak.py
+          flatpak install --user -y --noninteractive experiments/aster-engine/build/aster-linux-x64.flatpak
+          mkdir -p "$HOME/.var/app/io.aster.browser.EnginePreview/config"
+          printf '%s\n' 'keep-this-profile' > "$HOME/.var/app/io.aster.browser.EnginePreview/config/upgrade-fixture"
+          # Export a newer app commit, then exercise the same command users run.
+          printf '%s\n' 'replacement fixture' > experiments/aster-engine/build/flatpak-app/files/upgrade-fixture
+          flatpak build-export experiments/aster-engine/build/flatpak-repository experiments/aster-engine/build/flatpak-app preview
+          flatpak build-bundle experiments/aster-engine/build/flatpak-repository experiments/aster-engine/build/flatpak-update-test.flatpak io.aster.browser.EnginePreview preview
+          flatpak install --user --or-update -y --noninteractive experiments/aster-engine/build/flatpak-update-test.flatpak
+          flatpak run --command=cat io.aster.browser.EnginePreview /app/upgrade-fixture | grep -Fx 'replacement fixture'
+          test "$(cat "$HOME/.var/app/io.aster.browser.EnginePreview/config/upgrade-fixture")" = keep-this-profile
+          # Restore the exact deliverable after the update fixture.
+          flatpak install --user --or-update -y --noninteractive experiments/aster-engine/build/aster-linux-x64.flatpak
+          timeout 60s dbus-run-session xvfb-run -a flatpak run --filesystem="$PWD/experiments/aster-engine/build" io.aster.browser.EnginePreview --smoke "$PWD/experiments/aster-engine/build/aster-flatpak-window.png"
+          test -s experiments/aster-engine/build/aster-flatpak-window.png
+          printf '%s\n' 'Flatpak installed, updated application bytes, retained profile and opened the native window.' > experiments/aster-engine/build/FLATPAK-UPDATE-STATUS.txt
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: aster-engine-Linux-Flatpak
+          path: |
+            experiments/aster-engine/build/aster-linux-x64.flatpak
+            experiments/aster-engine/build/FLATPAK-SHA256SUMS.txt
+            experiments/aster-engine/build/aster-flatpak-window.png
+            experiments/aster-engine/build/FLATPAK-UPDATE-STATUS.txt
+            experiments/aster-engine/build/VERSION.json
+          retention-days: 14
+  android:
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'codex/aster-webkit-desktop' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ASTER_EMULATOR_API: ${{ inputs.android_api || '26' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build and verify the actual Android APK
+        env:
+          # Pull requests never receive the persistent private signing identity.
+          ASTER_ANDROID_SIGNING_JSON: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/codex/aster-webkit-desktop' && secrets.ASTER_ANDROID_SIGNING_JSON || '' }}
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          env = os.environ.copy()
+          env['ASTER_BUILD_NUMBER'] = str(int(env['ASTER_BUILD_NUMBER']) - 1)
+          subprocess.run(['python', 'experiments/aster-engine/build.py', 'android'], env=env, check=True)
+          out = pathlib.Path('experiments/aster-engine/build/android')
+          (out / 'aster-engine-preview.apk').rename(out / 'upgrade-baseline.apk')
+          subprocess.run(['python', 'experiments/aster-engine/build.py', 'android'], check=True)
+      - name: Boot Android
+        run: python experiments/aster-engine/tests/start_android_emulator.py
+      - name: Exercise navigation and a data-preserving APK replacement
+        env:
+          ANDROID_SERIAL: emulator-5554
+          ASTER_ANDROID_BASELINE_APK: experiments/aster-engine/build/android/upgrade-baseline.apk
+        run: |
+          python experiments/aster-engine/tests/android_smoke.py
+          printf '%s\n' 'Android API 26 workspace, forms, reader, persistent website sessions, clear-data logout and bookmark-preserving APK replacement passed.' > experiments/aster-engine/build/ANDROID-TEST-STATUS.txt
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: aster-engine-Android
+          path: |
+            experiments/aster-engine/build/android/aster-engine-preview.apk
+            experiments/aster-engine/build/android/*.png
+            experiments/aster-engine/build/android/*.log
+            experiments/aster-engine/build/android/drm-device-report.xml
+            experiments/aster-engine/build/SHA256SUMS.txt
+            experiments/aster-engine/build/android/SIGNING.json
+            experiments/aster-engine/build/ANDROID-TEST-STATUS.txt
+            experiments/aster-engine/build/VERSION.json
+          retention-days: 14
+  release:
+    needs: [desktop, flatpak, android]
+    # Windows' known media failure is preserved in its report. Its artifact still
+    # requires core, native-window and real setup/update checks to pass.
+    if: ${{ always() && !cancelled() && github.repository == 'xatusbetazx17/aster-browser' && github.ref == 'refs/heads/codex/aster-webkit-desktop' && github.event_name != 'pull_request' && needs.flatpak.result == 'success' && needs.android.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: aster-engine-*
+          path: release-artifacts
+      - name: Verify package identities and publish permanent preview downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python experiments/aster-engine/packaging/publish_release.py release-artifacts

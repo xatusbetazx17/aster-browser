@@ -1,0 +1,27 @@
+name: Aster public release downloads
+
+on:
+  push:
+    branches: ['codex/aster-webkit-desktop']
+    paths:
+      - '.github/scripts/verify_preview_downloads.py'
+      - '.github/workflows/aster-release-downloads.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-downloads:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify public downloads and release publisher recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m unittest discover -s experiments/aster-engine/tests -p test_release.py
+          python .github/scripts/verify_preview_downloads.py

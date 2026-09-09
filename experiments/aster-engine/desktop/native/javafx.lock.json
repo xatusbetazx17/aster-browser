@@ -1,0 +1,115 @@
+{
+  "version": "21.0.12",
+  "artifacts": [
+    {
+      "module": "base",
+      "platform": "linux",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-base/21.0.12/javafx-base-21.0.12-linux.jar",
+      "sha256": "ac83213e343d734d7d315b4a850b309d8de4a4950c6e46497d8bc68e744b245d",
+      "name": "javafx-base-21.0.12-linux.jar"
+    },
+    {
+      "module": "graphics",
+      "platform": "linux",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-graphics/21.0.12/javafx-graphics-21.0.12-linux.jar",
+      "sha256": "200ee46c819d03811c736900cdfacb2047921313b261d93e52cdeef1eaf1ebb7",
+      "name": "javafx-graphics-21.0.12-linux.jar"
+    },
+    {
+      "module": "media",
+      "platform": "linux",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-media/21.0.12/javafx-media-21.0.12-linux.jar",
+      "sha256": "927574bc433cbf9836058efcb216d93c5bdab6307cf4a9e0a28b1f8b4b311032",
+      "name": "javafx-media-21.0.12-linux.jar"
+    },
+    {
+      "module": "swing",
+      "platform": "linux",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-swing/21.0.12/javafx-swing-21.0.12-linux.jar",
+      "sha256": "8ba36148dc4c01b40e632c657c6cb9ffd91bf7c4795e5a36bbf5ddb8713fa03d",
+      "name": "javafx-swing-21.0.12-linux.jar"
+    },
+    {
+      "module": "base",
+      "platform": "win",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-base/21.0.12/javafx-base-21.0.12-win.jar",
+      "sha256": "110c32b2034d1ca4c644b919f9f28370d312cd192a26e2df1a83ec1df4cd6a6b",
+      "name": "javafx-base-21.0.12-win.jar"
+    },
+    {
+      "module": "graphics",
+      "platform": "win",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-graphics/21.0.12/javafx-graphics-21.0.12-win.jar",
+      "sha256": "af380b5afede1f13fbe0a8ebdb5b2855a97b1e22c60dcefb5a90a498fd679722",
+      "name": "javafx-graphics-21.0.12-win.jar"
+    },
+    {
+      "module": "media",
+      "platform": "win",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-media/21.0.12/javafx-media-21.0.12-win.jar",
+      "sha256": "4a50be716a4afa246787d114679ddba1ecc17e35f275ff3b99ccb49610ec1a06",
+      "name": "javafx-media-21.0.12-win.jar"
+    },
+    {
+      "module": "swing",
+      "platform": "win",
+      "url": "https://repo.maven.apache.org/maven2/org/openjfx/javafx-swing/21.0.12/javafx-swing-21.0.12-win.jar",
+      "sha256": "d9b555ff90af7806996eebfb795ebe5e163c0a67118d7305f4edea022652e760",
+      "name": "javafx-swing-21.0.12-win.jar"
+    }
+  ],
+  "notices": [
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/ADDITIONAL_LICENSE_INFO",
+      "name": "ADDITIONAL_LICENSE_INFO",
+      "sha256": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/ASSEMBLY_EXCEPTION",
+      "name": "ASSEMBLY_EXCEPTION",
+      "sha256": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/LICENSE",
+      "name": "LICENSE",
+      "sha256": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/modules/javafx.graphics/src/main/legal/jpeg_fx.md",
+      "name": "modules_javafx.graphics_src_main_legal_jpeg_fx.md",
+      "sha256": "4d8164326adbb7c6a3dbb65b1979962915e4b6f67eb5885409c80a3f350b322a"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/modules/javafx.graphics/src/main/legal/mesa3d.md",
+      "name": "modules_javafx.graphics_src_main_legal_mesa3d.md",
+      "sha256": "63f4e6f75caebbccb95d903fb43e46ac7111b3624d0a34f146b276d7d9e7b152"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/modules/javafx.media/src/main/legal/directshow.md",
+      "name": "modules_javafx.media_src_main_legal_directshow.md",
+      "sha256": "d847da5757a30d093db3f90a0bac9b1699a52965daa3ec5dedf3ebf14c81c698"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/modules/javafx.media/src/main/legal/glib.md",
+      "name": "modules_javafx.media_src_main_legal_glib.md",
+      "sha256": "69882471620c3ee7f947f8c2348039cb88448762d363663a0a0d472cc04b7912"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/modules/javafx.media/src/main/legal/gstreamer.md",
+      "name": "modules_javafx.media_src_main_legal_gstreamer.md",
+      "sha256": "80e6074416857e660fdba10495326e2803082f70f692ee9b08a54d0f532e563c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openjdk/jfx21u/ecd5757a6970c88bcf179779d73d8fb6c7ed9d29/modules/javafx.media/src/main/legal/libffi.md",
+      "name": "modules_javafx.media_src_main_legal_libffi.md",
+      "sha256": "8b7ffa48fb4b8aac3ffde9d014a4888f1b325199c4beb710d13898acf3c370bf"
+    }
+  ],
+  "source_url": "https://github.com/openjdk/jfx21u/tree/21.0.12+1",
+  "java_sources": [
+    "https://repo.maven.apache.org/maven2/org/openjfx/javafx-base/21.0.12/javafx-base-21.0.12-sources.jar",
+    "https://repo.maven.apache.org/maven2/org/openjfx/javafx-graphics/21.0.12/javafx-graphics-21.0.12-sources.jar",
+    "https://repo.maven.apache.org/maven2/org/openjfx/javafx-media/21.0.12/javafx-media-21.0.12-sources.jar",
+    "https://repo.maven.apache.org/maven2/org/openjfx/javafx-swing/21.0.12/javafx-swing-21.0.12-sources.jar"
+  ]
+}
