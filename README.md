@@ -10,9 +10,9 @@ Windows setup and Linux Flatpak replace an older original-engine installation wh
 
 Aster is being developed as a **standalone browser with its own interface and page engine**. The original-engine Windows/Linux/Android application is the destination for new development. It opens directly as Aster and embeds no Chrome, Firefox, WebKit or WebView. The older Linux WebKit prototype remains available separately.
 
-**Status: experimental.** The independent engine is a limited implementation, not a complete modern browser. The 0.5 engine milestone adds desktop CORS-governed HTTP APIs, common request/file/form bodies, asynchronous XMLHttpRequest and progressive response delivery. The 0.4 website sessions, desktop storage and renderer measurements remain included. The included 0.3 workspace provides the dark Aster interface, integrated reading/notes, tab parking, lazy restoration and better Android navigation on top of images, basic CSS/forms and document tools, with Windows/Linux bundles, an Android 8+ APK and a Flatpak build. Full web compatibility, protected streaming, production signing and validated Steam Deck support remain unfinished.
+**Status: experimental.** Aster 0.6 adds shared ad/tracker request blocking, normal-flow CSS boxes and a polished native Windows/Linux/Android workspace. Protection has saved site exceptions, custom hostname rules and actual blocked-request activity. The 0.5 HTTP APIs, 0.4 sessions/storage and existing reader, notes, tab parking and downloads remain included. Full web compatibility, Netflix/Prime Video, cloud gaming, permanent Android signing and validated Steam Deck support remain unfinished. No performance superiority over other browsers has been established.
 
-Read [Aster 0.5 features, streaming blockers and the remaining engine roadmap](experiments/aster-engine/RELEASE_0.5.md).
+Read [Aster 0.6 protection, layout and remaining engine work](experiments/aster-engine/RELEASE_0.6.md).
 
 Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 

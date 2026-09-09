@@ -91,8 +91,10 @@ def image_fixture():
 
 
 class Fixture(BaseHTTPRequestHandler):
+    image_requests = 0
     def do_GET(self):
         if self.path == '/image.png':
+            Fixture.image_requests += 1
             body = image_fixture()
             self.send_response(200)
             self.send_header('Content-Type', 'image/png')
@@ -103,6 +105,7 @@ class Fixture(BaseHTTPRequestHandler):
         html = "<title>Second fixture</title><h1>Second fixture</h1><p>Link navigation worked.</p>" if self.path == "/second" else "<title>First fixture</title><a href='/second'>Open second fixture</a><p>Network page rendered by Aster.</p>"
         if self.path != '/second':
             html += "<img src='/image.png' width='80' height='40' alt='Aster image fixture'><form action='/submitted' method='post'><input name='q' value='android8'></form>"
+            html += "<section style='background:#b0ebdf;padding:12px;border:2px solid #267861;margin:8px 0'><p style='margin:0'>Native CSS box fixture.</p></section>"
         if "login=android8" in self.headers.get("Cookie", ""):
             html += "<p>Session cookie restored.</p>"
         body = html.encode()
@@ -162,13 +165,40 @@ def main():
                 raise AssertionError(f'Expected emulator RGBA8888, got {pixel_format}')
             pixels = raw[-width * height * 4:]
             count = sum(pixels[i:i + 3] == b'\x11\x53\x97' for i in range(0, len(pixels), 4))
-            if count > 100:
+            box_count = sum(pixels[i:i + 3] == b'\xb0\xeb\xdf' for i in range(0, len(pixels), 4))
+            if count > 100 and box_count > 100:
                 break
             if time.monotonic() > deadline:
-                raise AssertionError('Android did not paint the fetched image pixels')
+                raise AssertionError('Android did not paint the fetched image and CSS box pixels')
             time.sleep(0.5)
         (OUT / 'aster-android-images.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
-        print('Fetched image pixels were rendered by the native Android Canvas.', flush=True)
+        print('Fetched image and CSS box pixels were rendered by the native Android Canvas.', flush=True)
+        menu('Site protection')
+        tap(wait_text('Custom blocked hostnames', exact=True))
+        adb('shell', 'input', 'text', '127.0.0.1')
+        adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        tap(wait_text('Save hostname rules', exact=True))
+        wait_text('Protection settings saved.')
+        tap(wait_text('Done', exact=True))
+        before_images = Fixture.image_requests
+        menu('Reload')
+        wait_text('Network page rendered by Aster.')
+        menu('Site protection')
+        wait_text('requests blocked for this origin this session.')
+        activity = ET.tostring(screen(), encoding='unicode')
+        if '1 requests blocked for this origin this session.' not in activity or Fixture.image_requests != before_images:
+            raise AssertionError('Android blocking did not prevent the actual image request')
+        tap(wait_text('Allow requests on this site', exact=True))
+        wait_text('Protection settings saved.')
+        tap(wait_text('Reload', exact=True))
+        wait_text('Network page rendered by Aster.')
+        deadline = time.monotonic() + 10
+        while Fixture.image_requests <= before_images:
+            if time.monotonic() > deadline:
+                raise AssertionError('Android site exception did not restore image requests')
+            time.sleep(0.1)
+        print('Android native protection blocked a real image request; its site exception restored it.', flush=True)
+        node = wait_text('Network page rendered by Aster.')
         bounds = list(map(int, re.findall(r"\d+", node.attrib["bounds"])))
         density = float(adb("shell", "wm", "density").strip().split()[-1]) / 160
         # The fixture's first link is at the engine's 24px content inset.
@@ -222,6 +252,12 @@ def main():
         wait_text("Network page rendered by Aster.")
         wait_text("Session cookie restored.")
         print("Persistent website cookie survived process restart and APK replacement.", flush=True)
+        menu('Site protection')
+        exception = wait_text('Allow requests on this site', exact=True)
+        if exception.attrib.get('checked') != 'true' or wait_text('Custom blocked hostnames', exact=True).attrib.get('text') != '127.0.0.1':
+            raise AssertionError('Android lost protection rules or exception after APK replacement')
+        tap(wait_text('Done', exact=True))
+        print('Protection rules and site exception survived APK replacement.', flush=True)
         menu("Streaming support")
         wait_text("Device Widevine:")
         report = screen()

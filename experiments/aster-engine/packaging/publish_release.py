@@ -129,7 +129,7 @@ Linux uses the same `io.aster.browser.EnginePreview` application and `preview` b
 
 Older Qt/Chromium kits, WebKit builds and differently signed Android test APKs are separate installations. Their data is not automatically converted. Close Aster before updating; downloads already saved outside the application remain in place. Updates are initiated by downloading a newer package; there is no background auto-updater.
 
-See [web request improvements and the remaining engine roadmap](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.5.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
+See [site protection, CSS layout and the remaining engine roadmap](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.6.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
 """
 
 

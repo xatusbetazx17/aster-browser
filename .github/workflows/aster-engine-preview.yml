@@ -143,9 +143,10 @@ jobs:
           ASTER_BUILD_VIDEO: ${{ runner.os == 'Windows' && steps.windows_video.outcome || steps.linux_video.outcome }}
           ASTER_BUILD_STREAM: ${{ runner.os == 'Windows' && steps.windows_stream.outcome || steps.linux_stream.outcome }}
         run: |
-          import os
+          import json, os
           from pathlib import Path
-          lines = ['Aster 0.4 development preview', 'Core, browsing and reading checks: passed']
+          version = json.loads(Path('experiments/aster-engine/build/VERSION.json').read_text())['version']
+          lines = ['Aster ' + version + ' development preview', 'Core, browsing and reading checks: passed']
           for label, key in [('Platform', 'OS'), ('Commit', 'COMMIT'), ('Native window', 'UI'), ('Video decoding', 'VIDEO'), ('HLS and page controls', 'STREAM')]:
               lines.append(label + ': ' + os.environ['ASTER_BUILD_' + key])
           if any(os.environ['ASTER_BUILD_' + key] != 'success' for key in ('VIDEO', 'STREAM')):

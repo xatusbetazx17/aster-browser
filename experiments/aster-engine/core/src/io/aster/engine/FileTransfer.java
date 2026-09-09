@@ -10,11 +10,12 @@ public final class FileTransfer {
         save(initial,output,progress,new SiteData().request(initial,false,"GET"));
     }
     public static void save(URI initial,OutputStream output,Progress progress,SiteData.Request request)throws IOException {
+        request.explicitDownload();
         PageLoader.validate(initial);URI uri=initial;long limit=512L*1024*1024,deadline=System.nanoTime()+900_000_000_000L;
         for(int redirect=0;redirect<=5;redirect++){
             if(Thread.currentThread().isInterrupted())throw new IOException("Download cancelled.");
             HttpURLConnection c=(HttpURLConnection)uri.toURL().openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(8000);c.setReadTimeout(8000);
-            c.setRequestProperty("User-Agent","AsterEnginePreview/0.5");c.setRequestProperty("Accept-Encoding","identity");
+            c.setRequestProperty("User-Agent","AsterEnginePreview/0.6");c.setRequestProperty("Accept-Encoding","identity");
             request.prepare(c);
             try{int code=c.getResponseCode();request.receive(c);if(code==301||code==302||code==303||code==307||code==308){
                 URI next=PageLoader.link(uri,c.getHeaderField("Location"));if(next==null||uri.getScheme().equalsIgnoreCase("https")&&!next.getScheme().equalsIgnoreCase("https"))throw new IOException("Unsafe download redirect refused.");uri=next;continue;}

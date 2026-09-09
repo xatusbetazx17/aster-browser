@@ -1,6 +1,6 @@
 # Aster original engine preview
 
-**Version 0.5:** see [web request compatibility and remaining service blockers](RELEASE_0.5.md). Desktop adds CORS-governed HTTP APIs, Request/Blob/File/FormData, URLSearchParams and asynchronous XHR with progressive responses. Desktop/Android query links now preserve their path. The [0.4 sessions/storage](RELEASE_0.4.md), [0.3 workspace](RELEASE_0.3.md) and [0.2 browsing/reading](RELEASE_0.2.md) remain included. Full web compatibility is unfinished.
+**Version 0.6:** see [site protection, CSS boxes and remaining engine work](RELEASE_0.6.md). Shared request blocking, custom hostname rules, saved site exceptions and a native protection panel join normal-flow box layout and revised Home cards. Existing HTTP APIs, sessions, reading, notes and downloads remain included. Full website compatibility is unfinished.
 
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
@@ -26,7 +26,8 @@ or silently remove that prototype's reader and local companion.
 | Area | Preview behavior |
 | --- | --- |
 | Navigation | HTTP/HTTPS address entry, relative links, bounded redirects, Back, Forward, Home |
-| Layout | Text, headings, paragraphs, lists, basic table text, preformatted lines, Unicode, word wrapping |
+| Layout | Normal-flow boxes, width/min/max sizing, margin/padding, solid borders, flat backgrounds, radius, alignment; text, headings, lists, preformatted lines and word wrapping |
+| Site protection | Shared offline hostname blocking, custom rules, saved origin exceptions and actual session activity; no full filter-list/cosmetic support |
 | Typography | Bold, italic, inherited size/color; inline `font-size` in px, six-digit hex `color`, bold/italic declarations |
 | Images | Bounded same-origin PNG/JPEG/GIF decoding; alternative text on unsupported or failed resources |
 | Desktop UI | Dark workspace and sidebar, integrated reader/notes, real tab parking, lazy restoration, phrase find and background link tabs; up to 20 tabs and 30 persisted bookmarks |
@@ -36,7 +37,7 @@ or silently remove that prototype's reader and local companion.
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
 | Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS; page play/pause/volume/mute/events and file seeking. HLS seeking is disabled. JavaFX Media without JavaFX WebView |
-| Not implemented | Modern HTML recovery, full DOM/CSS/box layout, complex selectors, advanced forms, full cookie/site/storage semantics, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
+| Not implemented | Modern HTML recovery, full DOM/CSS/Flex/Grid, complete selectors, advanced forms, full cookie/site/storage semantics, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
@@ -55,8 +56,8 @@ Windows/Linux controls:
   tab; closing the final tab opens a fresh home page.
 - A compact new-tab button immediately after the tabs, a horizontally scrollable
   tab strip for many tabs, rounded toolbar controls and a 2-by-2 tools menu.
-- A native, flat home dashboard with six shortcuts, readable typography and a
-  110 px open-tab capacity ring. Counts reflect this application session; they do
+- A native home dashboard with reading, bookmarks, protection and playground cards,
+  vector navigation controls and real live/parked/bookmark counts. These counts do
   not claim CPU/memory measurements or streaming readiness.
 - `aster:bookmarks` with saved links and explicit clearing; `aster:history` with
   the last 200 successful visits from this session; `aster:settings` with persisted

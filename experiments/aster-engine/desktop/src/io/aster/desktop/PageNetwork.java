@@ -65,7 +65,8 @@ final class PageNetwork implements AutoCloseable {
                     URI uri=target(page,string(command,"url"),true);SocketPeer peer=new SocketPeer(id);sockets.put(id,peer);
                     WebSocket.Builder builder=CLIENT.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(8)).header("Origin",origin(page));
                     URI http=URI.create((uri.getScheme().equalsIgnoreCase("wss")?"https":"http")+uri.toString().substring(uri.getScheme().length()));
-                    String cookie=siteData.request(page,false,"GET").header(http);if(!cookie.isEmpty())builder.header("Cookie",cookie);
+                    SiteData.Request context=siteData.request(page,false,"GET");context.check(http);
+                    String cookie=context.header(http);if(!cookie.isEmpty())builder.header("Cookie",cookie);
                     Object protocols=command.get("protocols");
                     if(!(protocols instanceof List)||((List<?>)protocols).size()>16)throw new IOException("Invalid WebSocket protocols");
                     List<?> list=(List<?>)protocols;String[] rest=new String[Math.max(0,list.size()-1)];
@@ -109,7 +110,7 @@ final class PageNetwork implements AutoCloseable {
                 if(headers.put(name,value)!=null)throw new IOException("Duplicate network header name");
             }
             for(int redirects=0;redirects<=5;redirects++){
-                uri=target(page,uri.toString(),false);
+                uri=target(page,uri.toString(),false);context.check(uri);
                 tainted|=!ResourceLoader.sameOrigin(page,uri);
                 if(tainted&&mode.equals("same-origin"))throw new IOException("Request mode requires the page origin");
                 if(t.cancelled)return;
@@ -126,6 +127,7 @@ final class PageNetwork implements AutoCloseable {
                     }
                 }
                 if(t.cancelled)return;
+                context.check(uri); // A rule may have changed while preflight was in flight.
                 HttpRequest.Builder builder=builder(uri);
                 // Third-party cookie access remains disabled, including redirect chains returning home.
                 boolean cookies=!credentials.equals("omit")&&!tainted;
@@ -177,7 +179,7 @@ final class PageNetwork implements AutoCloseable {
         }catch(Exception e){t.event(Map.of("id",t.id,"kind","fetch-error","error",safe(e)));}
         finally{synchronized(this){fetches.remove(t.id,t);}if(t.deadline!=null)t.deadline.cancel(false);}
     }
-    private static HttpRequest.Builder builder(URI uri){return HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).header("User-Agent","AsterEnginePreview/0.5").header("Accept-Encoding","gzip, deflate");}
+    private static HttpRequest.Builder builder(URI uri){return HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).header("User-Agent","AsterEnginePreview/0.6").header("Accept-Encoding","gzip, deflate");}
     private HttpResponse<InputStream> send(Transfer t,HttpRequest request)throws IOException,InterruptedException{
         if(t.cancelled)throw new InterruptedIOException("Fetch cancelled");
         HttpResponse<InputStream> response=CLIENT.send(request,HttpResponse.BodyHandlers.ofInputStream());

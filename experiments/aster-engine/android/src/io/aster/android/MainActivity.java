@@ -91,14 +91,26 @@ public final class MainActivity extends Activity {
     private TextView homeText(String text,int size,int color){TextView view=new TextView(this);view.setText(text);view.setTextSize(size);view.setTextColor(color);view.setPadding(0,dp(8),0,dp(12));return view;}
     private ScrollView buildHome(){ScrollView holder=new ScrollView(this);holder.setFillViewport(true);holder.setBackgroundColor(PAPER);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(24),dp(20),dp(24),dp(24));
         body.addView(homeText("✦  A S T E R",16,ACCENT));body.addView(homeText("Your space to explore.",28,INK));body.addView(homeText("Browse, read and keep your ideas together.",16,0xffa5b4c6));
-        String[] titles={"Search with DuckDuckGo","Example website","Your bookmarks","Open document","Restore saved tabs"};Runnable[] actions={()->load(URI.create("https://html.duckduckgo.com/html/"),-1),()->load(URI.create("https://example.com"),-1),this::openBookmarks,this::openDocument,this::restoreTabs};
-        for(int i=0;i<titles.length;i++){Button b=control(titles[i],titles[i],actions[i]);b.setBackground(round(0xff1b2633));LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(52));params.bottomMargin=dp(10);body.addView(b,params);}
-        body.addView(homeText("Independent engine · 0.5 preview",15,ACCENT));body.addView(homeText("Simple pages and reading are ready to try. Netflix, Prime Video and cloud gaming remain unsupported. Streaming support in the menu explains the remaining work.",15,0xffa5b4c6));holder.addView(body);return holder;}
+        body.addView(homeCard("READ & KEEP","Open a document","Word, text and Markdown in your reading space.",this::openDocument));
+        body.addView(homeCard("PICK UP HERE","Your bookmarks","Return to the pages you have chosen to keep.",this::openBookmarks));
+        body.addView(homeCard("LESS NOISE","Site protection","See blocked hosts and choose your own rules.",this::protection));
+        LinearLayout shortcuts=new LinearLayout(this);
+        shortcuts.addView(control("Search","Search with DuckDuckGo",()->load(URI.create("https://html.duckduckgo.com/html/"),-1)),new LinearLayout.LayoutParams(0,dp(52),1));
+        shortcuts.addView(control("Restore tabs","Restore saved tabs",this::restoreTabs),new LinearLayout.LayoutParams(0,dp(52),1));body.addView(shortcuts);
+        body.addView(homeText("Independent engine · 0.6 preview",15,ACCENT));body.addView(homeText("Protected streaming and cloud gaming remain unfinished. Streaming support in the menu explains the current limits.",15,0xffa5b4c6));holder.addView(body);return holder;}
+    private View homeCard(String category,String title,String description,Runnable action){
+        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setBackground(round(0xff1b2633));card.setPadding(dp(18),dp(12),dp(18),dp(12));
+        LinearLayout.LayoutParams bounds=new LinearLayout.LayoutParams(-1,-2);bounds.bottomMargin=dp(12);card.setLayoutParams(bounds);
+        TextView label=homeText(category,11,ACCENT);label.setTypeface(null,Typeface.BOLD);label.setPadding(0,0,0,dp(5));card.addView(label);
+        TextView heading=homeText(title,20,INK);heading.setTypeface(null,Typeface.BOLD);heading.setPadding(0,0,0,dp(6));card.addView(heading);
+        TextView detail=homeText(description,14,0xffa5b4c6);detail.setPadding(0,0,0,0);card.addView(detail);card.setClickable(true);card.setFocusable(true);card.setContentDescription(title+". "+description);card.setOnClickListener(v->action.run());return card;
+    }
     private void updateNavigation(){navBack.setEnabled(index>0);navForward.setEnabled(index+1<history.size());tabButton.setText("Tabs · "+tabs.size());tabButton.setContentDescription("Show tabs");}
     private void openDocument(){Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("*/*");startActivityForResult(intent,41);}
     private void stopLoading(){if(pending==null)return;generation++;pending.cancel(true);pending=null;if(images!=null)images.cancel(true);say("Navigation stopped.");}
     private void menu(View anchor) {
         PopupMenu menu = new PopupMenu(this, anchor);
+        menu.getMenu().add("Site protection").setOnMenuItemClickListener(item->{protection();return true;});
         menu.getMenu().add("Back").setEnabled(index > 0).setOnMenuItemClickListener(item -> { move(-1); return true; });
         menu.getMenu().add("Forward").setEnabled(index + 1 < history.size()).setOnMenuItemClickListener(item -> { move(1); return true; });
         menu.getMenu().add("Reload").setOnMenuItemClickListener(item->{if(document!=null)load(document.uri,index);return true;});
@@ -115,10 +127,27 @@ public final class MainActivity extends Activity {
         });
         menu.getMenu().add("Clear website data").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setTitle("Clear website data").setMessage("Sign out of websites and clear their cookies? Bookmarks and reader notes stay saved.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{stopLoading();if(download!=null)download.cancel(true);siteData.clear();try{siteData.flush();}catch(Exception e){android.util.Log.w("AsterSiteData","Website data clear failed",e);new AlertDialog.Builder(this).setTitle("Website data").setMessage("Website data was cleared in memory, but the saved file could not be updated.").setPositiveButton("OK",null).show();}load(PageLoader.HOME,-1);}).show();return true;});
         menu.getMenu().add("About this preview").setOnMenuItemClickListener(item -> {
-            new AlertDialog.Builder(this).setTitle("Aster 0.5 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
+            new AlertDialog.Builder(this).setTitle("Aster 0.6 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
         }); menu.show();
     }
     private void move(int delta) { int next = index + delta; if (next >= 0 && next < history.size()) load(history.get(next), next); }
+    private void protection(){
+        URI uri=document==null?PageLoader.HOME:document.uri;Protection protection=siteData.protection;
+        ScrollView holder=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(20),dp(8),dp(20),dp(12));holder.addView(body);
+        TextView intro=new TextView(this);intro.setText("Offline ad/tracker blocking · "+protection.starterCount()+" starter hostnames. Direct navigation and downloads remain available.");intro.setTextSize(15);body.addView(intro);
+        CheckBox enabled=new CheckBox(this);enabled.setText("Block ads and trackers");enabled.setChecked(protection.enabled());body.addView(enabled);
+        CheckBox exception=new CheckBox(this);exception.setText("Allow requests on this site");exception.setChecked(protection.allowed(uri));exception.setEnabled(!SiteData.origin(uri).isEmpty());body.addView(exception);
+        TextView scope=new TextView(this);scope.setText(SiteData.origin(uri).isEmpty()?"Open a website to make a site exception.":SiteData.origin(uri));body.addView(scope);
+        TextView result=new TextView(this);result.setText("Changes apply to new requests. Reload to retry a page's resources.");result.setPadding(0,dp(12),0,dp(12));
+        Runnable persist=()->{try{protection.flush();result.setText("Protection settings saved. Reload to retry the page.");}catch(Exception e){result.setText("Changes are active but could not be saved to this profile.");}};
+        enabled.setOnCheckedChangeListener((v,on)->{protection.enabled(on);persist.run();});exception.setOnCheckedChangeListener((v,on)->{try{protection.allow(uri,on);persist.run();}catch(IllegalArgumentException e){result.setText(e.getMessage());}});
+        Protection.Snapshot snapshot=protection.snapshot(uri);StringBuilder summary=new StringBuilder("\n"+snapshot.blocked+" requests blocked for this origin this session.\n");snapshot.hosts.forEach((host,count)->summary.append(count).append("  ").append(host).append('\n'));
+        TextView activity=new TextView(this);activity.setText(summary.toString());activity.setTextSize(14);body.addView(activity);
+        TextView label=new TextView(this);label.setText("Your blocked hostnames · one per line");body.addView(label);
+        EditText rules=new EditText(this);rules.setMinLines(3);rules.setMaxLines(5);rules.setTextSize(14);rules.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);rules.setText(protection.custom());rules.setContentDescription("Custom blocked hostnames");body.addView(rules);
+        Button save=new Button(this);save.setText("Save hostname rules");save.setAllCaps(false);save.setOnClickListener(v->{try{protection.custom(rules.getText().toString());persist.run();rules.setText(protection.custom());}catch(IllegalArgumentException e){result.setText(e.getMessage());}});body.addView(save);body.addView(result);
+        new AlertDialog.Builder(this).setTitle("Site protection").setView(holder).setPositiveButton("Done",null).setNeutralButton("Reload",(d,w)->{if(document!=null&&!uri.equals(PageLoader.HOME))load(uri,index);}).show();
+    }
     private void load(URI uri, int historyIndex) {
         load(uri,historyIndex,null);
     }
@@ -187,7 +216,7 @@ public final class MainActivity extends Activity {
     private void saveDownload(URI source,android.net.Uri destination){
         download=transfers.submit(()->{File staged=null;boolean complete=false;
             try{staged=File.createTempFile("aster-download-",".part",getCacheDir());
-                try(OutputStream output=new FileOutputStream(staged)){FileTransfer.save(source,output,(received,total)->runOnUiThread(()->{if(!isDestroyed())say("Downloading · "+(received/1024)+" KiB"+(total>0?" / "+(total/1024)+" KiB":""));}),siteData.request(source,false,"GET"));}
+                try(OutputStream output=new FileOutputStream(staged)){FileTransfer.save(source,output,(received,total)->runOnUiThread(()->{if(!isDestroyed())say("Downloading · "+(received/1024)+" KiB"+(total>0?" / "+(total/1024)+" KiB":""));}),siteData.request(source,false,"GET").explicitDownload());}
                 if(Thread.currentThread().isInterrupted())throw new IOException("Download cancelled.");
                 try(InputStream input=new FileInputStream(staged);OutputStream output=getContentResolver().openOutputStream(destination,"w")){
                     if(output==null)throw new IOException("Destination is unavailable.");byte[] buffer=new byte[32768];int n;
@@ -244,6 +273,13 @@ public final class MainActivity extends Activity {
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas); if (layout == null) return;
             canvas.save(); canvas.scale(scale, scale); Rect clip = canvas.getClipBounds();
+            for(Engine.Rect box:layout.boxes){
+                if(box.y+box.height<clip.top||box.y>clip.bottom)continue;
+                paint.setStyle(Paint.Style.FILL);
+                if(box.background!=0){paint.setColor(box.background);canvas.drawRoundRect(box.x,box.y,box.x+box.width,box.y+box.height,box.radius,box.radius,paint);}
+                if(box.border>0){float half=box.border/2;paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(box.border);paint.setColor(box.borderColor);canvas.drawRoundRect(box.x+half,box.y+half,box.x+box.width-half,box.y+box.height-half,box.radius,box.radius,paint);}
+            }
+            paint.setStyle(Paint.Style.FILL);paint.setStrokeWidth(1);
             for (int i=layout.firstVisible(clip.top);i<layout.items.size();i++) {Engine.Draw draw=layout.items.get(i);if(draw.y>clip.bottom)break;
                 if (draw.y + draw.height < clip.top || draw.y > clip.bottom) continue;
                 if(draw.image!=null){Bitmap bitmap=bitmaps.get(draw.image);if(bitmap!=null){float fit=Math.min(draw.width/bitmap.getWidth(),draw.height/bitmap.getHeight());canvas.drawBitmap(bitmap,null,new RectF(draw.x,draw.y,draw.x+bitmap.getWidth()*fit,draw.y+bitmap.getHeight()*fit),paint);continue;}

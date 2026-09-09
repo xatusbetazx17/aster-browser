@@ -23,7 +23,7 @@ final class DownloadManager implements AutoCloseable {
         volatile String error = "";
         private volatile boolean cancelled;
         private long lastNotice;
-        Transfer(URI source, Path target) { this.source = source; this.target = target;this.context=siteData.request(source,false,"GET"); }
+        Transfer(URI source, Path target) { this.source = source; this.target = target;this.context=siteData.request(source,false,"GET").explicitDownload(); }
         boolean finished() { return state == State.COMPLETE || state == State.CANCELLED || state == State.FAILED; }
         synchronized void cancel() {
             if (finished()) return;
@@ -89,7 +89,7 @@ final class DownloadManager implements AutoCloseable {
                 transfer.check(deadline);
                 HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
                 connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(10000);
-                connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.5");
+                connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.6");
                 connection.setRequestProperty("Accept", "*/*"); connection.setRequestProperty("Accept-Encoding", "identity");
                 transfer.context.prepare(connection);
                 try {

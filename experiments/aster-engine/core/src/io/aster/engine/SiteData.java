@@ -22,8 +22,9 @@ public final class SiteData {
     private final Path file;
     private long epoch;
     private boolean dirty;
-    public SiteData(){file=null;}
-    public SiteData(Path file)throws IOException{this.file=file.toAbsolutePath();read();}
+    public final Protection protection;
+    public SiteData(){file=null;protection=new Protection();}
+    public SiteData(Path file)throws IOException{this.file=file.toAbsolutePath();read();protection=new Protection(this.file.resolveSibling("protection.bin"));}
     public static String origin(URI uri){
         if(uri==null)return "";
         try{PageLoader.validate(uri);}catch(IllegalArgumentException e){return "";}
@@ -34,7 +35,7 @@ public final class SiteData {
     public synchronized Request request(URI initiator,boolean topLevel,String method){return new Request(origin(initiator),topLevel,method,epoch);}
     public final class Request {
         private final String initiator;private final boolean topLevel;private final long generation;
-        private String method,firstTarget;private boolean crossed;
+        private String method,firstTarget;private boolean crossed,explicitDownload;
         private Request(String initiator,boolean topLevel,String method,long generation){this.initiator=initiator;this.topLevel=topLevel;this.method=method;this.generation=generation;}
         public void method(String value){method=value;}
         public String header(URI target){synchronized(SiteData.this){
@@ -43,7 +44,9 @@ public final class SiteData {
             boolean same=!crossed&&(initiator.isEmpty()||to.equals(initiator));
             return select(target,false,same,topLevel&&(method.equals("GET")||method.equals("HEAD")));
         }}
-        public void prepare(HttpURLConnection connection){String value=header(URI.create(connection.getURL().toString()));if(!value.isEmpty())connection.setRequestProperty("Cookie",value);}
+        public Request explicitDownload(){explicitDownload=true;return this;}
+        public void check(URI target)throws IOException{if(!topLevel&&!explicitDownload)protection.check(initiator.isEmpty()?null:URI.create(initiator),target);}
+        public void prepare(HttpURLConnection connection)throws IOException{URI target=URI.create(connection.getURL().toString());check(target);String value=header(target);if(!value.isEmpty())connection.setRequestProperty("Cookie",value);}
         public void receive(HttpURLConnection connection){
             URI uri=URI.create(connection.getURL().toString());List<String> fields=new ArrayList<>();
             for(int i=1;i<=256;i++){String name=connection.getHeaderFieldKey(i),value=connection.getHeaderField(i);if(name==null&&value==null)break;if("set-cookie".equalsIgnoreCase(name)&&value!=null)fields.add(value);}
@@ -137,10 +140,11 @@ public final class SiteData {
     public synchronized Object storage(Storage session,boolean persistent,URI uri,String operation,String key,String value){
         Object result=(persistent?local:session).access(uri,operation,key,value);if(persistent&&!operation.equals("get")&&!operation.equals("keys"))dirty=true;return result;
     }
-    public synchronized void clear(){epoch++;cookies.clear();local.clear();dirty=true;}
+    public synchronized void clear(){epoch++;cookies.clear();local.clear();protection.clearActivity();dirty=true;}
     public synchronized int cookieCount(){expire();return cookies.size();}
     /** Session cookies stay in memory; only explicitly expiring cookies go to disk. */
     public synchronized void flush()throws IOException{
+        protection.flush();
         if(file==null||!dirty)return;expire();Path directory=file.getParent();Files.createDirectories(directory);
         // Query the path attribute view directly: Android app sandboxes can deny
         // the mount-table access needed by getFileStore(), even for owned files.

@@ -111,6 +111,7 @@ public final class PreviewMain {
         address.addActionListener(e -> { try { load(current(), target(address.getText()), -1); } catch (IllegalArgumentException ex) { message(ex.getMessage()); } });
         toolbar.add(address, BorderLayout.CENTER);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0)); actions.setOpaque(false);
+        actions.add(button("Protect","Site protection and blocked requests",this::protection));
         actions.add(button("☆", "Bookmark this page (Ctrl+D)", this::saveBookmark));
         actions.add(button("Menu", "Aster menu", this::menu)); toolbar.add(actions, BorderLayout.EAST);
         header.add(toolbar, BorderLayout.CENTER);
@@ -149,6 +150,7 @@ public final class PreviewMain {
     }
     private JButton button(String label, String name, Runnable action) {
         JButton b = new RoundButton(label); b.setToolTipText(name); b.getAccessibleContext().setAccessibleName(name);
+        if(Arrays.asList("←","→","⌂","↻","☆").contains(label)){b.setText("");b.setIcon(new ToolbarIcon(label));}
         b.addActionListener(e -> action.run()); return b;
     }
     private void bind(String stroke, Runnable action) {
@@ -552,7 +554,7 @@ public final class PreviewMain {
     private void sync() {
         Tab tab = current(); if(tab == null) return;
         if(!address.hasFocus())address.setText(tab.location.toString());
-        reloadButton.setText(tab.pending==null?"↻":"×");reloadButton.getAccessibleContext().setAccessibleName(tab.pending==null?"Reload (Ctrl+R)":"Stop loading (Escape)");
+        reloadButton.setIcon(new ToolbarIcon(tab.pending==null?"↻":"×"));reloadButton.getAccessibleContext().setAccessibleName(tab.pending==null?"Reload (Ctrl+R)":"Stop loading (Escape)");
         int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;tabCount.setText((tabs.getTabCount()-parked)+" live");tabCount.setToolTipText(parked+" parked · "+tabs.getTabCount()+" total tabs");
         message(tab.message); back.setEnabled(tab.index>0); forward.setEnabled(tab.index+1<tab.history.size());
         for(Component c:strip.getComponents()) if(c instanceof TabChip) ((TabChip)c).update();
@@ -571,6 +573,12 @@ public final class PreviewMain {
         String[] labels={"Read page","Open document","Restore session","Reopen tab","Site support"};Runnable[] commands={this::readPage,this::openDocument,this::restoreSession,this::reopenTab,()->load(current(),URI.create("aster:compatibility"),-1)};
         for(int i=0;i<labels.length;i++){Runnable command=commands[i];JButton b=button(labels[i],labels[i],()->{popup.setVisible(false);command.run();});b.setPreferredSize(new Dimension(112,76));grid.add(b);}
         WorkspaceTheme.apply(grid);popup.add(grid); popup.show(surface,Math.max(0,surface.getWidth()-260),88);
+    }
+    private void protection(){
+        Tab tab=current();URI uri=tab==null?PageLoader.HOME:tab.location;
+        ProtectionView view=new ProtectionView(siteData.protection,uri,()->{try{siteData.protection.flush();}catch(Exception error){message("Protection changes are active but could not be saved to this profile.");}});
+        int choice=JOptionPane.showOptionDialog(surface,view,"Aster · Site protection",JOptionPane.DEFAULT_OPTION,JOptionPane.PLAIN_MESSAGE,null,new String[]{"Done","Reload page"},"Done");
+        if(choice==1&&current()==tab&&internal(uri)==null)reload();
     }
     private static String capitalize(String s) { return s.substring(0,1).toUpperCase(Locale.ROOT)+s.substring(1); }
     private static final class WrapPanel extends JPanel {
@@ -595,16 +603,18 @@ public final class PreviewMain {
     private JPanel internalPage(Tab tab,String page) {
         JPanel panel=body(page.equals("home") ? "Your space to explore." : capitalize(page), page.equals("home") ? "Browse, read and keep your ideas together." : "Aster tools · on this computer");
         if(page.equals("home")) {
-            JPanel links=new JPanel(new GridLayout(3,2,10,10)); links.setOpaque(false); links.setAlignmentX(Component.LEFT_ALIGNMENT); links.setMaximumSize(new Dimension(Integer.MAX_VALUE,180));links.setPreferredSize(new Dimension(560,180));
-            String[][] targets={{"DuckDuckGo search","https://html.duckduckgo.com/html/"},{"Example website","https://example.com"},{"Your bookmarks","aster:bookmarks"},{"Recent pages","aster:history"},{"Try the playground","aster:playground"},{"Website compatibility","aster:compatibility"}};
-            for(String[] item:targets) links.add(button(item[0],item[0],()->load(tab,target(item[1]),-1))); panel.add(links); panel.add(Box.createVerticalStrut(24));
-            JPanel reading=new JPanel(new FlowLayout(FlowLayout.LEFT));reading.setOpaque(false);reading.setAlignmentX(Component.LEFT_ALIGNMENT);reading.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
-            reading.add(button("Open document","Open Word, text or Markdown",this::openDocument));reading.add(button("Restore tabs","Restore saved tabs and reading positions",this::restoreSession));panel.add(reading);
-            JPanel awareness=new JPanel(new FlowLayout(FlowLayout.LEFT,16,0)); awareness.setOpaque(false); awareness.setAlignmentX(Component.LEFT_ALIGNMENT); awareness.setMaximumSize(new Dimension(Integer.MAX_VALUE,120));
-            final int count=tabs.getTabCount(); JComponent ring=new JComponent() { protected void paintComponent(Graphics graphics) { Graphics2D g=(Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g.setStroke(new BasicStroke(8)); g.setColor(WorkspaceTheme.LINE); g.drawOval(8,8,94,94); g.setColor(ACCENT); g.drawArc(8,8,94,94,90,-Math.round(360f*count/20)); g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,20)); String value=count+" / 20"; g.drawString(value,(110-g.getFontMetrics().stringWidth(value))/2,61); g.dispose(); } };
+            JPanel cards=new JPanel(new GridLayout(2,2,12,12));cards.setOpaque(false);cards.setAlignmentX(Component.LEFT_ALIGNMENT);cards.setMaximumSize(new Dimension(1000,276));cards.setPreferredSize(new Dimension(560,276));
+            cards.add(new WorkspaceCard("READ & KEEP","Open a document","Bring Word, text and Markdown into your reading space.",this::openDocument));
+            cards.add(new WorkspaceCard("PICK UP HERE","Your bookmarks","Return to the pages you have chosen to keep.",()->load(tab,URI.create("aster:bookmarks"),-1)));
+            cards.add(new WorkspaceCard("LESS NOISE","Site protection","Control blocked requests and make exceptions for a site.",this::protection));
+            cards.add(new WorkspaceCard("TRY SOMETHING","The playground","Explore supported scripting, media and controller tools.",()->load(tab,URI.create("aster:playground"),-1)));
+            panel.add(cards);panel.add(Box.createVerticalStrut(20));
+            JPanel shortcuts=new WrapPanel();shortcuts.setOpaque(false);shortcuts.setAlignmentX(Component.LEFT_ALIGNMENT);shortcuts.setMaximumSize(new Dimension(Integer.MAX_VALUE,96));
+            shortcuts.add(button("Search the web","Search with DuckDuckGo",()->load(tab,URI.create("https://html.duckduckgo.com/html/"),-1)));
+            shortcuts.add(button("Restore tabs","Restore saved tabs and reading positions",this::restoreSession));shortcuts.add(button("Site support","Tested capabilities and unfinished services",()->load(tab,URI.create("aster:compatibility"),-1)));panel.add(shortcuts);panel.add(Box.createVerticalStrut(18));
             int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;
-            ring.setPreferredSize(new Dimension(110,110)); ring.setToolTipText("Open tabs: "+count+" of 20"); awareness.add(ring); awareness.add(new JLabel((count-parked)+" live · "+parked+" parked · "+bookmarkCount()+" saved")); panel.add(awareness); panel.add(Box.createVerticalStrut(22));
-            paragraph(panel,"Aster 0.5 preview · Simple websites and reading are ready to try. Netflix, Prime Video and cloud gaming still need engine work. Check Website compatibility before testing a service.");
+            paragraph(panel,(tabs.getTabCount()-parked)+" live tabs  ·  "+parked+" parked  ·  "+bookmarkCount()+" bookmarks");
+            paragraph(panel,"Independent engine · Aster 0.6 preview. Protected streaming and cloud gaming remain unfinished; Site support shows the current limits.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -626,6 +636,7 @@ public final class PreviewMain {
             for(DownloadManager.Transfer transfer : items) { DownloadRow row=new DownloadRow(transfer); tab.downloadRows.add(row); panel.add(row); panel.add(Box.createVerticalStrut(12)); }
             panel.add(button("Clear finished list","Clear finished entries; keep downloaded files",()->{ downloads.clearFinished(); tab.setViewportView(internalPage(tab,page)); }));
         } else if(page.equals("settings")) {
+            panel.add(button("Site protection","Ad and tracker blocking controls",this::protection));panel.add(Box.createVerticalStrut(16));
             paragraph(panel,"Reading size changes website text. Settings are saved without changing your bookmarks.");
             JComboBox<String> zoom = new JComboBox<String>(new String[]{"100%","125%","150%","200%"}) {
                 protected void processMouseWheelEvent(MouseWheelEvent e) { if(isPopupVisible()) super.processMouseWheelEvent(e); else { e.consume(); tab.dispatchEvent(SwingUtilities.convertMouseEvent(this,e,tab)); } }
@@ -644,7 +655,7 @@ public final class PreviewMain {
             paragraph(panel,"Netflix and Prime Video: unsupported. Aster now has basic website sessions but still needs a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
             paragraph(panel,"Cloud gaming: unsupported. WebRTC transport, real-time audio/video, complete graphics and input APIs, and service acceptance must work together. The playground only demonstrates local controller input.");
             paragraph(panel,"Check the release notes for tested platforms and known issues. An unsupported page may load incompletely, even when some text is visible.");
-            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.5.md"),-1)));
+            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.6.md"),-1)));
         }
         panel.add(Box.createVerticalGlue());WorkspaceTheme.apply(panel); return panel;
     }
@@ -713,6 +724,13 @@ public final class PreviewMain {
             super.paintComponent(graphics); ensureLayout(); if (layout == null) return;search();
             Graphics2D g = (Graphics2D) graphics.create(); g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.scale(scale, scale); Rectangle clip = g.getClipBounds();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            for(Engine.Rect box:layout.boxes){
+                if(clip!=null&&(box.y+box.height<clip.y||box.y>clip.y+clip.height))continue;
+                if(box.background!=0){g.setColor(new Color(box.background,true));g.fill(new java.awt.geom.RoundRectangle2D.Float(box.x,box.y,box.width,box.height,box.radius*2,box.radius*2));}
+                if(box.border>0){float half=box.border/2;g.setColor(new Color(box.borderColor,true));g.setStroke(new BasicStroke(box.border));g.draw(new java.awt.geom.RoundRectangle2D.Float(box.x+half,box.y+half,Math.max(0,box.width-box.border),Math.max(0,box.height-box.border),box.radius*2,box.radius*2));}
+            }
+            g.setStroke(new BasicStroke(1));
             for (int i=layout.firstVisible(clip==null?0:clip.y);i<layout.items.size();i++) {Engine.Draw draw=layout.items.get(i);
                 if(clip!=null&&draw.y>clip.y+clip.height)break;
                 if (clip != null && (draw.y + draw.height < clip.y || draw.y > clip.y + clip.height)) continue;

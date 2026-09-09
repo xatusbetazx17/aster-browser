@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 import urllib.request
+import urllib.error
+import time
 
 ROOT = Path(__file__).resolve().parent
 BUILD = ROOT / 'build'
@@ -16,8 +18,17 @@ BUILD = ROOT / 'build'
 def checked_download(url, target, digest):
     if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == digest:
         return
-    with urllib.request.urlopen(url, timeout=60) as response:
-        data = response.read(40 * 1024 * 1024 + 1)
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:
+                data = response.read(40 * 1024 * 1024 + 1)
+            break
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
+            if attempt or isinstance(error, urllib.error.HTTPError) and error.code not in {408, 429, 500, 502, 503, 504}:
+                raise
+            print(f'Transient download failure; retrying {target.name} once', flush=True)
+            time.sleep(1)
+    # A checksum mismatch is a hard failure, never retried or bypassed.
     if len(data) > 40 * 1024 * 1024 or hashlib.sha256(data).hexdigest() != digest:
         raise RuntimeError(f'Dependency checksum mismatch: {target.name}')
     target.parent.mkdir(parents=True, exist_ok=True)

@@ -9,16 +9,16 @@ import java.util.zip.GZIPInputStream;
 /** Bounded page navigation, native form POST and same-origin stylesheets. Explicit profile cookies; no external handlers. */
 public final class PageLoader {
     public static final URI HOME = URI.create("aster://welcome");
-    public static final String WELCOME = "<html><head><title>Aster · Engine preview</title></head><body>"
+    public static final String WELCOME = "<html><head><title>Aster · Engine preview</title><style>main{max-width:680px;margin:0 auto;padding:24px;background:#edf7f3;border:1px solid #c2dcd3;border-radius:18px}h1{color:#133e35}main p{color:#40594f}</style></head><body><main>"
         + "<p style='color:#247878;font-weight:bold'>A S T E R</p><h1>Your space to explore.</h1>"
         + "<p>Search, read and keep useful things together.</p>"
         + "<h2>Start exploring</h2><p>Search above, enter a website address or try "
         + "<a href='https://example.com'>Example Domain</a>. Simple pages, images and basic forms work here.</p>"
         + "<h2>Read your way</h2><p>Open the menu to read a page, find text, keep notes or "
         + "open a Word or text document. Read aloud uses an installed English or Spanish voice.</p>"
-        + "<h2>Still growing</h2><p>Aster 0.4 is an independent browser preview. Full web apps, "
+        + "<h2>Still growing</h2><p>Aster 0.6 is an independent browser preview. Full web apps, "
         + "account sign-in, PDF, cloud gaming and protected streaming remain unfinished.</p>"
-        + "<p><b>Tip:</b> use Tabs and bookmarks in the menu to keep exploring.</p></body></html>";
+        + "<p><b>Tip:</b> use Tabs and bookmarks in the menu to keep exploring.</p></main></body></html>";
 
     public static URI address(String input) {
         String text = input.trim();
@@ -86,7 +86,7 @@ public final class PageLoader {
             if (Thread.currentThread().isInterrupted() || System.nanoTime() > deadline) throw new IOException("Page request cancelled or timed out.");
             HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
             connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
-            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.5");
+            connection.setRequestProperty("User-Agent", "AsterEnginePreview/0.6");
             connection.setRequestProperty("Accept", "text/html,text/plain;q=0.9");
             connection.setRequestProperty("Accept-Encoding", "gzip");
             request.method(formBody==null?"GET":"POST");request.prepare(connection);

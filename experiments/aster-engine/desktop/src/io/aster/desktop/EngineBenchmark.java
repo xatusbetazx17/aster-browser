@@ -30,7 +30,8 @@ final class EngineBenchmark {
         output.put("layout_uncached",stats(values[0]));output.put("layout_cached",stats(values[1]));
     }
     static void verifySame(Engine.Layout a,Engine.Layout b){
-        if(a.height!=b.height||a.items.size()!=b.items.size())throw new AssertionError("Cached layout changed geometry");
+        if(a.height!=b.height||a.items.size()!=b.items.size()||a.boxes.size()!=b.boxes.size())throw new AssertionError("Cached layout changed geometry");
+        for(int i=0;i<a.boxes.size();i++){Engine.Rect x=a.boxes.get(i),y=b.boxes.get(i);if(x.x!=y.x||x.y!=y.y||x.width!=y.width||x.height!=y.height||x.border!=y.border||x.radius!=y.radius||x.background!=y.background||x.borderColor!=y.borderColor)throw new AssertionError("Cached layout changed a box");}
         for(int i=0;i<a.items.size();i++){Engine.Draw x=a.items.get(i),y=b.items.get(i);if(!x.text.equals(y.text)||x.x!=y.x||x.y!=y.y||x.width!=y.width||x.height!=y.height||x.action!=y.action||!Objects.equals(x.link,y.link)||!Objects.equals(x.image,y.image))throw new AssertionError("Cached layout changed a draw");}
     }
     static void run(Path output)throws Exception{

@@ -26,6 +26,7 @@ public final class Engine {
         public final int action;
         public final boolean newline;
         public URI image;
+        boolean hardBreak;
         public float imageWidth = 240, imageHeight = 160;
         Run(String text, Style style, URI link, int action, boolean newline) {
             this.text = text; this.style = style; this.link = link; this.action = action; this.newline = newline;
@@ -40,12 +41,13 @@ public final class Engine {
         public final List<URI> media;
         private final boolean complexText;
         public String css = "";
+        FlowBox flow;
         Document(URI uri, String title, List<Run> runs, String source, boolean scriptsBlocked, List<URI> media) {
             this.uri = uri; this.title = title; this.runs = Collections.unmodifiableList(runs);
             boolean complex=false;for(Run run:runs){if(complexText(run.text)){complex=true;break;}}this.complexText=complex;
             this.source = source; this.scriptsBlocked = scriptsBlocked; this.media = Collections.unmodifiableList(media);
         }
-        public Document blockScripts() { Document d=new Document(uri,title,runs,source,true,media);d.css=css;return d; }
+        public Document blockScripts() { Document d=new Document(uri,title,runs,source,true,media);d.css=css;d.flow=flow;return d; }
         public String text() {
             StringBuilder out = new StringBuilder();
             for (Run run : runs) out.append(run.newline ? "\n" : run.text);
@@ -55,6 +57,7 @@ public final class Engine {
     private static final class Frame {
         final String tag; final Style style; final URI link; final int action;
         boolean hidden;
+        FlowBox flow;PageStyles.Element element;
         Frame(String tag, Style style, URI link, int action) { this.tag = tag; this.style = style; this.link = link; this.action = action; }
     }
 
@@ -71,6 +74,7 @@ public final class Engine {
         List<Run> runs = new ArrayList<>();
         List<Frame> stack = new ArrayList<>();
         stack.add(new Frame("root", DEFAULT, null, -1));
+        FlowBox root=new FlowBox("root","",DEFAULT);stack.get(0).flow=root;int boxes=0;
         List<URI> media = new ArrayList<>();
         // ASCII folding keeps source offsets intact (Unicode case folding can change length).
         StringBuilder folded = new StringBuilder(source.length());
@@ -119,7 +123,8 @@ public final class Engine {
                 pos = closeEnd < 0 ? source.length() : closeEnd + 1; continue;
             }
             Map<String, String> attrs = attributes(inside.substring(nameEnd));
-            String declarations=styles.declarations(tag,attrs);
+            PageStyles.Element element=new PageStyles.Element(tag,attrs,current.element);
+            String declarations=styles.declarations(element,attrs);
             boolean hidden=current.hidden||attrs.containsKey("hidden")||PageStyles.property(declarations,"display").equals("none")||tag.equals("input")&&attrs.getOrDefault("type","").equalsIgnoreCase("hidden");
             if (!hidden&&(BLOCKS.contains(tag) || tag.equals("br")||PageStyles.property(declarations,"display").equals("block"))) newline(runs, current);
             Style style = style(tag, declarations, current.style);
@@ -130,7 +135,14 @@ public final class Engine {
             if(interactive) try { action=Integer.parseInt(attrs.getOrDefault("data-aster-action","-1")); } catch(NumberFormatException ignored) { action=-1; }
             if(tag.equals("button")) style=new Style(style.size,0xff176b59,true,style.italic,style.pre);
             Frame frame = new Frame(tag, style, link, action);
-            frame.hidden=hidden;
+            frame.hidden=hidden;frame.element=element;
+            frame.flow=current.flow;
+            if(!hidden&&(BLOCKS.contains(tag)||tag.equals("body")||PageStyles.property(declarations,"display").equals("block"))){
+                if(++boxes>=MAX_RUNS)throw new IllegalArgumentException("Page has too many layout boxes.");
+                frame.flow=new FlowBox(tag,declarations,style);current.flow.children.add(frame.flow);
+                if(PageStyles.property(declarations,"text-align").isEmpty())frame.flow.box.align=current.flow.box.align;
+            }
+            if(tag.equals("br")&&!hidden){if(++boxes>=MAX_RUNS)throw new IllegalArgumentException("Page has too many layout breaks.");Run br=new Run("",style,null,-1,true);br.hardBreak=true;current.flow.children.add(br);}
             if((tag.equals("video") || tag.equals("audio") || tag.equals("source")) && media.size()<4) {
                 URI resource=PageLoader.link(uri,attrs.get("src")); if(resource!=null && !media.contains(resource))media.add(resource);
             }
@@ -146,7 +158,7 @@ public final class Engine {
             }
         }
         if (title.length() > 160) title = title.substring(0, 160);
-        Document document=new Document(uri, title.isEmpty() ? "Untitled page" : title, runs, source, false, media);document.css=css;return document;
+        Document document=new Document(uri, title.isEmpty() ? "Untitled page" : title, runs, source, false, media);document.css=css;document.flow=root;return document;
     }
     static int rawClose(String lower, String tag, int from) {
         int p = from;
@@ -216,7 +228,7 @@ public final class Engine {
         if (text.isEmpty()||frame.hidden) return;
         if (!frame.style.pre) text = text.replaceAll("[\\t\\n\\r\\f ]+", " ");
         if (runs.size() >= MAX_RUNS) throw new IllegalArgumentException("Page has too many text runs.");
-        runs.add(new Run(text, frame.style, frame.link, frame.action, false));
+        Run run=new Run(text, frame.style, frame.link, frame.action, false);runs.add(run);frame.flow.children.add(run);
     }
     private static void newline(List<Run> runs, Frame frame) {
         if(frame.hidden)return;
@@ -279,7 +291,7 @@ public final class Engine {
     public static final class Draw {
         public final String text; public final Style style; public final URI link;
         public final int action;
-        public final float x, y, width; public float height;
+        public float x;public final float y, width; public float height;
         public URI image;
         Draw(String text, Style style, URI link, int action, float x, float y, float width) {
             this.text = text; this.style = style; this.link = link; this.x = x; this.y = y;
@@ -287,10 +299,17 @@ public final class Engine {
             this.action = action;
         }
     }
+    public static final class Rect {
+        public final float x,y,width,border,radius;public float height;
+        public final int background,borderColor;
+        Rect(float x,float y,float width,float height,int background,int borderColor,float border,float radius){this.x=x;this.y=y;this.width=width;this.height=height;this.background=background;this.borderColor=borderColor;this.border=border;this.radius=radius;}
+    }
     public static final class Layout {
         public final List<Draw> items; public final float height;
+        public final List<Rect> boxes;
         private final float maximumHeight;
-        Layout(List<Draw> items, float height) { this.items = Collections.unmodifiableList(items); this.height = height;float max=0;for(Draw d:items)max=Math.max(max,d.height);maximumHeight=max; }
+        Layout(List<Draw> items, float height) {this(items,height,Collections.emptyList());}
+        Layout(List<Draw> items,float height,List<Rect> boxes) {this.boxes=Collections.unmodifiableList(boxes);this.items = Collections.unmodifiableList(items); this.height = height;float max=0;for(Draw d:items)max=Math.max(max,d.height);maximumHeight=max; }
         public int firstVisible(float y){int lo=0,hi=items.size();float top=y-maximumHeight;while(lo<hi){int mid=(lo+hi)>>>1;if(items.get(mid).y<top)lo=mid+1;else hi=mid;}return lo;}
         public URI hit(float x, float y) {
             for(int i=firstVisible(y);i<items.size();i++){Draw d=items.get(i);if(d.y>y)break;if (d.link != null && x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height) return d.link;}
@@ -304,6 +323,7 @@ public final class Engine {
     /** The uncached path is retained for geometry verification and measured baselines. */
     public static Layout layout(Document doc,float viewportWidth,Measure measure,boolean cacheWidths) {
         if(cacheWidths&&doc.complexText)measure=new WidthCache(measure);
+        if(doc.flow!=null)return FlowBox.layout(doc.flow,viewportWidth,measure);
         float right = Math.max(100, Math.min(10_000, viewportWidth)) - 24, x = 24, y = 24, line = 25;
         List<Draw> items = new ArrayList<>();
         boolean pendingSpace = false;
