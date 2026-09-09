@@ -22,8 +22,11 @@ final class ReadingTools {
         TextView body=new TextView(activity);body.setText(text);body.setTextSize(18);body.setTextIsSelectable(true);body.setPadding(12,12,12,12);
         ScrollView scroll=new ScrollView(activity);scroll.addView(body);content.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         search.setOnEditorActionListener((v,a,e)->{String q=search.getText().toString();if(q.isEmpty())return true;
-            android.text.SpannableString highlighted=new android.text.SpannableString(text);String lower=text.toLowerCase(Locale.ROOT),needle=q.toLowerCase(Locale.ROOT);int at=0,first=-1,count=0;
-            while((at=lower.indexOf(needle,at))>=0&&count++<1000){if(first<0)first=at;highlighted.setSpan(new android.text.style.BackgroundColorSpan(0xffffe38a),at,Math.min(text.length(),at+q.length()),0);at+=Math.max(1,q.length());}
+            android.text.SpannableString highlighted=new android.text.SpannableString(text);int first=-1,count=0;
+            java.util.regex.Matcher matches=java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q),java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE).matcher(text);
+            while(matches.find()&&count++<1000){int at=matches.start(),end=matches.end();if(first<0)first=at;
+                highlighted.setSpan(new android.text.style.BackgroundColorSpan(0xffffe38a),at,end,0);
+                highlighted.setSpan(new android.text.style.ForegroundColorSpan(0xff173d38),at,end,0);}
             body.setText(highlighted);if(first>=0&&body.getLayout()!=null){int line=body.getLayout().getLineForOffset(first);scroll.smoothScrollTo(0,body.getLayout().getLineTop(line));}
             return true;});
         String key="note-"+java.util.UUID.nameUUIDFromBytes(identity.getBytes(java.nio.charset.StandardCharsets.UTF_8));
