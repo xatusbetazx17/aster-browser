@@ -5,6 +5,7 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -141,10 +142,14 @@ public final class SiteData {
     /** Session cookies stay in memory; only explicitly expiring cookies go to disk. */
     public synchronized void flush()throws IOException{
         if(file==null||!dirty)return;expire();Path directory=file.getParent();Files.createDirectories(directory);
-        if(Files.getFileStore(directory).supportsFileAttributeView("posix"))Files.setPosixFilePermissions(directory,PosixFilePermissions.fromString("rwx------"));
+        // Query the path attribute view directly: Android app sandboxes can deny
+        // the mount-table access needed by getFileStore(), even for owned files.
+        PosixFileAttributeView directoryView=Files.getFileAttributeView(directory,PosixFileAttributeView.class);
+        if(directoryView!=null)directoryView.setPermissions(PosixFilePermissions.fromString("rwx------"));
         Path temp=Files.createTempFile(directory,"site-data-",".tmp");
         try{
-            if(Files.getFileStore(temp).supportsFileAttributeView("posix"))Files.setPosixFilePermissions(temp,PosixFilePermissions.fromString("rw-------"));
+            PosixFileAttributeView tempView=Files.getFileAttributeView(temp,PosixFileAttributeView.class);
+            if(tempView!=null)tempView.setPermissions(PosixFilePermissions.fromString("rw-------"));
             try(DataOutputStream out=new DataOutputStream(Files.newOutputStream(temp))){
                 out.writeInt(0x41535431);int count=0;for(Cookie c:cookies)if(c.expires>0)count++;out.writeInt(count);
                 for(Cookie c:cookies)if(c.expires>0){out.writeUTF(c.origin);out.writeUTF(c.name);out.writeUTF(c.value);out.writeUTF(c.path);out.writeUTF(c.sameSite);out.writeBoolean(c.secure);out.writeBoolean(c.httpOnly);out.writeLong(c.expires);}

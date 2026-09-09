@@ -200,6 +200,8 @@ def main():
         menu('Page forms')
         tap(wait_text('Submit', exact=True))
         wait_text('Native POST reached the server.')
+        if "could not be saved" in ET.tostring(screen(), encoding="unicode"):
+            raise AssertionError("Android could not persist the new website session")
         print('Native form POST submitted successfully.', flush=True)
         menu('Back')
         wait_text('Network page rendered by Aster.')
@@ -238,7 +240,7 @@ def main():
         print("Android passed: native Canvas, actual fetched image pixels, real HTTP/link/Back, native form POST, reader controls, bookmark-preserving APK replacement, MediaDrm query.")
     finally:
         server.shutdown()
-        logs = adb("logcat", "-d", "-s", "AndroidRuntime:E", "ActivityManager:E")
+        logs = adb("logcat", "-d", "-s", "AndroidRuntime:E", "ActivityManager:E", "AsterSiteData:W")
         OUT.joinpath("android-runtime.log").write_text(logs, encoding="utf-8")
         if "FATAL EXCEPTION" in logs:
             print(logs[-8000:], flush=True)

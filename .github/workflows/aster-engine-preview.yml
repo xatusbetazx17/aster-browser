@@ -257,7 +257,7 @@ jobs:
           ASTER_ANDROID_BASELINE_APK: experiments/aster-engine/build/android/upgrade-baseline.apk
         run: |
           python experiments/aster-engine/tests/android_smoke.py
-          printf '%s\n' 'Android API 26 workspace, per-tab navigation, forms, reader and bookmark-preserving APK replacement passed.' > experiments/aster-engine/build/ANDROID-TEST-STATUS.txt
+          printf '%s\n' 'Android API 26 workspace, forms, reader, persistent website sessions, clear-data logout and bookmark-preserving APK replacement passed.' > experiments/aster-engine/build/ANDROID-TEST-STATUS.txt
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:

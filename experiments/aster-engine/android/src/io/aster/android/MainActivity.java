@@ -43,7 +43,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedState);
         preferences = getSharedPreferences("aster-engine-preview", MODE_PRIVATE);
         String dataWarning="";
-        if(profileData==null)try{profileData=new SiteData(new File(getFilesDir(),"website-data/site-data.bin").toPath());}catch(Exception e){profileData=new SiteData();dataWarning="Saved website data could not be opened. This session keeps it in memory only.";}
+        if(profileData==null)try{profileData=new SiteData(new File(getFilesDir(),"website-data/site-data.bin").toPath());}catch(Exception e){android.util.Log.w("AsterSiteData","Saved profile could not be read",e);profileData=new SiteData();dataWarning="Saved website data could not be opened. This session keeps it in memory only.";}
         siteData=profileData;
         reading=new ReadingTools(this,preferences);tabs.add(new MobileTab());
         for(int i=0;i<Math.min(12,preferences.getInt("session-count",0));i++)try{MobileTab t=new MobileTab();t.uri=PageLoader.address(preferences.getString("session-url-"+i,""));t.title=preferences.getString("session-title-"+i,"Saved tab");t.scroll=Math.max(0,preferences.getInt("session-scroll-"+i,0));previousTabs.add(t);}catch(IllegalArgumentException ignored){}
@@ -113,7 +113,7 @@ public final class MainActivity extends Activity {
         menu.getMenu().add("Streaming support").setOnMenuItemClickListener(item -> {
             new AlertDialog.Builder(this).setTitle("Aster streaming support").setMessage(DrmProbe.report()).setPositiveButton("OK", null).show(); return true;
         });
-        menu.getMenu().add("Clear website data").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setTitle("Clear website data").setMessage("Sign out of websites and clear their cookies? Bookmarks and reader notes stay saved.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{stopLoading();if(download!=null)download.cancel(true);siteData.clear();try{siteData.flush();}catch(Exception e){say("Website data could not be cleared on disk.");}load(PageLoader.HOME,-1);}).show();return true;});
+        menu.getMenu().add("Clear website data").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setTitle("Clear website data").setMessage("Sign out of websites and clear their cookies? Bookmarks and reader notes stay saved.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{stopLoading();if(download!=null)download.cancel(true);siteData.clear();try{siteData.flush();}catch(Exception e){android.util.Log.w("AsterSiteData","Website data clear failed",e);new AlertDialog.Builder(this).setTitle("Website data").setMessage("Website data was cleared in memory, but the saved file could not be updated.").setPositiveButton("OK",null).show();}load(PageLoader.HOME,-1);}).show();return true;});
         menu.getMenu().add("About this preview").setOnMenuItemClickListener(item -> {
             new AlertDialog.Builder(this).setTitle("Aster 0.4 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
         }); menu.show();
@@ -130,7 +130,7 @@ public final class MainActivity extends Activity {
         pending = network.submit(() -> {
             try {
                 Engine.Document result = PageLoader.load(uri,formBody,siteData,siteRequest);
-                String warning="";try{siteData.flush();}catch(Exception e){warning="Website data could not be saved to this device.";}final String storageWarning=warning;
+                String warning="";try{siteData.flush();}catch(Exception e){android.util.Log.w("AsterSiteData","Website data flush failed",e);warning="Website data could not be saved to this device.";}final String storageWarning=warning;
                 runOnUiThread(() -> {
                     if (isDestroyed() || request != generation) return;
                     pending=null;document = result;
@@ -218,7 +218,7 @@ public final class MainActivity extends Activity {
     public void onBackPressed() { if (index > 0) move(-1); else super.onBackPressed(); }
     protected void onSaveInstanceState(Bundle out) { if (document != null) out.putString("address", document.uri.toString()); super.onSaveInstanceState(out); }
     protected void onPause(){saveTabs();super.onPause();}
-    protected void onStop(){try{siteData.flush();}catch(Exception e){say("Website data could not be saved.");}super.onStop();}
+    protected void onStop(){try{siteData.flush();}catch(Exception e){android.util.Log.w("AsterSiteData","Website data flush failed on stop",e);say("Website data could not be saved.");}super.onStop();}
     protected void onDestroy() { generation++; if (pending != null) pending.cancel(true);if(images!=null)images.cancel(true);if(download!=null)download.cancel(true);transfers.shutdownNow();assets.shutdownNow();reading.close(); network.shutdownNow(); super.onDestroy(); }
 
     private final class PageView extends View {
