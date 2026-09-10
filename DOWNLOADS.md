@@ -16,7 +16,38 @@ If you previously used the portable original-engine ZIP, setup uses the same per
 
 The optional **aster-windows-x64-portable.zip** is for people who prefer a folder they can extract and run. Extract the whole ZIP. The setup EXE is the easiest choice for routine updates.
 
+Setup uses Aster's icon and follows the Windows light/dark setting. Choose an
+installation folder and optional Start menu/desktop shortcuts. Later setups
+remember that folder and the selected shortcuts. Uninstalling from Windows Apps
+removes the application; bookmarks, notes and website data are kept for reinstall.
+
 ## Linux with Flatpak, x86_64
+
+Download **install-linux.sh** from the same release, then run:
+
+```bash
+bash install-linux.sh --run
+```
+
+This single script downloads the latest published original-engine Flatpak and
+checks its SHA-256 against the release manifest before installation. The same
+command updates the application. Run it as your normal desktop account; Flatpak
+must already be installed. It uses no system package manager or read-only OS
+unlock. Options include `-y` to accept Flatpak prompts, `--check` for local status,
+and `--uninstall` to remove only this user's preview while keeping its profile.
+
+To use files already downloaded from one release:
+
+```bash
+bash install-linux.sh --bundle ./aster-linux-x64.flatpak --checksums ./SHA256SUMS.txt
+```
+
+The runtime may still need an internet connection on the first install. A checksum
+mismatch stops before installation; get both files from the same versioned release
+and retry. The rolling preview can change during a download. Checksums detect
+corrupt/mixed packages; they are not an independent publisher signature.
+
+You can also install the bundle directly:
 
 Download **aster-linux-x64.flatpak**. Open it with a software manager that supports Flatpak, or run this command from the downloaded file's folder:
 

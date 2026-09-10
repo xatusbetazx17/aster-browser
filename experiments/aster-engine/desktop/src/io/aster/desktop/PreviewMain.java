@@ -69,6 +69,8 @@ public final class PreviewMain {
         pageScale = (percent == 125 || percent == 150 || percent == 200 ? percent : 100) / 100.0;
         surface.setBackground(PAPER);
         if (window != null) {
+            java.net.URL icon=PreviewMain.class.getResource("/aster_logo.png");
+            if(icon!=null)window.setIconImage(new ImageIcon(icon).getImage());
             window.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
             window.addWindowListener(new WindowAdapter() { public void windowClosing(WindowEvent e) {
                 if(downloads.activeCount() == 0 || JOptionPane.showConfirmDialog(surface,
@@ -94,11 +96,11 @@ public final class PreviewMain {
         add.setIcon(new Icon() { public int getIconWidth(){return 12;} public int getIconHeight(){return 12;} public void paintIcon(Component c, Graphics g, int x, int y){ g.setColor(INK); g.drawLine(x+1,y+6,x+11,y+6); g.drawLine(x+6,y+1,x+6,y+11); } });
         add.setPreferredSize(new Dimension(30, 30)); strip.add(add);
         JScrollPane tabScroll = new JScrollPane(strip, JScrollPane.VERTICAL_SCROLLBAR_NEVER, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        tabScroll.setBorder(BorderFactory.createEmptyBorder()); tabScroll.setPreferredSize(new Dimension(600, 58));
+        tabScroll.setBorder(BorderFactory.createEmptyBorder()); tabScroll.setPreferredSize(new Dimension(600, 50));
         tabScroll.getHorizontalScrollBar().setUnitIncrement(80);
         header.add(tabScroll, BorderLayout.NORTH);
         JPanel toolbar = new JPanel(new BorderLayout(8, 0)); toolbar.setOpaque(false);
-        toolbar.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        toolbar.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
         JPanel navigation = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)); navigation.setOpaque(false);
         navigation.add(back); navigation.add(forward);
         navigation.add(button("⌂", "Home", () -> load(current(), PageLoader.HOME, -1)));
@@ -127,13 +129,16 @@ public final class PreviewMain {
         bind("control L", () -> { address.requestFocusInWindow(); address.selectAll(); });
         bind("control S", this::saveCurrentPage); bind("control J", () -> load(current(), URI.create("aster:downloads"), -1));
         bind("control R",this::reload);bind("F5",this::reload);bind("control F",this::findPage);
-        bind("ESCAPE",()->{if(findBar.isVisible()){findBar.setVisible(false);if(current()!=null){current().canvas.findText="";current().canvas.repaint();}}else stopNavigation();});
+        bind("ESCAPE",()->{if(isFullscreen())toggleFullscreen();else if(findBar.isVisible()){findBar.setVisible(false);if(current()!=null){current().canvas.findText="";current().canvas.repaint();}}else stopNavigation();});
         bind("F3",()->findNext(1));bind("shift F3",()->findNext(-1));bind("control shift R",this::readPage);
         bind("control shift T",this::reopenTab);bind("control O",this::openDocument);
+        bind("control H",()->load(current(),URI.create("aster:history"),-1));
+        bind("control shift O",()->load(current(),URI.create("aster:bookmarks"),-1));
+        bind("control COMMA",()->load(current(),URI.create("aster:settings"),-1));
         bind("control T", this::newTab); bind("control W", this::closeTab); bind("control D", this::saveBookmark);
         bind("alt LEFT", () -> move(-1)); bind("alt RIGHT", () -> move(1));
         bind("control TAB", () -> cycle(1)); bind("control shift TAB", () -> cycle(-1));
-        bind("F11", () -> { if(window!=null){GraphicsDevice screen=window.getGraphicsConfiguration().getDevice();if(screen.getFullScreenWindow()==window)screen.setFullScreenWindow(null);else screen.setFullScreenWindow(window);} });
+        bind("F11",this::toggleFullscreen);
         if (window != null) { window.setSize(1100, 780); window.setMinimumSize(new Dimension(720, 420)); window.setLocationByPlatform(true); }
         // Construct and lay out the native welcome page before showing the window once.
         newTab();
@@ -143,7 +148,7 @@ public final class PreviewMain {
         RoundButton(String label) { super(label); setContentAreaFilled(false); setOpaque(false); setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10)); setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14)); setForeground(INK); }
         protected void paintComponent(Graphics graphics) {
             Graphics2D g = (Graphics2D) graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setColor(getModel().isPressed() ? WorkspaceTheme.LINE : getModel().isRollover() ? new Color(0x263747) : WorkspaceTheme.RAISED);
+            g.setColor(getModel().isPressed() ? WorkspaceTheme.LINE : getModel().isRollover() ? WorkspaceTheme.HOVER : WorkspaceTheme.RAISED);
             g.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 14, 14); g.setColor(hasFocus() ? ACCENT : WorkspaceTheme.LINE);
             g.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 14, 14); g.dispose(); super.paintComponent(graphics);
         }
@@ -568,11 +573,39 @@ public final class PreviewMain {
         preferences.put("url"+count,url); preferences.put("title"+count,tab.canvas.document.title); preferences.putInt("count",count+1); refreshInternal(tab); message("Bookmark saved.");
     }
     private void menu() {
-        JPopupMenu popup=new JPopupMenu(); JPanel grid=new JPanel(new GridLayout(0,2,8,8)); grid.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        for(String page:new String[]{"bookmarks","history","downloads","settings","playground"}) { JButton b=button(capitalize(page),"Open "+page,()->{ popup.setVisible(false); load(current(),URI.create("aster:"+page),-1); }); b.setPreferredSize(new Dimension(112,76)); grid.add(b); }
-        String[] labels={"Read page","Open document","Restore session","Reopen tab","Site support"};Runnable[] commands={this::readPage,this::openDocument,this::restoreSession,this::reopenTab,()->load(current(),URI.create("aster:compatibility"),-1)};
-        for(int i=0;i<labels.length;i++){Runnable command=commands[i];JButton b=button(labels[i],labels[i],()->{popup.setVisible(false);command.run();});b.setPreferredSize(new Dimension(112,76));grid.add(b);}
-        WorkspaceTheme.apply(grid);popup.add(grid); popup.show(surface,Math.max(0,surface.getWidth()-260),88);
+        JPopupMenu popup=buildMenu();
+        popup.show(surface,Math.max(0,surface.getWidth()-popup.getPreferredSize().width-12),88);
+    }
+    private boolean isFullscreen(){return window!=null&&window.getGraphicsConfiguration().getDevice().getFullScreenWindow()==window;}
+    private void toggleFullscreen(){if(window!=null)window.getGraphicsConfiguration().getDevice().setFullScreenWindow(isFullscreen()?null:window);}
+    private JMenuItem menuItem(String label,String shortcut,Runnable command){
+        JMenuItem item=new JMenuItem(label);item.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));
+        if(shortcut!=null)item.setAccelerator(KeyStroke.getKeyStroke(shortcut));
+        item.addActionListener(e->command.run());return item;
+    }
+    JPopupMenu buildMenu(){
+        JPopupMenu popup=new JPopupMenu();popup.getAccessibleContext().setAccessibleName("Aster menu");
+        JMenu file=new JMenu("File");file.setMnemonic(KeyEvent.VK_F);
+        file.add(menuItem("New tab","control T",this::newTab));
+        file.add(menuItem("Reopen closed tab","control shift T",this::reopenTab));
+        file.addSeparator();file.add(menuItem("Open document…","control O",this::openDocument));
+        JMenuItem save=menuItem("Save page as…","control S",this::saveCurrentPage);
+        save.setEnabled(current()!=null&&internal(current().location)==null);file.add(save);
+        file.addSeparator();file.add(menuItem("Close tab","control W",this::closeTab));
+        JMenu view=new JMenu("View");view.setMnemonic(KeyEvent.VK_V);
+        view.add(menuItem("Read page","control shift R",this::readPage));
+        view.add(menuItem("Find in page…","control F",this::findPage));
+        view.add(menuItem("Reload page","control R",this::reload));
+        view.add(menuItem("Full screen","F11",this::toggleFullscreen));
+        JMenu tools=new JMenu("Tools");tools.setMnemonic(KeyEvent.VK_T);
+        String[] pages={"downloads","history","bookmarks","settings","playground","compatibility"};
+        String[] labels={"Downloads","History","Bookmarks","Settings","Playground","Site support"};
+        String[] keys={"control J","control H","control shift O","control COMMA",null,null};
+        for(int i=0;i<pages.length;i++){final URI uri=URI.create("aster:"+pages[i]);tools.add(menuItem(labels[i],keys[i],()->load(current(),uri,-1)));}
+        tools.addSeparator();tools.add(menuItem("Site protection",null,this::protection));
+        tools.add(menuItem("Restore saved session",null,this::restoreSession));
+        for(JMenu section:new JMenu[]{file,view,tools}){section.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));WorkspaceTheme.apply(section.getPopupMenu());popup.add(section);}
+        WorkspaceTheme.apply(popup);return popup;
     }
     private void protection(){
         Tab tab=current();URI uri=tab==null?PageLoader.HOME:tab.location;

@@ -83,6 +83,7 @@ def assemble(artifacts, output, commit, previous=None):
     output.mkdir(parents=True, exist_ok=True)
     apk_name = "aster-android-8-plus.apk" if signing["persistent"] else "aster-android-8-plus-test.apk"
     files = {
+        "install-linux.sh": Path(__file__).resolve().parents[3] / "install-linux.sh",
         "aster-windows-x64-setup.exe": windows / "aster-windows-x64-setup.exe",
         "aster-windows-x64-portable.zip": windows / "aster-engine-windows-x64.zip",
         "aster-linux-x64.flatpak": flatpak / "aster-linux-x64.flatpak",
@@ -120,7 +121,7 @@ This update adds desktop cross-origin HTTP APIs with CORS enforcement, Request/B
 | Device | Download | Install or update |
 | --- | --- | --- |
 | Windows 10/11 x64 | [Download Windows setup]({base}/aster-windows-x64-setup.exe) | Close Aster, run setup, then open Aster Preview from Start. Running a newer setup replaces the existing application and preserves its profile. |
-| Linux x64 with Flatpak | [Download Linux Flatpak]({base}/aster-linux-x64.flatpak) | Open with your software installer, or run `flatpak install --user --or-update ./aster-linux-x64.flatpak`. |
+| Linux x64 with Flatpak | [Download Linux installer]({base}/install-linux.sh) · [Flatpak bundle]({base}/aster-linux-x64.flatpak) | Run `bash install-linux.sh --run`, or open the Flatpak with your software installer. Running the script again installs updates. |
 | Android 8+ | [Download Android APK]({base}/{apk_name}) | {android_update} |
 
 Windows includes Java; no separate Java installation is required. The Windows package is unsigned and Windows may display an unknown-publisher warning. Windows video/HLS remains unreliable; read WINDOWS-BUILD-STATUS.txt. Basic session fixtures now pass; full web compatibility, advanced account flows, Netflix, Prime Video and cloud gaming remain unfinished.

@@ -46,6 +46,8 @@ class ReleaseTests(unittest.TestCase):
             result = publisher.assemble(root / "input", root / "output", metadata["commit"])
             self.assertEqual(result[2], "aster-android-8-plus.apk")
             self.assertIn("aster-windows-x64-setup.exe", (root / "output/SHA256SUMS.txt").read_text())
+            self.assertIn("install-linux.sh", (root / "output/SHA256SUMS.txt").read_text())
+            self.assertEqual((root / "output/install-linux.sh").read_bytes(), (ROOT.parents[1] / "install-linux.sh").read_bytes())
             self.assertIn("failure", (root / "output/WINDOWS-BUILD-STATUS.txt").read_text())
 
     def test_wrong_benchmark_revision_blocks_publication(self):

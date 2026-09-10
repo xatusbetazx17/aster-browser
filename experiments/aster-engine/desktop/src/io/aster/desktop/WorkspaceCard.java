@@ -12,7 +12,7 @@ final class WorkspaceCard extends JButton {
     }
     protected void paintComponent(Graphics graphics){
         Graphics2D g=(Graphics2D)graphics.create();g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g.setColor(getModel().isPressed()?WorkspaceTheme.LINE:getModel().isRollover()?new Color(0x253647):WorkspaceTheme.RAISED);g.fillRoundRect(0,0,getWidth()-1,getHeight()-1,22,22);
+        g.setColor(getModel().isPressed()?WorkspaceTheme.LINE:getModel().isRollover()?WorkspaceTheme.HOVER:WorkspaceTheme.RAISED);g.fillRoundRect(0,0,getWidth()-1,getHeight()-1,22,22);
         g.setColor(hasFocus()?WorkspaceTheme.ACCENT:WorkspaceTheme.LINE);g.drawRoundRect(1,1,getWidth()-3,getHeight()-3,22,22);
         g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,11));g.setColor(WorkspaceTheme.ACCENT);g.drawString(category,18,25);
         g.setFont(new Font(Font.SANS_SERIF,Font.BOLD,19));g.setColor(WorkspaceTheme.TEXT);g.drawString(title,18,53);

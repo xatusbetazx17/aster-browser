@@ -86,6 +86,7 @@ def desktop(test=False, package=False):
         if image.exists():
             shutil.rmtree(image)
         run("jpackage", "--type", "app-image", "--name", "AsterEnginePreview", "--app-version", native_version(),
+            "--icon", ROOT / ('packaging/aster.ico' if sys.platform == 'win32' else 'desktop/resources/aster_logo.png'),
             "--vendor", "Aster Browser", "--input", jar.parent, "--main-jar", jar.name,
             "--add-modules", "java.desktop,java.prefs,java.net.http,jdk.httpserver,jdk.crypto.ec,jdk.unsupported,jdk.unsupported.desktop,java.xml,java.logging", "--dest", image.parent)
         shutil.copyfile(ROOT.parents[1] / "LICENSE", image / "LICENSE")

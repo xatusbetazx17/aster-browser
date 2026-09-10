@@ -6,6 +6,16 @@
 
 [Install and update instructions](DOWNLOADS.md) · [Latest Codex preview and release notes](https://github.com/xatusbetazx17/aster-browser/releases/tag/codex-preview) · [All versions](https://github.com/xatusbetazx17/aster-browser/releases)
 
+**Linux one-command setup:** from this checkout, run `bash install-linux.sh --run`.
+It downloads and verifies the current original-engine Flatpak, then installs or
+updates it for your account. Flatpak must already be installed. `--check` shows
+installation status; `--uninstall` removes the app while keeping saved data.
+Windows setup offers the Aster icon, system light/dark appearance, a destination
+folder and separate Start menu/desktop shortcut choices.
+
+The [improvements adapted from new-development](docs/development/new-development-port.md)
+also include the cyan/dark desktop styling and compact File / View / Tools menu.
+
 Windows setup and Linux Flatpak replace an older original-engine installation while keeping its profile. Android needs the persistent signing identity described on the release page; disposable-key testing APKs cannot update one another. These release downloads have no 14-day artifact expiry.
 
 Aster is being developed as a **standalone browser with its own interface and page engine**. The original-engine Windows/Linux/Android application is the destination for new development. It opens directly as Aster and embeds no Chrome, Firefox, WebKit or WebView. The older Linux WebKit prototype remains available separately.
@@ -44,7 +54,10 @@ See [preview installation and update limitations](experiments/aster-engine/READM
 - [Android build status](docs/setup/android.md)
 - [Setup behavior and data preservation](docs/setup/README.md)
 
-On supported desktop Linux, run the same setup command again to update Aster's managed code installation. The updater verifies downloads and preserves earlier code revisions for rollback. Browser profile data is separate from those code directories.
+On Linux with Flatpak, run the root `install-linux.sh` again to install the latest
+published original-engine preview. Its profile remains separate from application
+files. The older WebKit source updater lives under `installers/`; its own
+installation and rollback behavior is documented separately.
 
 ## Implemented in the standalone Linux prototype
 

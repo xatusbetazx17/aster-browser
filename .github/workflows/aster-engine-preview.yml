@@ -4,10 +4,12 @@ on:
   push:
     branches: ['codex/aster-webkit-desktop']
     paths:
+      - 'install-linux.sh'
       - 'experiments/aster-engine/**'
       - '.github/workflows/aster-engine-preview.yml'
   pull_request:
     paths:
+      - 'install-linux.sh'
       - 'experiments/aster-engine/**'
       - '.github/workflows/aster-engine-preview.yml'
   workflow_dispatch:
@@ -56,7 +58,7 @@ jobs:
       - name: Test original parser, layout, HTTP and Java2D; build native package
         id: package
         run: |
-          python -m unittest discover -s experiments/aster-engine/tests -p test_release.py
+          python -m unittest discover -s experiments/aster-engine/tests -p 'test_*.py'
           python experiments/aster-engine/build.py desktop --test --package
       - name: Build and exercise the Windows install/update EXE
         id: windows_setup
@@ -198,21 +200,26 @@ jobs:
           mkdir -p experiments/aster-engine/build/native
           tar -xzf experiments/aster-engine/build/aster-engine-linux-x64.tar.gz -C experiments/aster-engine/build/native
           python experiments/aster-engine/packaging/build_flatpak.py
-          flatpak install --user -y --noninteractive experiments/aster-engine/build/aster-linux-x64.flatpak
+          bash install-linux.sh --bundle experiments/aster-engine/build/aster-linux-x64.flatpak --checksums experiments/aster-engine/build/FLATPAK-SHA256SUMS.txt -y
           mkdir -p "$HOME/.var/app/io.aster.browser.EnginePreview/config"
           printf '%s\n' 'keep-this-profile' > "$HOME/.var/app/io.aster.browser.EnginePreview/config/upgrade-fixture"
           # Export a newer app commit, then exercise the same command users run.
           printf '%s\n' 'replacement fixture' > experiments/aster-engine/build/flatpak-app/files/upgrade-fixture
           flatpak build-export experiments/aster-engine/build/flatpak-repository experiments/aster-engine/build/flatpak-app preview
           flatpak build-bundle experiments/aster-engine/build/flatpak-repository experiments/aster-engine/build/flatpak-update-test.flatpak io.aster.browser.EnginePreview preview
-          flatpak install --user --or-update -y --noninteractive experiments/aster-engine/build/flatpak-update-test.flatpak
+          sha256sum experiments/aster-engine/build/flatpak-update-test.flatpak | awk '{ print $1 "  aster-linux-x64.flatpak" }' > experiments/aster-engine/build/FLATPAK-TEST-SHA256SUMS.txt
+          bash install-linux.sh --bundle experiments/aster-engine/build/flatpak-update-test.flatpak --checksums experiments/aster-engine/build/FLATPAK-TEST-SHA256SUMS.txt -y
           flatpak run --command=cat io.aster.browser.EnginePreview /app/upgrade-fixture | grep -Fx 'replacement fixture'
           test "$(cat "$HOME/.var/app/io.aster.browser.EnginePreview/config/upgrade-fixture")" = keep-this-profile
           # Restore the exact deliverable after the update fixture.
-          flatpak install --user --or-update -y --noninteractive experiments/aster-engine/build/aster-linux-x64.flatpak
+          bash install-linux.sh --bundle experiments/aster-engine/build/aster-linux-x64.flatpak --checksums experiments/aster-engine/build/FLATPAK-SHA256SUMS.txt -y
+          bash install-linux.sh --check
           timeout 60s dbus-run-session xvfb-run -a flatpak run --filesystem="$PWD/experiments/aster-engine/build" io.aster.browser.EnginePreview --smoke "$PWD/experiments/aster-engine/build/aster-flatpak-window.png"
           test -s experiments/aster-engine/build/aster-flatpak-window.png
-          printf '%s\n' 'Flatpak installed, updated application bytes, retained profile and opened the native window.' > experiments/aster-engine/build/FLATPAK-UPDATE-STATUS.txt
+          bash install-linux.sh --uninstall -y
+          test "$(cat "$HOME/.var/app/io.aster.browser.EnginePreview/config/upgrade-fixture")" = keep-this-profile
+          bash install-linux.sh --bundle experiments/aster-engine/build/aster-linux-x64.flatpak --checksums experiments/aster-engine/build/FLATPAK-SHA256SUMS.txt -y
+          printf '%s\n' 'Linux installer verified checksums, installed/updated the Flatpak, opened its window and preserved the profile through uninstall/reinstall.' > experiments/aster-engine/build/FLATPAK-UPDATE-STATUS.txt
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: aster-engine-Linux-Flatpak

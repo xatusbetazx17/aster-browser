@@ -23,6 +23,11 @@ public final class WorkspaceTests {
     static void edt(Runnable task)throws Exception{SwingUtilities.invokeAndWait(task);}
     static void waitFor(BooleanSupplier condition)throws Exception{long until=System.nanoTime()+10_000_000_000L;while(true){AtomicBoolean ready=new AtomicBoolean();edt(()->ready.set(condition.getAsBoolean()));if(ready.get())return;if(System.nanoTime()>until)throw new AssertionError("Workspace fixture timed out");Thread.sleep(20);}}
     static void layout(Container root){root.doLayout();for(Component c:root.getComponents())if(c instanceof Container)layout((Container)c);}
+    static JMenuItem menuAction(PreviewMain browser,String group,String label){
+        for(Component section:browser.buildMenu().getComponents())if(section instanceof JMenu&&((JMenu)section).getText().equals(group))
+            for(Component child:((JMenu)section).getMenuComponents())if(child instanceof JMenuItem&&((JMenuItem)child).getText().equals(label))return (JMenuItem)child;
+        throw new AssertionError("Missing menu action: "+group+" / "+label);
+    }
     static void render(Path file,int width){app.surface.setSize(width,780);app.fitReader();for(int i=0;i<4;i++)layout(app.surface);app.workspace.setDividerLocation(width>=1050?.62:.5);for(int i=0;i<3;i++)layout(app.surface);
         BufferedImage image=new BufferedImage(width,780,BufferedImage.TYPE_INT_RGB);Graphics2D g=image.createGraphics();app.surface.printAll(g);g.dispose();try{ImageIO.write(image,"png",file.toFile());}catch(Exception e){throw new RuntimeException(e);}
         check(app.reader.getWidth()>=280&&app.reader.getHeight()>=180,"Reader clipped at supported window size");}
@@ -39,7 +44,13 @@ public final class WorkspaceTests {
             byte[] bytes=body.getBytes(StandardCharsets.UTF_8);try{exchange.getResponseHeaders().set("Content-Type","text/html");exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);}finally{exchange.close();}
         });server.start();URI one=URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/one"),two=one.resolve("/two");
         try{
-            edt(()->{app=new PreviewMain(prefs);app.load(app.current(),one,-1);});waitFor(()->app.current().location.equals(one)&&app.current().pending==null);
+            edt(()->{app=new PreviewMain(prefs);
+                menuAction(app,"File","New tab").doClick();check(app.tabs.getTabCount()==2,"Menu failed to open a tab");
+                menuAction(app,"File","Close tab").doClick();check(app.tabs.getTabCount()==1,"Menu failed to close its tab");
+                menuAction(app,"Tools","Bookmarks").doClick();check(app.current().location.equals(URI.create("aster:bookmarks")),"Bookmarks menu did not navigate");
+                check(!menuAction(app,"File","Save page as…").isEnabled(),"Internal tools offered a website download");
+                app.load(app.current(),one,-1);});waitFor(()->app.current().location.equals(one)&&app.current().pending==null);
+            edt(()->check(menuAction(app,"File","Save page as…").isEnabled(),"Website cannot be saved through the menu"));
             final PreviewMain.Tab[] first={null},second={null};final int[] beforePark={0,0};
             edt(()->{first[0]=app.current();app.readPage();app.reader.notes.setText("English notes y español.");app.reader.flush();
                 check(prefs.get(ReadingTools.noteKey(one.toString()),"").equals("English notes y español."),"Notes not saved to existing profile identity");

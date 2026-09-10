@@ -21,13 +21,17 @@ ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 MinVersion=10.0
 UsePreviousAppDir=yes
+DisableDirPage=no
 DisableProgramGroupPage=yes
 LicenseFile=..\..\..\LICENSE
 OutputDir=..\build
 OutputBaseFilename=aster-windows-x64-setup
 Compression=lzma2
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic
+SetupIconFile=aster.ico
+WizardSmallImageFile=..\desktop\resources\aster_logo.png
+WizardSmallImageFileDynamicDark=..\desktop\resources\aster_logo.png
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
@@ -37,10 +41,11 @@ UninstallDisplayIcon={app}\application\AsterEnginePreview.exe
 Source: "..\build\native\AsterEnginePreview\*"; DestDir: "{app}\application"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Aster Preview"; Filename: "{app}\application\AsterEnginePreview.exe"
+Name: "{autoprograms}\Aster Preview"; Filename: "{app}\application\AsterEnginePreview.exe"; Tasks: startmenuicon
 Name: "{autodesktop}\Aster Preview"; Filename: "{app}\application\AsterEnginePreview.exe"; Tasks: desktopicon
 
 [Tasks]
+Name: startmenuicon; Description: "Create a Start menu shortcut"
 Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Run]

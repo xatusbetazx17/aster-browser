@@ -1,7 +1,10 @@
 # Linux: install or update Aster
 
-For **Aster original-engine 0.2**, use its
+For **Aster original-engine preview**, use its
 [release downloads and Flatpak install/update instructions](../../DOWNLOADS.md#linux-with-flatpak-x86_64).
+The root `bash install-linux.sh --run` installs/updates that Flatpak and verifies
+its checksum. It also supports `--check`, `--uninstall`, and a downloaded bundle
+with its matching checksum manifest. Flatpak must already be installed.
 It has limited images, CSS/forms, scripting/media and Word/text reading without
 embedding WebKit or another browser engine. Full web compatibility, PDF and the AI
 companion remain unfinished. The commands below install the separate WebKit prototype.
@@ -66,11 +69,12 @@ Rollback does not restore or change browser-profile data. Old release directorie
 
 ## Steam Deck and immutable Linux
 
-The original-engine 0.2 workflow builds a Flatpak using a common Freedesktop runtime.
+The original-engine workflow builds a Flatpak using a common Freedesktop runtime.
 Use it only from a successful Flatpak build/install/window test. This improves
 portability on Flatpak-capable x64 distributions, including the intended SteamOS
 desktop-mode path, but physical Steam Deck controls, audio and graphics remain
-unverified. The source updater below does not install that Flatpak or modify the
+unverified. The root installer uses that Flatpak. The WebKit source updater under
+`installers/` does not install the Flatpak or modify the
 immutable OS image.
 
 ## Existing Git checkouts or old Aster installations

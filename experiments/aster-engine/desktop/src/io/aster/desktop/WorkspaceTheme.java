@@ -6,8 +6,9 @@ import javax.swing.text.JTextComponent;
 
 /** Aster chrome only: website colors are always owned by the page renderer. */
 final class WorkspaceTheme {
-    static final Color TEXT=new Color(0xe8eef5), ACCENT=new Color(0x64dfce), PAGE=new Color(0x121922);
-    static final Color CHROME=new Color(0x0b1017), RAISED=new Color(0x1b2633), LINE=new Color(0x304254), MUTED=new Color(0xa5b4c6);
+    // Port the cyan/dark presentation from new-development onto native controls.
+    static final Color TEXT=new Color(0xe2e8f0), ACCENT=new Color(0x67cbef), PAGE=new Color(0x131720);
+    static final Color CHROME=new Color(0x10131a), RAISED=new Color(0x1a202c), LINE=new Color(0x2a3344), MUTED=new Color(0xa5b4c6), HOVER=new Color(0x252d3d);
     static void apply(Component component) {
         if(component instanceof PreviewMain.PageCanvas || component instanceof MediaPanel)return;
         component.setForeground(component instanceof JComponent && Boolean.TRUE.equals(((JComponent)component).getClientProperty("aster.accent"))?ACCENT:TEXT);
