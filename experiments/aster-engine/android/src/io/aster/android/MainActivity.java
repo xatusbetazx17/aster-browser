@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
     private Engine.Document document;
     private ReadingTools reading;
     private final ExecutorService assets=Executors.newSingleThreadExecutor();private Future<?> images;
-    private final Map<URI,Bitmap> bitmaps=new HashMap<>();
+    private final Map<String,Bitmap> bitmaps=new HashMap<>();
     private static final class MobileTab {URI uri=PageLoader.HOME;String title="New tab";int scroll,index=-1;final List<URI> history=new ArrayList<>();MobileTab copy(){MobileTab t=new MobileTab();t.uri=uri;t.title=title;t.scroll=scroll;t.index=index;t.history.addAll(history);return t;}}
     private final List<MobileTab> tabs=new ArrayList<>(),previousTabs=new ArrayList<>();private int selectedTab,restoreScroll;
     private URI downloadSource;private Future<?> download;
@@ -74,6 +74,7 @@ public final class MainActivity extends Activity {
         status = new TextView(this); status.setTextColor(INK); status.setTextSize(13);status.setVisibility(View.GONE); status.setPadding(dp(16), dp(4), dp(16), dp(8));
         root.addView(status);
         scroll = new ScrollView(this); scroll.setFillViewport(true); page = new PageView(); scroll.addView(page);
+        scroll.addOnLayoutChangeListener((view,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{if(bottom-top!=oldBottom-oldTop)page.reset();});
         FrameLayout pages=new FrameLayout(this);pages.addView(scroll);homePage=buildHome();pages.addView(homePage);root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout bottom=new LinearLayout(this);bottom.setPadding(dp(4),dp(3),dp(4),dp(3));
         navBack=control("←","Back",()->move(-1));navForward=control("→","Forward",()->move(1));tabButton=control("Tabs · 1","Show tabs",this::tabMenu);
@@ -97,7 +98,7 @@ public final class MainActivity extends Activity {
         LinearLayout shortcuts=new LinearLayout(this);
         shortcuts.addView(control("Search","Search with DuckDuckGo",()->load(URI.create("https://html.duckduckgo.com/html/"),-1)),new LinearLayout.LayoutParams(0,dp(52),1));
         shortcuts.addView(control("Restore tabs","Restore saved tabs",this::restoreTabs),new LinearLayout.LayoutParams(0,dp(52),1));body.addView(shortcuts);
-        body.addView(homeText("Independent engine · 0.6 preview",15,ACCENT));body.addView(homeText("Protected streaming and cloud gaming remain unfinished. Streaming support in the menu explains the current limits.",15,0xffa5b4c6));holder.addView(body);return holder;}
+        body.addView(homeText("Independent engine · 0.7 preview",15,ACCENT));body.addView(homeText("Protected streaming and cloud gaming remain unfinished. Streaming support in the menu explains the current limits.",15,0xffa5b4c6));holder.addView(body);return holder;}
     private View homeCard(String category,String title,String description,Runnable action){
         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setBackground(round(0xff1b2633));card.setPadding(dp(18),dp(12),dp(18),dp(12));
         LinearLayout.LayoutParams bounds=new LinearLayout.LayoutParams(-1,-2);bounds.bottomMargin=dp(12);card.setLayoutParams(bounds);
@@ -127,7 +128,7 @@ public final class MainActivity extends Activity {
         });
         menu.getMenu().add("Clear website data").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setTitle("Clear website data").setMessage("Sign out of websites and clear their cookies? Bookmarks and reader notes stay saved.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{stopLoading();if(download!=null)download.cancel(true);siteData.clear();try{siteData.flush();}catch(Exception e){android.util.Log.w("AsterSiteData","Website data clear failed",e);new AlertDialog.Builder(this).setTitle("Website data").setMessage("Website data was cleared in memory, but the saved file could not be updated.").setPositiveButton("OK",null).show();}load(PageLoader.HOME,-1);}).show();return true;});
         menu.getMenu().add("About this preview").setOnMenuItemClickListener(item -> {
-            new AlertDialog.Builder(this).setTitle("Aster 0.6 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
+            new AlertDialog.Builder(this).setTitle("Aster 0.7 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
         }); menu.show();
     }
     private void move(int delta) { int next = index + delta; if (next >= 0 && next < history.size()) load(history.get(next), next); }
@@ -189,14 +190,13 @@ public final class MainActivity extends Activity {
         });
     }
     private void loadImages(Engine.Document doc,int request){
-        if(doc.scriptsBlocked)return;List<URI> sources=new ArrayList<>();
-        for(Engine.Run r:doc.runs)if(r.image!=null&&PageAssets.sameOrigin(doc.uri,r.image)&&!sources.contains(r.image)&&sources.size()<8)sources.add(r.image);
-        images=assets.submit(()->{long total=0;for(URI source:sources){if(Thread.currentThread().isInterrupted())return;
+        if(doc.scriptsBlocked)return;List<PageMarkup.Asset> sources=PageMarkup.images(doc.uri,doc.source);
+        images=assets.submit(()->{long total=0;for(PageMarkup.Asset source:sources){if(Thread.currentThread().isInterrupted())return;
             try{byte[] bytes=PageAssets.fetch(doc.uri,source,true,siteData.request(doc.uri,false,"GET"));BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
                 if(options.outWidth<1||options.outHeight<1||(long)options.outWidth*options.outHeight>2_000_000)continue;
                 long size=(long)options.outWidth*options.outHeight*4;if(total+size>8*1024*1024)break;total+=size;
                 Bitmap image=BitmapFactory.decodeByteArray(bytes,0,bytes.length);if(image==null)continue;
-                runOnUiThread(()->{if(!isDestroyed()&&generation==request){bitmaps.put(source,image);page.invalidate();}});
+                runOnUiThread(()->{if(!isDestroyed()&&generation==request){bitmaps.put(source.key(),image);page.invalidate();}});
             }catch(Exception ignored){/* Keep alternative text on failure. */}
         }});
     }
@@ -257,7 +257,7 @@ public final class MainActivity extends Activity {
 
     private final class PageView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private Engine.Layout layout; private int lastWidth = -1;
+        private Engine.Layout layout; private int lastWidth = -1,lastHeight=-1;
         private final float scale = getResources().getDisplayMetrics().scaledDensity;
         private float downX, downY;
         PageView() { super(MainActivity.this); setBackgroundColor(Color.WHITE); setFocusable(true); setContentDescription("Aster page"); }
@@ -267,10 +267,11 @@ public final class MainActivity extends Activity {
             paint.setTextSize(s.size); paint.setColor(s.color);
         }
         protected void onMeasure(int w, int h) {
-            int width = MeasureSpec.getSize(w);
-            if (document != null && (layout == null || width != lastWidth)) {
-                lastWidth = width;
-                try { layout = Engine.layout(document, width / scale, (text, s) -> { style(s); return paint.measureText(text); }); }
+            int width = MeasureSpec.getSize(w),height=Math.max(1,scroll.getHeight()-scroll.getPaddingTop()-scroll.getPaddingBottom());
+            if (document != null && (layout == null || width != lastWidth || height!=lastHeight)) {
+                lastWidth = width;lastHeight=height;
+                try { document=Engine.forViewport(document,width/scale,height/scale);setContentDescription(document.text());
+                    layout = Engine.layout(document, width / scale, (text, s) -> { style(s); return paint.measureText(text); }); }
                 catch (IllegalArgumentException e) { layout = null; say("Page is too complex for this preview."); }
             }
             setMeasuredDimension(width, Math.max(MeasureSpec.getSize(h), layout == null ? dp(200) : (int) Math.ceil(layout.height * scale)));
@@ -287,7 +288,7 @@ public final class MainActivity extends Activity {
             paint.setStyle(Paint.Style.FILL);paint.setStrokeWidth(1);
             for (int i=layout.firstVisible(clip.top);i<layout.items.size();i++) {Engine.Draw draw=layout.items.get(i);if(draw.y>clip.bottom)break;
                 if (draw.y + draw.height < clip.top || draw.y > clip.bottom) continue;
-                if(draw.image!=null){Bitmap bitmap=bitmaps.get(draw.image);if(bitmap!=null){float fit=Math.min(draw.width/bitmap.getWidth(),draw.height/bitmap.getHeight());canvas.drawBitmap(bitmap,null,new RectF(draw.x,draw.y,draw.x+bitmap.getWidth()*fit,draw.y+bitmap.getHeight()*fit),paint);continue;}
+                if(draw.image!=null){Bitmap bitmap=bitmaps.get(draw.imageKey);if(bitmap!=null){float fit=Math.min(draw.width/bitmap.getWidth(),draw.height/bitmap.getHeight());canvas.drawBitmap(bitmap,null,new RectF(draw.x,draw.y,draw.x+bitmap.getWidth()*fit,draw.y+bitmap.getHeight()*fit),paint);continue;}
                     paint.setColor(0xffe8eeec);canvas.drawRect(draw.x,draw.y,draw.x+draw.width,draw.y+draw.height,paint);}
                 style(draw.style); canvas.drawText(draw.text, draw.x, draw.y + draw.style.size, paint);
                 if (draw.link != null) canvas.drawLine(draw.x, draw.y + draw.style.size + 2, draw.x + draw.width, draw.y + draw.style.size + 2, paint);

@@ -1,6 +1,6 @@
 # Aster original engine preview
 
-**Version 0.6:** see [site protection, CSS boxes and remaining engine work](RELEASE_0.6.md). Shared request blocking, custom hostname rules, saved site exceptions and a native protection panel join normal-flow box layout and revised Home cards. Existing HTTP APIs, sessions, reading, notes and downloads remain included. Full website compatibility is unfinished.
+**Version 0.7:** see [responsive CSS, CDN resources and current limitations](RELEASE_0.7.md). Stylesheets and images can load from other origins with explicit request policies, responsive CSS updates when the viewport changes, and stylesheet order and priority survive script snapshots. Site protection, HTTP APIs, sessions, reading, notes and downloads remain included. Full website compatibility is unfinished.
 
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
@@ -27,9 +27,10 @@ or silently remove that prototype's reader and local companion.
 | --- | --- |
 | Navigation | HTTP/HTTPS address entry, relative links, bounded redirects, Back, Forward, Home |
 | Layout | Normal-flow boxes, width/min/max sizing, margin/padding, solid borders, flat backgrounds, radius, alignment; text, headings, lists, preformatted lines and word wrapping |
+| Responsive CSS | Screen width/height/orientation media queries, nested `@media`, style/link media attributes, viewport resizing/zoom, stylesheet source order and author `!important` priorities within the supported selector subset |
 | Site protection | Shared offline hostname blocking, custom rules, saved origin exceptions and actual session activity; no full filter-list/cosmetic support |
 | Typography | Bold, italic, inherited size/color; inline `font-size` in px, six-digit hex `color`, bold/italic declarations |
-| Images | Bounded same-origin PNG/JPEG/GIF decoding; alternative text on unsupported or failed resources |
+| Images and stylesheets | Bounded HTTP/HTTPS PNG/JPEG/GIF and CSS, including CDN origins; CORS attributes, stylesheet SHA-256/384/512 integrity checks, resource-policy restrictions, no cross-origin cookies and no HTTPS downgrades |
 | Desktop UI | Dark workspace and sidebar, integrated reader/notes, real tab parking, lazy restoration, phrase find and background link tabs; up to 20 tabs and 30 persisted bookmarks |
 | Android UI | Dark native home, visible navigation and reader controls, per-tab Back/Forward history, up to 12 tabs, forms, notes/speech, Save As, bookmarks and saved sessions |
 | Network | Platform TLS validation; restricted origin-isolated cookies; no certificate bypass or embedded URL credentials; desktop adds same-origin scripts/WebSocket and bounded CORS-governed fetch/XHR and explicitly requested media |
@@ -326,9 +327,12 @@ the SDK's AAPT2, D8, zipalign and apksigner directly. The output is
 
 ## Validation scope
 
-`build.py desktop --test` runs 13 core tests plus download, script and desktop
+`build.py desktop --test` runs 14 core tests plus download, script and desktop
 integration suites, including actual localhost HTTP exchanges,
-a deterministic malformed-markup corpus and Java2D pixel rendering. The new CI
+a deterministic malformed-markup corpus and Java2D pixel rendering. CDN tests use
+two real HTTP origins, check CORS/integrity/redirect/cookie boundaries, and retain
+styles through actual QuickJS snapshots. Responsive tests repaint the page at
+different widths, heights and zoom levels and check pixels and link targets. The CI
 workflow packages and launches the Linux and Windows applications. The desktop
 integration tests exercise actual controls, a real local HTTP page, scaled link
 clicking, Back, background/final-tab closing, settings wheel protection and
@@ -342,7 +346,8 @@ activates Save As with an isolated test destination, verifies the saved bytes an
 renders the completed Downloads page. The native launch checks additionally
 exercise hover fade and animated close cleanup. Tests do not overwrite a user's normal preview profile. Its Android
 job builds/verifies the APK and tests native Canvas rendering, a real HTTP page,
-a tapped link, Back, a bookmark-preserving same-key APK replacement and the actual
+a tapped link, Back, CORS CDN images and integrity-checked responsive CSS, a
+bookmark-preserving same-key APK replacement and the actual
 device DRM query in an API 26 emulator. A green job is required before citing its
 platform result. Artifact creation alone is not a passed device test.
 

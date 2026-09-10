@@ -74,6 +74,8 @@ def desktop(test=False, package=False):
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.CompatibilityTests")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.ProtectionTests")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.BoxLayoutTests", BUILD)
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.ResponsiveTests", BUILD)
+        run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.AssetTests")
         run("java", "-cp", os.pathsep.join(map(str, [classes, tests])), "io.aster.desktop.MediaRelayTests")
         run("java", "-Djava.awt.headless=true", "-cp", os.pathsep.join(map(str, [classes, tests]))+os.pathsep+libraries, "io.aster.desktop.SiteDataTests")
         run("java", "-Djava.awt.headless=true", "-jar", jar, "--render-test", BUILD / "aster-page.png")

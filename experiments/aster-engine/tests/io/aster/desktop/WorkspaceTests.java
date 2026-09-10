@@ -63,7 +63,7 @@ public final class WorkspaceTests {
                 Engine.Draw link=canvas.layout.items.stream().filter(d->d.link!=null).findFirst().get();canvas.dispatchEvent(new MouseEvent(canvas,MouseEvent.MOUSE_CLICKED,System.currentTimeMillis(),MouseEvent.CTRL_DOWN_MASK,(int)(link.x+2),(int)(link.y+4),1,false,MouseEvent.BUTTON1));
                 check(app.current()==first[0]&&app.tabs.getTabCount()==2,"Ctrl-click stole focus or reused the current tab");second[0]=(PreviewMain.Tab)app.tabs.getComponentAt(1);
             });waitFor(()->second[0].location.equals(two)&&second[0].pending==null);
-            edt(()->{app.tabs.setSelectedComponent(second[0]);first[0].canvas.images.put(one,new BufferedImage(20,20,BufferedImage.TYPE_INT_RGB));
+            edt(()->{app.tabs.setSelectedComponent(second[0]);first[0].canvas.images.put(one.toString(),new BufferedImage(20,20,BufferedImage.TYPE_INT_RGB));
                 first[0].getVerticalScrollBar().setValue(250);int history=first[0].history.size();beforePark[0]=first[0].index;beforePark[1]=history;check(app.park(first[0]),"Static background page would not park");
                 check(first[0].canvas.document==null&&first[0].canvas.layout==null&&first[0].canvas.images.isEmpty()&&first[0].original==null,"Parking retained page resources");
                 check(first[0].history.size()==history&&first[0].location.equals(one),"Parking lost navigation history");check(first[0].restoreScroll==250,"Parking lost scroll position");app.tabs.setSelectedComponent(first[0]);

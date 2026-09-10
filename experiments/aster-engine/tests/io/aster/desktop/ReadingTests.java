@@ -54,6 +54,9 @@ public final class ReadingTests {
         }
         BufferedImage logo=new BufferedImage(80,40,BufferedImage.TYPE_INT_RGB);Graphics2D graphics=logo.createGraphics();graphics.setColor(Color.BLUE);graphics.fillRect(0,0,80,40);graphics.dispose();ByteArrayOutputStream image=new ByteArrayOutputStream();ImageIO.write(logo,"png",image);
         check(PreviewMain.decodeImage(image.toByteArray()).getRGB(5,5)==Color.BLUE.getRGB(),"Actual image decoder");rejects(()->PreviewMain.decodeImage(new byte[]{1,2,3}));
+        HttpServer imageServer=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        String imageUrl="http://127.0.0.1:"+imageServer.getAddress().getPort()+"/logo.png";
+        imageServer.createContext("/",e->{byte[] bytes=image.toByteArray();e.getResponseHeaders().set("Content-Type","image/png");e.sendResponseHeaders(200,bytes.length);e.getResponseBody().write(bytes);e.close();});imageServer.start();
         AtomicReference<String> body=new AtomicReference<>();AtomicInteger sheets=new AtomicInteger();
         HttpServer server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);URI local=URI.create("http://127.0.0.1:"+server.getAddress().getPort());
         server.createContext("/",exchange->{String path=exchange.getRequestURI().getPath();byte[] payload;String type="text/html";
@@ -61,7 +64,7 @@ public final class ReadingTests {
             else if(path.equals("/theme.css")){payload=".fixture {color:#123456}".getBytes(StandardCharsets.UTF_8);type="text/css";sheets.incrementAndGet();}
             else if(path.equals("/submit")){body.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));payload="<h1>Form received</h1>".getBytes(StandardCharsets.UTF_8);}
             else if(path.equals("/file")){payload=new byte[1200000];Arrays.fill(payload,(byte)29);type="application/octet-stream";}
-            else{String html="<title>Reading fixture</title><link rel='stylesheet' href='/theme.css'><h1 class='fixture'>Aster reading</h1><img src='/logo.png' width='240' height='120' alt='Blue image'><p>Images and native reading work together.</p>";payload=html.getBytes(StandardCharsets.UTF_8);}
+            else{String html="<title>Reading fixture</title><link rel='stylesheet' href='/theme.css'><h1 class='fixture'>Aster reading</h1><img src='"+imageUrl+"' width='240' height='120' alt='Blue image'><p>Images and native reading work together.</p>";payload=html.getBytes(StandardCharsets.UTF_8);}
             if(!path.equals("/logo.png")&&!path.equals("/file")){ByteArrayOutputStream compressed=new ByteArrayOutputStream();try(GZIPOutputStream gzip=new GZIPOutputStream(compressed)){gzip.write(payload);}payload=compressed.toByteArray();exchange.getResponseHeaders().set("Content-Encoding","gzip");}
             exchange.getResponseHeaders().set("Content-Type",type);exchange.sendResponseHeaders(200,payload.length);exchange.getResponseBody().write(payload);exchange.close();});server.start();
         Preferences prefs=Preferences.userRoot().node("io/aster/reading-tests-"+UUID.randomUUID());final PreviewMain[] app={null};
@@ -69,7 +72,7 @@ public final class ReadingTests {
             Engine.Document loaded=PageLoader.load(local);check(loaded.runs.get(0).style.color==0xff123456&&sheets.get()==1,"Gzip external stylesheet");
             PageLoader.load(local.resolve("/submit"),"q=test".getBytes(StandardCharsets.UTF_8));check(body.get().equals("q=test"),"Actual form POST");
             ByteArrayOutputStream file=new ByteArrayOutputStream();FileTransfer.save(local.resolve("/file"),file,(a,b)->{});check(file.size()==1200000&&file.toByteArray()[1199999]==29,"Android shared direct download bytes");
-            rejects(()->PageAssets.fetch(local,URI.create("http://example.invalid/logo.png"),true));
+            rejects(()->PageAssets.fetch(site,local.resolve("/logo.png"),true));
             edt(()->{app[0]=new PreviewMain(prefs);app[0].load(app[0].current(),local,-1);});
             waitFor(()->{AtomicBoolean ready=new AtomicBoolean();try{edt(()->ready.set(!app[0].current().canvas.images.isEmpty()));}catch(Exception e){throw new RuntimeException(e);}return ready.get();});
             edt(()->{PreviewMain.PageCanvas canvas=app[0].current().canvas;canvas.setSize(800,700);BufferedImage rendered=new BufferedImage(800,700,BufferedImage.TYPE_INT_RGB);Graphics2D g=rendered.createGraphics();canvas.paint(g);g.dispose();
@@ -77,7 +80,7 @@ public final class ReadingTests {
                 try{ImageIO.write(rendered,"png",Paths.get(args.length>0?args[0]:".","aster-reading.png").toFile());}catch(IOException e){throw new RuntimeException(e);}
                 app[0].saveSession();app[0].dispose();app[0]=new PreviewMain(prefs);check(app[0].current().canvas.document.uri.equals(PageLoader.HOME)||"home".equals(PreviewMain.internal(app[0].current().canvas.document.uri)),"Startup fetched saved website automatically");app[0].restoreSession();});
             waitFor(()->{AtomicBoolean ready=new AtomicBoolean();try{edt(()->ready.set(app[0].current().canvas.document.uri.equals(local)));}catch(Exception e){throw new RuntimeException(e);}return ready.get();});
-        }finally{edt(()->{if(app[0]!=null)app[0].dispose();});prefs.removeNode();server.stop(0);}
+        }finally{edt(()->{if(app[0]!=null)app[0].dispose();});prefs.removeNode();server.stop(0);imageServer.stop(0);}
         System.out.println("Reading release passed: search, CSS/gzip, real image decode/paint, native form POST, DOCX security/text, Android download bytes, idle script snapshots and desktop session recovery.");
     }
 }

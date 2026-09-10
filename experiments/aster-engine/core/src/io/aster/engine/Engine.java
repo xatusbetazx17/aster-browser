@@ -26,6 +26,7 @@ public final class Engine {
         public final int action;
         public final boolean newline;
         public URI image;
+        public String imageKey;
         boolean hardBreak;
         public float imageWidth = 240, imageHeight = 160;
         Run(String text, Style style, URI link, int action, boolean newline) {
@@ -41,13 +42,19 @@ public final class Engine {
         public final List<URI> media;
         private final boolean complexText;
         public String css = "";
+        private Map<String,String> stylesheets=Collections.emptyMap();
+        private boolean interactive,responsive;
+        private float viewportWidth=1024,viewportHeight=768;
         FlowBox flow;
         Document(URI uri, String title, List<Run> runs, String source, boolean scriptsBlocked, List<URI> media) {
             this.uri = uri; this.title = title; this.runs = Collections.unmodifiableList(runs);
             boolean complex=false;for(Run run:runs){if(complexText(run.text)){complex=true;break;}}this.complexText=complex;
             this.source = source; this.scriptsBlocked = scriptsBlocked; this.media = Collections.unmodifiableList(media);
         }
-        public Document blockScripts() { Document d=new Document(uri,title,runs,source,true,media);d.css=css;d.flow=flow;return d; }
+        public Document blockScripts() {
+            Document d=new Document(uri,title,runs,source,true,media);d.css=css;d.flow=flow;
+            d.stylesheets=stylesheets;d.interactive=interactive;d.responsive=responsive;d.viewportWidth=viewportWidth;d.viewportHeight=viewportHeight;return d;
+        }
         public String text() {
             StringBuilder out = new StringBuilder();
             for (Run run : runs) out.append(run.newline ? "\n" : run.text);
@@ -68,9 +75,30 @@ public final class Engine {
     /** Only snapshots from a running script session attach click targets. */
     public static Document parseInteractive(URI uri, String source) { return parse(uri,source,true,""); }
     public static Document parseInteractive(URI uri,String source,String css) { return parse(uri,source,true,css); }
+    public static Document parseWithStylesheets(URI uri,String source,Map<String,String> stylesheets){
+        return parse(uri,source,false,"",Collections.unmodifiableMap(new LinkedHashMap<>(stylesheets)),1024,768);
+    }
+    /** Keep fetched CSS and its element policies when the script DOM changes. */
+    public static Document parseInteractive(Document original,String source){return snapshot(original,source,true);}
+    public static Document withoutActions(Document document){return snapshot(document,document.source,false);}
+    private static Document snapshot(Document original,String source,boolean interactive){
+        Document result=parse(original.uri,source,interactive,original.css,original.stylesheets,original.viewportWidth,original.viewportHeight);
+        return original.scriptsBlocked?result.blockScripts():result;
+    }
+    /** Re-evaluate CSS against the visible viewport, never the scrollable page height. */
+    public static Document forViewport(Document document,float width,float height){
+        if(!Float.isFinite(width)||!Float.isFinite(height))throw new IllegalArgumentException("Invalid viewport size.");
+        width=Math.max(1,Math.min(100000,width));height=Math.max(1,Math.min(100000,height));
+        if(!document.responsive||document.viewportWidth==width&&document.viewportHeight==height)return document;
+        Document result=parse(document.uri,document.source,document.interactive,document.css,document.stylesheets,width,height);
+        return document.scriptsBlocked?result.blockScripts():result;
+    }
     private static Document parse(URI uri, String source, boolean interactive,String css) {
+        return parse(uri,source,interactive,css,Collections.emptyMap(),1024,768);
+    }
+    private static Document parse(URI uri,String source,boolean interactive,String css,Map<String,String> sheets,float width,float height) {
         if (source.length() > MAX_SOURCE) throw new IllegalArgumentException("Page exceeds the preview's 1 MB text limit.");
-        PageStyles styles = new PageStyles(source,css);
+        PageStyles styles = new PageStyles(source,css,uri,sheets,width,height);
         List<Run> runs = new ArrayList<>();
         List<Frame> stack = new ArrayList<>();
         stack.add(new Frame("root", DEFAULT, null, -1));
@@ -150,6 +178,7 @@ public final class Engine {
             if (tag.equals("img")&&!hidden) {
                 add(runs, "[Image: " + attrs.getOrDefault("alt", "no description") + "]", frame);
                 Run image=runs.get(runs.size()-1);image.image=PageLoader.link(uri,attrs.get("src"));
+                PageMarkup.Asset asset=PageMarkup.image(uri,attrs);image.imageKey=asset==null?null:asset.key();
                 image.imageWidth=dimension(attrs.get("width"),240);image.imageHeight=dimension(attrs.get("height"),160);
             }
             if (!VOID.contains(tag) && !inside.endsWith("/")) {
@@ -158,7 +187,8 @@ public final class Engine {
             }
         }
         if (title.length() > 160) title = title.substring(0, 160);
-        Document document=new Document(uri, title.isEmpty() ? "Untitled page" : title, runs, source, false, media);document.css=css;document.flow=root;return document;
+        Document document=new Document(uri,title.isEmpty()?"Untitled page":title,runs,source,false,media);document.css=css;document.flow=root;
+        document.stylesheets=sheets;document.interactive=interactive;document.responsive=styles.responsive;document.viewportWidth=width;document.viewportHeight=height;return document;
     }
     static int rawClose(String lower, String tag, int from) {
         int p = from;
@@ -293,6 +323,7 @@ public final class Engine {
         public final int action;
         public float x;public final float y, width; public float height;
         public URI image;
+        public String imageKey;
         Draw(String text, Style style, URI link, int action, float x, float y, float width) {
             this.text = text; this.style = style; this.link = link; this.x = x; this.y = y;
             this.width = width; this.height = style.size * 1.45f;
@@ -322,6 +353,7 @@ public final class Engine {
     }
     /** The uncached path is retained for geometry verification and measured baselines. */
     public static Layout layout(Document doc,float viewportWidth,Measure measure,boolean cacheWidths) {
+        doc=forViewport(doc,viewportWidth,doc.viewportHeight);
         if(cacheWidths&&doc.complexText)measure=new WidthCache(measure);
         if(doc.flow!=null)return FlowBox.layout(doc.flow,viewportWidth,measure);
         float right = Math.max(100, Math.min(10_000, viewportWidth)) - 24, x = 24, y = 24, line = 25;
@@ -331,7 +363,7 @@ public final class Engine {
             if(run.image!=null){
                 if(x>24){y+=line;x=24;}
                 float width=Math.min(run.imageWidth,right-24),height=run.imageHeight*width/run.imageWidth;
-                Draw draw=new Draw(run.text,run.style,run.link,run.action,x,y,width);draw.image=run.image;draw.height=height;items.add(draw);
+                Draw draw=new Draw(run.text,run.style,run.link,run.action,x,y,width);draw.image=run.image;draw.imageKey=run.imageKey;draw.height=height;items.add(draw);
                 y+=height+12;line=25;pendingSpace=false;continue;
             }
             if (run.newline) { y += line + 10; x = 24; line = 25; pendingSpace = false; continue; }

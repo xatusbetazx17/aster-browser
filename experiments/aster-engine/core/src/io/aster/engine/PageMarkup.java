@@ -5,6 +5,19 @@ import java.util.*;
 
 /** Shared bounded token scan for the preview's styles and native forms. */
 public final class PageMarkup {
+    /** Fetch policy is part of the cache key: one element cannot reuse another's
+     * response to bypass its crossorigin or integrity requirements. */
+    public static final class Asset {
+        public final URI uri;
+        public final boolean cors, credentials;
+        public final String integrity;
+        Asset(URI uri,Map<String,String> attrs,boolean stylesheet) {
+            this.uri=uri;cors=attrs.containsKey("crossorigin");
+            credentials="use-credentials".equalsIgnoreCase(attrs.get("crossorigin"));
+            integrity=stylesheet?attrs.getOrDefault("integrity","").trim():"";
+        }
+        public String key(){return uri+"\n"+cors+"\n"+credentials+"\n"+integrity;}
+    }
     public static final class Tag {
         public final String name, text;
         public final Map<String,String> attrs;
@@ -40,11 +53,29 @@ public final class PageMarkup {
     }
     public static List<URI> stylesheets(URI page,String source) {
         List<URI> result=new ArrayList<>();
-        for(Tag t:tags(source)) if(!t.closing&&t.name.equals("link")&&t.attrs.getOrDefault("rel","").equalsIgnoreCase("stylesheet")&&!t.attrs.containsKey("disabled")) {
-            URI uri=PageLoader.link(page,t.attrs.get("href"));
-            if(PageAssets.sameOrigin(page,uri)&&result.size()<4&&!result.contains(uri))result.add(uri);
-        }
+        for(Asset asset:stylesheetAssets(page,source))if(!result.contains(asset.uri))result.add(asset.uri);
         return result;
+    }
+    static Asset stylesheet(URI page,Tag tag){
+        if(tag.closing||!tag.name.equals("link")||tag.attrs.containsKey("disabled"))return null;
+        List<String> rel=Arrays.asList(tag.attrs.getOrDefault("rel","").toLowerCase(Locale.ROOT).trim().split("\\s+"));
+        String type=tag.attrs.getOrDefault("type","").trim();
+        if(!rel.contains("stylesheet")||rel.contains("alternate")||!type.isEmpty()&&!type.equalsIgnoreCase("text/css"))return null;
+        return asset(page,tag.attrs,"href",true);
+    }
+    static Asset image(URI page,Map<String,String> attrs){return asset(page,attrs,"src",false);}
+    private static Asset asset(URI page,Map<String,String> attrs,String attribute,boolean stylesheet){
+        URI uri=PageLoader.link(page,attrs.get(attribute));
+        return PageAssets.allowed(page,uri)?new Asset(uri,attrs,stylesheet):null;
+    }
+    public static List<Asset> stylesheetAssets(URI page,String source){return assets(page,source,true);}
+    public static List<Asset> images(URI page,String source){return assets(page,source,false);}
+    private static List<Asset> assets(URI page,String source,boolean stylesheets){
+        List<Asset> result=new ArrayList<>();Set<String> keys=new HashSet<>();
+        for(Tag tag:tags(source)){
+            Asset asset=stylesheets?stylesheet(page,tag):!tag.closing&&tag.name.equals("img")?image(page,tag.attrs):null;
+            if(asset!=null&&keys.add(asset.key())){result.add(asset);if(result.size()>=(stylesheets?4:8))break;}
+        }return result;
     }
     private PageMarkup() { }
 }

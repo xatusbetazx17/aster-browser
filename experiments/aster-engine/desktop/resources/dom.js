@@ -160,7 +160,7 @@
   root.parentNode=document;
   Object.assign(globalThis,{window:globalThis,self:globalThis,document,EventTarget:Target,Event:AsterEvent,KeyboardEvent:AsterEvent,MouseEvent:AsterEvent,Node,HTMLElement:Node,HTMLMediaElement,HTMLVideoElement:HTMLMediaElement,HTMLAudioElement:HTMLMediaElement,
     addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),dispatchEvent:win.dispatchEvent.bind(win),
-    navigator:Object.freeze({userAgent:'AsterEnginePreview/0.6 QuickJS',getGamepads:()=>nativePads()}),
+    navigator:Object.freeze({userAgent:'AsterEnginePreview/0.7 QuickJS',getGamepads:()=>nativePads()}),
     performance:Object.freeze({now:()=>clock}),console:Object.freeze({log:(...args)=>warn(args.join(' ')),warn:(...args)=>warn(args.join(' ')),error:(...args)=>warn(args.join(' '))})});
   function schedule(fn,ms,repeat,args) {
     if(typeof fn!=='function') throw new TypeError('Timer callback must be a function');
@@ -180,11 +180,15 @@
       const tag=n.tagName.toLowerCase();
       // Keep the live stylesheet nodes when serializing a scripted page. Escaping
       // '<' as CSS prevents stylesheet text from closing its HTML element.
-      if(tag==='head') return n.children.filter(c=>c.tagName==='STYLE').map(c=>render(c,depth+1)).join('');
-      if(tag==='style') { const css=n.textContent; size+=css.length; if(size>1000000) throw new RangeError('DOM text limit'); return '<style>'+css.replace(/</g,'\\3c ')+'</style>'; }
+      if(tag==='head') return n.children.filter(c=>c.tagName==='STYLE'||c.tagName==='LINK').map(c=>render(c,depth+1)).join('');
+      if(tag==='style') {
+        const css=n.textContent; size+=css.length; if(size>1000000) throw new RangeError('DOM text limit');
+        let attrs=''; for(const k of ['id','type','media','disabled']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
+        return '<style'+attrs+'>'+css.replace(/</g,'\\3c ')+'</style>';
+      }
       if(hidden.has(tag)) return '';
       if(!/^[a-z][a-z0-9-]*$/.test(tag)) return '';
-      let attrs=''; for(const k of ['href','src','alt','id','class','style','type','controls','width','height','hidden']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
+      let attrs=''; for(const k of ['href','src','alt','id','class','style','type','controls','width','height','hidden','rel','media','crossorigin','integrity','disabled']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
       const css=Object.entries(n.style).map(([k,v])=>k.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+':'+String(v)).join(';');
       if(css) attrs=attrs.replace(/ style="[^"]*"/,'')+' style="'+escape(css)+'"';
       attrs+=' data-aster-action="'+n._id+'"';

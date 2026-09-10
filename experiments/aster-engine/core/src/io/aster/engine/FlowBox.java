@@ -56,7 +56,7 @@ final class FlowBox {
             void run(Engine.Run run){
                 if(run.newline){if(run.hardBreak)flush(true);return;}
                 if(run.image!=null){flush(false);float w=Math.min(run.imageWidth,width),h=run.imageHeight*w/run.imageWidth;draw(run.text,run,w);
-                    Engine.Draw d=items.get(items.size()-1);d.image=run.image;d.height=h;height=h;flush(false);return;}
+                    Engine.Draw d=items.get(items.size()-1);d.image=run.image;d.imageKey=run.imageKey;d.height=h;height=h;flush(false);return;}
                 String text=run.text;
                 for(int at=0;at<text.length();){
                     int cp=text.codePointAt(at);

@@ -116,7 +116,7 @@ def notes(metadata, signing, apk_name, tag):
         "This test APK cannot promise an in-place update from another CI run. Do not uninstall an older app containing data you need.")
     return f"""Aster {metadata['version']} — experimental original engine, built from `{metadata['commit']}`.
 
-This update adds desktop cross-origin HTTP APIs with CORS enforcement, Request/Blob/File/FormData and URLSearchParams, asynchronous XMLHttpRequest, early response headers, upload/download progress and bounded gzip/deflate decoding. Desktop and Android also preserve the current path for query-only links. The existing website sessions, desktop storage, dark workspace, reading/notes and tab parking remain included. Android JavaScript/video is still unfinished. WINDOWS-BENCHMARK.json and LINUX-BENCHMARK.json contain the scoped renderer results; they do not compare Aster with other browsers. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
+This update adds CDN stylesheet/image loading with CORS, stylesheet integrity and isolated cookies, responsive CSS media queries, stylesheet source order and important priorities in the supported CSS subset. Desktop resizing/zoom and script snapshots retain styling; Android shares the engine changes. Site protection, HTTP APIs, sessions, dark workspace, reading/notes and tab parking remain included. Android JavaScript/video is still unfinished. WINDOWS-BENCHMARK.json and LINUX-BENCHMARK.json contain scoped renderer results; they do not compare Aster with other browsers. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
 
 | Device | Download | Install or update |
 | --- | --- | --- |
@@ -130,7 +130,7 @@ Linux uses the same `io.aster.browser.EnginePreview` application and `preview` b
 
 Older Qt/Chromium kits, WebKit builds and differently signed Android test APKs are separate installations. Their data is not automatically converted. Close Aster before updating; downloads already saved outside the application remain in place. Updates are initiated by downloading a newer package; there is no background auto-updater.
 
-See [site protection, CSS layout and the remaining engine roadmap](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.6.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
+See [responsive CSS, CDN resources and current limitations](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.7.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
 """
 
 

@@ -10,6 +10,8 @@ import time
 import xml.etree.ElementTree as ET
 import struct
 import zlib
+import base64
+import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/android"
@@ -92,20 +94,29 @@ def image_fixture():
 
 class Fixture(BaseHTTPRequestHandler):
     image_requests = 0
+    cross_origin_errors = []
+    css = b'@media screen and (max-width:600px){section{background:#b0ebdf !important}}'
     def do_GET(self):
-        if self.path == '/image.png':
-            Fixture.image_requests += 1
-            body = image_fixture()
+        if self.path in ('/image.png', '/cdn.css'):
+            if self.headers.get('Origin') != 'http://127.0.0.1:8765' or self.headers.get('Cookie'):
+                Fixture.cross_origin_errors.append('CDN origin missing or first-party cookie leaked')
+            image = self.path == '/image.png'
+            if image:
+                Fixture.image_requests += 1
+            body = image_fixture() if image else Fixture.css
             self.send_response(200)
-            self.send_header('Content-Type', 'image/png')
+            self.send_header('Content-Type', 'image/png' if image else 'text/css')
+            self.send_header('Access-Control-Allow-Origin', 'http://127.0.0.1:8765')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
             return
         html = "<title>Second fixture</title><h1>Second fixture</h1><p>Link navigation worked.</p>" if self.path == "/second" else "<title>First fixture</title><a href='/second'>Open second fixture</a><p>Network page rendered by Aster.</p>"
         if self.path != '/second':
-            html += "<img src='/image.png' width='80' height='40' alt='Aster image fixture'><form action='/submitted' method='post'><input name='q' value='android8'></form>"
-            html += "<section style='background:#b0ebdf;padding:12px;border:2px solid #267861;margin:8px 0'><p style='margin:0'>Native CSS box fixture.</p></section>"
+            integrity = base64.b64encode(hashlib.sha384(Fixture.css).digest()).decode()
+            html += f"<link rel='stylesheet' href='http://127.0.0.1:8766/cdn.css' crossorigin integrity='sha384-{integrity}'>"
+            html += "<img src='http://127.0.0.1:8766/image.png' crossorigin width='80' height='40' alt='Aster image fixture'><form action='/submitted' method='post'><input name='q' value='android8'></form>"
+            html += "<section style='background:#ff0000;padding:12px;border:2px solid #267861;margin:8px 0'><p style='margin:0'>Native CSS box fixture.</p></section>"
         if "login=android8" in self.headers.get("Cookie", ""):
             html += "<p>Session cookie restored.</p>"
         body = html.encode()
@@ -135,9 +146,12 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", 8765), Fixture)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    cdn = ThreadingHTTPServer(("127.0.0.1", 8766), Fixture)
+    threading.Thread(target=cdn.serve_forever, daemon=True).start()
     try:
         adb("wait-for-device")
         adb("reverse", "tcp:8765", "tcp:8765")
+        adb("reverse", "tcp:8766", "tcp:8766")
         baseline = Path(os.environ.get("ASTER_ANDROID_BASELINE_APK", str(OUT / "aster-engine-preview.apk")))
         adb("install", "--no-incremental", "--no-streaming", "-r", str(baseline))
         print("APK installed.", flush=True)
@@ -172,7 +186,9 @@ def main():
                 raise AssertionError('Android did not paint the fetched image and CSS box pixels')
             time.sleep(0.5)
         (OUT / 'aster-android-images.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
-        print('Fetched image and CSS box pixels were rendered by the native Android Canvas.', flush=True)
+        if Fixture.cross_origin_errors:
+            raise AssertionError(Fixture.cross_origin_errors)
+        print('CORS CDN image, verified stylesheet, responsive CSS and important cascade rendered by native Android Canvas.', flush=True)
         menu('Site protection')
         tap(wait_text('Custom blocked hostnames', exact=True))
         adb('shell', 'input', 'text', '127.0.0.1')
@@ -189,8 +205,8 @@ def main():
         if editor.attrib.get('focused') == 'true' or editor.attrib.get('text') != '127.0.0.1':
             raise AssertionError('Opening protection stole focus for editing or changed saved rules')
         activity = ET.tostring(screen(), encoding='unicode')
-        if '1 requests blocked for this origin this session.' not in activity or Fixture.image_requests != before_images:
-            raise AssertionError('Android blocking did not prevent the actual image request')
+        if '2 requests blocked for this origin this session.' not in activity or Fixture.image_requests != before_images:
+            raise AssertionError('Android blocking did not prevent the actual CDN stylesheet and image requests')
         tap(wait_text('Allow requests on this site', exact=True))
         wait_text('Protection settings saved.')
         if wait_text('Allow requests on this site', exact=True).attrib.get('checked') != 'true':
@@ -278,9 +294,12 @@ def main():
         if "Session cookie restored." in ET.tostring(screen(), encoding="unicode"):
             raise AssertionError("Clear website data kept the login session")
         print("Clear website data signed out while preserving the bookmark.", flush=True)
+        if Fixture.cross_origin_errors:
+            raise AssertionError(Fixture.cross_origin_errors)
         print("Android passed: native Canvas, actual fetched image pixels, real HTTP/link/Back, native form POST, reader controls, bookmark-preserving APK replacement, MediaDrm query.")
     finally:
         server.shutdown()
+        cdn.shutdown()
         logs = adb("logcat", "-d", "-s", "AndroidRuntime:E", "ActivityManager:E", "AsterSiteData:W")
         OUT.joinpath("android-runtime.log").write_text(logs, encoding="utf-8")
         if "FATAL EXCEPTION" in logs:

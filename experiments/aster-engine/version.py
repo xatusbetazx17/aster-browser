@@ -1,7 +1,7 @@
 """One version source for native packages, APKs and release metadata."""
 import os
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 
 def build_number():

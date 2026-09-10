@@ -16,6 +16,7 @@ import javax.imageio.ImageIO;
 
 /** Aster's native desktop shell; web pages use only the Aster Java2D renderer. */
 public final class PreviewMain {
+    static { PageAssets.useConnections(AssetConnection::new); }
     private static final Color INK=WorkspaceTheme.TEXT, ACCENT=WorkspaceTheme.ACCENT, PAPER=WorkspaceTheme.PAGE;
     private final JFrame window = GraphicsEnvironment.isHeadless() ? null : new JFrame("Aster · Independent browser preview");
     final JPanel surface = new JPanel(new BorderLayout());
@@ -352,11 +353,11 @@ public final class PreviewMain {
     }
     private void loadImages(Tab tab,Engine.Document document,int generation){
         if(document.scriptsBlocked)return;
-        java.util.List<URI> sources=new ArrayList<>();for(Engine.Run r:document.runs)if(r.image!=null&&PageAssets.sameOrigin(document.uri,r.image)&&!sources.contains(r.image)&&sources.size()<8)sources.add(r.image);
-        tab.imageTask=assets.submit(()->{long bytes=0;for(URI source:sources){if(Thread.currentThread().isInterrupted())return;
+        java.util.List<PageMarkup.Asset> sources=PageMarkup.images(document.uri,document.source);
+        tab.imageTask=assets.submit(()->{long bytes=0;for(PageMarkup.Asset source:sources){if(Thread.currentThread().isInterrupted())return;
             try{BufferedImage decoded=decodeImage(PageAssets.fetch(document.uri,source,true,siteData.request(document.uri,false,"GET")));long size=(long)decoded.getWidth()*decoded.getHeight()*4;
                 if(bytes+size>8*1024*1024)break;bytes+=size;
-                SwingUtilities.invokeLater(()->{if(!disposed&&!tab.closed&&tab.generation==generation){tab.canvas.images.put(source,decoded);tab.canvas.repaint();}});
+                SwingUtilities.invokeLater(()->{if(!disposed&&!tab.closed&&tab.generation==generation){tab.canvas.images.put(source.key(),decoded);tab.canvas.repaint();}});
             }catch(Exception ignored){/* Keep the image description when a bounded decode fails. */}
         }});
     }
@@ -481,7 +482,7 @@ public final class PreviewMain {
         if(tab.mediaId!=0){if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);}tab.mediaEvents.clear();tab.mediaTime.set(null);
         if(tab.controllerButton!=null){tab.controllerButton.setSelected(false);tab.controllerButton.setEnabled(false);}
         if(tab.runScripts!=null){tab.runScripts.setText("Run JavaScript");tab.runScripts.setEnabled(tab.original!=null&&!tab.original.scriptsBlocked);}
-        if(session!=null&&tab.canvas.document!=null)tab.canvas.setDocument(Engine.parse(tab.canvas.document.uri,tab.canvas.document.source));
+        if(session!=null&&tab.canvas.document!=null)tab.canvas.setDocument(Engine.withoutActions(tab.canvas.document));
     }
     @SuppressWarnings("unchecked") private void scriptCommand(Tab tab,String command,boolean click) {
         ScriptSession session=tab.script;if(session==null||current()!=tab)return;
@@ -498,7 +499,7 @@ public final class PreviewMain {
         try {
             Object update=snapshot.get("html");if(update!=null&&!(update instanceof String))throw new IllegalArgumentException("Invalid page snapshot");
             if(update instanceof String){String html=(String)update;if(html.length()>Engine.MAX_SOURCE)throw new IllegalArgumentException("Page snapshot exceeds limit");
-                if(!html.equals(tab.canvas.document.source))tab.canvas.setDocument(Engine.parseInteractive(tab.original.uri,html,tab.original.css));}
+                if(!html.equals(tab.canvas.document.source))tab.canvas.setDocument(Engine.parseInteractive(tab.canvas.document,html));}
             tab.chip.title(tab.canvas.document.title);tabs.setTitleAt(tabs.indexOfComponent(tab),plainLabel(tab.canvas.document.title));
             Object errors=snapshot.get("errors");tab.message=errors instanceof java.util.List&&!((java.util.List<?>)errors).isEmpty()?"Page script: "+((java.util.List<?>)errors).get(0):"";
             applyMediaCommands(tab,snapshot.get("media"),click);
@@ -647,7 +648,7 @@ public final class PreviewMain {
             shortcuts.add(button("Restore tabs","Restore saved tabs and reading positions",this::restoreSession));shortcuts.add(button("Site support","Tested capabilities and unfinished services",()->load(tab,URI.create("aster:compatibility"),-1)));panel.add(shortcuts);panel.add(Box.createVerticalStrut(18));
             int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;
             paragraph(panel,(tabs.getTabCount()-parked)+" live tabs  ·  "+parked+" parked  ·  "+bookmarkCount()+" bookmarks");
-            paragraph(panel,"Independent engine · Aster 0.6 preview. Protected streaming and cloud gaming remain unfinished; Site support shows the current limits.");
+            paragraph(panel,"Independent engine · Aster 0.7 preview. Protected streaming and cloud gaming remain unfinished; Site support shows the current limits.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -688,7 +689,7 @@ public final class PreviewMain {
             paragraph(panel,"Netflix and Prime Video: unsupported. Aster now has basic website sessions but still needs a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
             paragraph(panel,"Cloud gaming: unsupported. WebRTC transport, real-time audio/video, complete graphics and input APIs, and service acceptance must work together. The playground only demonstrates local controller input.");
             paragraph(panel,"Check the release notes for tested platforms and known issues. An unsupported page may load incompletely, even when some text is visible.");
-            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.6.md"),-1)));
+            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.7.md"),-1)));
         }
         panel.add(Box.createVerticalGlue());WorkspaceTheme.apply(panel); return panel;
     }
@@ -699,12 +700,13 @@ public final class PreviewMain {
     }
     private static String plainLabel(String text) { return "\u200b"+text; }
     static final class PageCanvas extends JPanel implements Scrollable {
-        final Map<URI,BufferedImage> images=new HashMap<>();String findText="";
+        final Map<String,BufferedImage> images=new HashMap<>();String findText="";
         int findIndex=-1;String searched="";Engine.Layout searchedLayout;
         final java.util.List<Rectangle> findRects=new ArrayList<>();final Set<Engine.Draw> foundDraws=new HashSet<>();
         private final Map<String,Font> fonts=new HashMap<>();
         private Font cachedFont(Engine.Style style){String key=style.size+":"+style.bold+":"+style.italic+":"+style.pre;return fonts.computeIfAbsent(key,k->font(style));}
-        Engine.Document document; Engine.Layout layout; int layoutWidth = -1; double scale = 1;
+        Engine.Document document; Engine.Layout layout; int layoutWidth = -1, layoutHeight=-1; double scale = 1;
+        private double layoutScale=-1;
         java.util.function.Consumer<URI> navigate = uri -> { };
         java.util.function.Consumer<URI> openTab = uri -> { };
         java.util.function.Consumer<URI> save = uri -> { };
@@ -746,9 +748,12 @@ public final class PreviewMain {
         }
         static Font font(Engine.Style s) { return new Font(s.pre ? Font.MONOSPACED : Font.SANS_SERIF, (s.bold ? Font.BOLD : 0) | (s.italic ? Font.ITALIC : 0), Math.round(s.size)); }
         void ensureLayout() {
-            if (document != null && (layout == null || layoutWidth != getWidth())) {
-                layoutWidth = getWidth();
-                try { layout = Engine.layout(document, (float)(getWidth()/scale), (text, style) -> getFontMetrics(cachedFont(style)).stringWidth(text)); }
+            int viewportHeight=getParent() instanceof JViewport?((JViewport)getParent()).getExtentSize().height:getHeight();
+            if (document != null && (layout == null || layoutWidth != getWidth() || layoutHeight!=viewportHeight || layoutScale!=scale)) {
+                layoutWidth = getWidth();layoutHeight=viewportHeight;layoutScale=scale;
+                try { Engine.Document previous=document;document=Engine.forViewport(document,(float)(getWidth()/scale),(float)(viewportHeight/scale));
+                    if(document!=previous)getAccessibleContext().setAccessibleDescription(document.text());
+                    layout = Engine.layout(document, (float)(getWidth()/scale), (text, style) -> getFontMetrics(cachedFont(style)).stringWidth(text)); }
                 catch (IllegalArgumentException e) { document = Engine.parse(PageLoader.HOME, "<h1>Page is too complex</h1><p>" + PageLoader.escape(e.getMessage()) + "</p>"); layout = Engine.layout(document, (float)(getWidth()/scale), (t, s) -> getFontMetrics(font(s)).stringWidth(t)); }
                 revalidate();
             }
@@ -767,7 +772,7 @@ public final class PreviewMain {
             for (int i=layout.firstVisible(clip==null?0:clip.y);i<layout.items.size();i++) {Engine.Draw draw=layout.items.get(i);
                 if(clip!=null&&draw.y>clip.y+clip.height)break;
                 if (clip != null && (draw.y + draw.height < clip.y || draw.y > clip.y + clip.height)) continue;
-                if(draw.image!=null){BufferedImage bitmap=images.get(draw.image);
+                if(draw.image!=null){BufferedImage bitmap=images.get(draw.imageKey);
                     if(bitmap!=null){double fit=Math.min(draw.width/bitmap.getWidth(),draw.height/bitmap.getHeight());g.drawImage(bitmap,(int)draw.x,(int)draw.y,(int)(bitmap.getWidth()*fit),(int)(bitmap.getHeight()*fit),null);continue;}
                     g.setColor(new Color(0xe8eeec));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
                 if(foundDraws.contains(draw)){g.setColor(new Color(0xffe38a));g.fillRect((int)draw.x,(int)draw.y,(int)draw.width,(int)draw.height);}
