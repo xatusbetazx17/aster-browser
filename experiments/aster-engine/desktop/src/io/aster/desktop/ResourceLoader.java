@@ -33,7 +33,7 @@ final class ResourceLoader {
             if("https".equalsIgnoreCase(page.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) throw new IOException("Mixed-content resource refused");
             if(script && !sameOrigin(page,uri)) throw new IOException("Cross-origin script redirect refused");
             HttpURLConnection c=(HttpURLConnection)uri.toURL().openConnection();
-            c.setInstanceFollowRedirects(false); c.setConnectTimeout(8000); c.setReadTimeout(8000); c.setRequestProperty("Accept-Encoding","identity"); c.setRequestProperty("User-Agent","AsterEnginePreview/0.7");
+            c.setInstanceFollowRedirects(false); c.setConnectTimeout(8000); c.setReadTimeout(8000); c.setRequestProperty("Accept-Encoding","identity"); c.setRequestProperty("User-Agent","AsterEnginePreview/0.8");
             request.prepare(c);
             try {
                 int code=c.getResponseCode();request.receive(c);

@@ -98,7 +98,7 @@ public final class MainActivity extends Activity {
         LinearLayout shortcuts=new LinearLayout(this);
         shortcuts.addView(control("Search","Search with DuckDuckGo",()->load(URI.create("https://html.duckduckgo.com/html/"),-1)),new LinearLayout.LayoutParams(0,dp(52),1));
         shortcuts.addView(control("Restore tabs","Restore saved tabs",this::restoreTabs),new LinearLayout.LayoutParams(0,dp(52),1));body.addView(shortcuts);
-        body.addView(homeText("Independent engine · 0.7 preview",15,ACCENT));body.addView(homeText("Protected streaming and cloud gaming remain unfinished. Streaming support in the menu explains the current limits.",15,0xffa5b4c6));holder.addView(body);return holder;}
+        body.addView(homeText("Independent engine · 0.8 preview",15,ACCENT));body.addView(homeText("Protected streaming and cloud gaming remain unfinished. Streaming support in the menu explains the current limits.",15,0xffa5b4c6));holder.addView(body);return holder;}
     private View homeCard(String category,String title,String description,Runnable action){
         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setBackground(round(0xff1b2633));card.setPadding(dp(18),dp(12),dp(18),dp(12));
         LinearLayout.LayoutParams bounds=new LinearLayout.LayoutParams(-1,-2);bounds.bottomMargin=dp(12);card.setLayoutParams(bounds);
@@ -128,7 +128,7 @@ public final class MainActivity extends Activity {
         });
         menu.getMenu().add("Clear website data").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setTitle("Clear website data").setMessage("Sign out of websites and clear their cookies? Bookmarks and reader notes stay saved.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{stopLoading();if(download!=null)download.cancel(true);siteData.clear();try{siteData.flush();}catch(Exception e){android.util.Log.w("AsterSiteData","Website data clear failed",e);new AlertDialog.Builder(this).setTitle("Website data").setMessage("Website data was cleared in memory, but the saved file could not be updated.").setPositiveButton("OK",null).show();}load(PageLoader.HOME,-1);}).show();return true;});
         menu.getMenu().add("About this preview").setOnMenuItemClickListener(item -> {
-            new AlertDialog.Builder(this).setTitle("Aster 0.7 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
+            new AlertDialog.Builder(this).setTitle("Aster 0.8 · Independent preview").setMessage("Aster's own renderer with images, a small CSS subset, native forms, tabs, document reading and offline system speech. Android 8 or later. Full web layouts, advanced login flows, Android JavaScript/video, PDF and the AI companion remain unfinished.").setPositiveButton("OK", null).show(); return true;
         }); menu.show();
     }
     private void move(int delta) { int next = index + delta; if (next >= 0 && next < history.size()) load(history.get(next), next); }

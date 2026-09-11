@@ -8,6 +8,7 @@ public final class Engine {
     public static final int MAX_SOURCE = 1_000_000, MAX_RUNS = 20_000, MAX_DEPTH = 64;
     private static final Set<String> BLOCKS = set("p div article section main header footer nav aside h1 h2 h3 h4 h5 h6 ul ol li blockquote pre table tr hr");
     private static final Set<String> VOID = set("br hr img meta link input source area base embed wbr col param");
+    private static final Set<String> METADATA = set("meta link source area base param col");
     private static Set<String> set(String words) { return new HashSet<>(Arrays.asList(words.split(" "))); }
 
     public static final class Style {
@@ -165,7 +166,7 @@ public final class Engine {
             Frame frame = new Frame(tag, style, link, action);
             frame.hidden=hidden;frame.element=element;
             frame.flow=current.flow;
-            if(!hidden&&(BLOCKS.contains(tag)||tag.equals("body")||PageStyles.property(declarations,"display").equals("block"))){
+            if(!hidden&&!METADATA.contains(tag)&&(BLOCKS.contains(tag)||tag.equals("body")||PageStyles.property(declarations,"display").equals("block")||PageStyles.property(declarations,"display").equals("flex")||current.flow.box.flex)){
                 if(++boxes>=MAX_RUNS)throw new IllegalArgumentException("Page has too many layout boxes.");
                 frame.flow=new FlowBox(tag,declarations,style);current.flow.children.add(frame.flow);
                 if(PageStyles.property(declarations,"text-align").isEmpty())frame.flow.box.align=current.flow.box.align;
@@ -337,10 +338,12 @@ public final class Engine {
     }
     public static final class Layout {
         public final List<Draw> items; public final float height;
+        /** DOM reading order is independent of flex positioning and viewport culling. */
+        public final List<Draw> readingItems;
         public final List<Rect> boxes;
         private final float maximumHeight;
         Layout(List<Draw> items, float height) {this(items,height,Collections.emptyList());}
-        Layout(List<Draw> items,float height,List<Rect> boxes) {this.boxes=Collections.unmodifiableList(boxes);this.items = Collections.unmodifiableList(items); this.height = height;float max=0;for(Draw d:items)max=Math.max(max,d.height);maximumHeight=max; }
+        Layout(List<Draw> items,float height,List<Rect> boxes) {this.boxes=Collections.unmodifiableList(boxes);this.readingItems=Collections.unmodifiableList(new ArrayList<>(items));items.sort(Comparator.comparingDouble(d->d.y));this.items = Collections.unmodifiableList(items); this.height = height;float max=0;for(Draw d:items)max=Math.max(max,d.height);maximumHeight=max; }
         public int firstVisible(float y){int lo=0,hi=items.size();float top=y-maximumHeight;while(lo<hi){int mid=(lo+hi)>>>1;if(items.get(mid).y<top)lo=mid+1;else hi=mid;}return lo;}
         public URI hit(float x, float y) {
             for(int i=firstVisible(y);i<items.size();i++){Draw d=items.get(i);if(d.y>y)break;if (d.link != null && x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height) return d.link;}

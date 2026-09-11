@@ -46,7 +46,7 @@ public final class PageAssets {
             if(tainted&&!asset.integrity.isEmpty()&&!asset.cors)throw new IOException("Cross-origin integrity requires CORS.");
             HttpURLConnection c = connections.open(target);
             c.setConnectTimeout(5000); c.setReadTimeout(5000); c.setInstanceFollowRedirects(false);
-            c.setRequestProperty("User-Agent", "AsterEnginePreview/0.7"); c.setRequestProperty("Accept-Encoding", image ? "identity" : "gzip");
+            c.setRequestProperty("User-Agent", "AsterEnginePreview/0.8"); c.setRequestProperty("Accept-Encoding", image ? "identity" : "gzip");
             try {
                 if(asset.cors&&tainted){c.setRequestProperty("Origin",origin);
                     if(!origin.equals(c.getRequestProperty("Origin")))throw new IOException("Native asset transport cannot send the CORS origin.");}

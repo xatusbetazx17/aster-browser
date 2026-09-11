@@ -179,7 +179,7 @@ final class PageNetwork implements AutoCloseable {
         }catch(Exception e){t.event(Map.of("id",t.id,"kind","fetch-error","error",safe(e)));}
         finally{synchronized(this){fetches.remove(t.id,t);}if(t.deadline!=null)t.deadline.cancel(false);}
     }
-    private static HttpRequest.Builder builder(URI uri){return HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).header("User-Agent","AsterEnginePreview/0.7").header("Accept-Encoding","gzip, deflate");}
+    private static HttpRequest.Builder builder(URI uri){return HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).header("User-Agent","AsterEnginePreview/0.8").header("Accept-Encoding","gzip, deflate");}
     private HttpResponse<InputStream> send(Transfer t,HttpRequest request)throws IOException,InterruptedException{
         if(t.cancelled)throw new InterruptedIOException("Fetch cancelled");
         HttpResponse<InputStream> response=CLIENT.send(request,HttpResponse.BodyHandlers.ofInputStream());

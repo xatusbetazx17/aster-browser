@@ -1,13 +1,14 @@
 <html><head><title>Aster · Engine playground</title></head><body>
+<style>.features{display:flex;gap:16px;flex-wrap:wrap}.feature{flex:1 1 180px;min-width:0;padding:16px;background:#edf7f3;border:1px solid #c2dcd3;border-radius:10px}@media(max-width:550px){.features{flex-direction:column}}</style>
 <p style="color:#176b59;font-weight:bold">A S T E R / PLAYGROUND</p>
 <h1>A little more alive.</h1>
 <p>This page runs inside Aster's own renderer. Choose Run JavaScript above to try it.</p>
-<h2 id="state">Scripts are off</h2>
+<section class="features"><article class="feature"><h2 id="state">Scripts are off</h2>
 <p id="counter">Click count: 0</p><button id="add">Add one</button>
-<h2>Keyboard and controller</h2>
+</article><article class="feature"><h2>Keyboard and controller</h2>
 <p>Click this page, then press an arrow key. Enable controller to let this page read a connected gamepad.</p>
 <p id="key">Waiting for a key</p><p id="pad">Controller access is off</p>
-<h2>Media preview</h2>
+</article></section><h2>Media preview</h2>
 <video id="clip" src="aster-sample.mp4" controls></video>
 <p><button id="play">Play video</button> · <button id="pause">Pause video</button> · <button id="restart">Restart video</button></p>
 <p id="media-status">A four-second video, controlled by this page. Select Run JavaScript, then Play video.</p>

@@ -648,7 +648,7 @@ public final class PreviewMain {
             shortcuts.add(button("Restore tabs","Restore saved tabs and reading positions",this::restoreSession));shortcuts.add(button("Site support","Tested capabilities and unfinished services",()->load(tab,URI.create("aster:compatibility"),-1)));panel.add(shortcuts);panel.add(Box.createVerticalStrut(18));
             int parked=0;for(int i=0;i<tabs.getTabCount();i++)if(((Tab)tabs.getComponentAt(i)).parked)parked++;
             paragraph(panel,(tabs.getTabCount()-parked)+" live tabs  ·  "+parked+" parked  ·  "+bookmarkCount()+" bookmarks");
-            paragraph(panel,"Independent engine · Aster 0.7 preview. Protected streaming and cloud gaming remain unfinished; Site support shows the current limits.");
+            paragraph(panel,"Independent engine · Aster 0.8 preview. Protected streaming and cloud gaming remain unfinished; Site support shows the current limits.");
         } else if(page.equals("bookmarks")) {
             if(bookmarkCount()==0) paragraph(panel,"No bookmarks yet. Open a page and press Ctrl+D or the star button.");
             for(int i=0;i<bookmarkCount();i++) { final String url=preferences.get("url"+i,""); JButton item=button(plainLabel(preferences.get("title"+i,url)),url,()->{ try { load(tab,target(url),-1); } catch(IllegalArgumentException e) { message(e.getMessage()); } }); item.setAlignmentX(Component.LEFT_ALIGNMENT); item.setMaximumSize(new Dimension(1200,38)); panel.add(item); panel.add(Box.createVerticalStrut(6)); }
@@ -689,7 +689,7 @@ public final class PreviewMain {
             paragraph(panel,"Netflix and Prime Video: unsupported. Aster now has basic website sessions but still needs a standards-complete DOM, media streaming APIs and an approved DRM module. A hardware DRM indicator alone does not enable playback.");
             paragraph(panel,"Cloud gaming: unsupported. WebRTC transport, real-time audio/video, complete graphics and input APIs, and service acceptance must work together. The playground only demonstrates local controller input.");
             paragraph(panel,"Check the release notes for tested platforms and known issues. An unsupported page may load incompletely, even when some text is visible.");
-            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.7.md"),-1)));
+            panel.add(button("Engine roadmap","Open the implementation and compatibility roadmap",()->load(tab,URI.create("https://github.com/xatusbetazx17/aster-browser/blob/codex/aster-webkit-desktop/experiments/aster-engine/RELEASE_0.8.md"),-1)));
         }
         panel.add(Box.createVerticalGlue());WorkspaceTheme.apply(panel); return panel;
     }
@@ -741,10 +741,10 @@ public final class PreviewMain {
         void setDocument(Engine.Document doc) { document = doc; layout = null; layoutWidth = -1;findIndex=-1; getAccessibleContext().setAccessibleDescription(doc.text()); revalidate(); repaint(); }
         void release(){document=null;layout=null;layoutWidth=-1;images.clear();fonts.clear();findRects.clear();foundDraws.clear();searchedLayout=null;getAccessibleContext().setAccessibleDescription("Parked page");}
         void search(){if(layout==searchedLayout&&findText.equals(searched))return;searchedLayout=layout;searched=findText;findIndex=-1;findRects.clear();foundDraws.clear();if(layout==null||findText.trim().isEmpty())return;
-            StringBuilder text=new StringBuilder();int[] starts=new int[layout.items.size()];for(int i=0;i<starts.length;i++){starts[i]=text.length();text.append(layout.items.get(i).text).append(' ');}
+            StringBuilder text=new StringBuilder();int[] starts=new int[layout.readingItems.size()];for(int i=0;i<starts.length;i++){starts[i]=text.length();text.append(layout.readingItems.get(i).text).append(' ');}
             java.util.regex.Matcher matches=java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(findText.trim().replaceAll("\\s+"," ")),java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE).matcher(text);
             while(matches.find()&&findRects.size()<1000){int at=Arrays.binarySearch(starts,matches.start());if(at<0)at=Math.max(0,-at-2);Rectangle rect=null;
-                for(int i=at;i<starts.length&&starts[i]<matches.end();i++){Engine.Draw d=layout.items.get(i);foundDraws.add(d);Rectangle r=new Rectangle((int)d.x,(int)d.y,(int)Math.ceil(d.width),(int)Math.ceil(d.height));rect=rect==null?r:rect.union(r);}if(rect!=null)findRects.add(rect);}
+                for(int i=at;i<starts.length&&starts[i]<matches.end();i++){Engine.Draw d=layout.readingItems.get(i);foundDraws.add(d);Rectangle r=new Rectangle((int)d.x,(int)d.y,(int)Math.ceil(d.width),(int)Math.ceil(d.height));rect=rect==null?r:rect.union(r);}if(rect!=null)findRects.add(rect);}
         }
         static Font font(Engine.Style s) { return new Font(s.pre ? Font.MONOSPACED : Font.SANS_SERIF, (s.bold ? Font.BOLD : 0) | (s.italic ? Font.ITALIC : 0), Math.round(s.size)); }
         void ensureLayout() {

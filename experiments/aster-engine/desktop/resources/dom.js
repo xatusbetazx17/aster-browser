@@ -46,13 +46,56 @@
       return !event.defaultPrevented;
     }
   }
+  // A live, bounded declaration view over the same style attribute used by the
+  // renderer. Mutating one property must preserve all other inline declarations.
+  function declarations(text) {
+    const out=new Map();let part='',quote='',depth=0,comment=false;
+    const add=part=>{const colon=part.indexOf(':');if(colon<1)return;let name=part.slice(0,colon).trim();if(!name.startsWith('--'))name=name.toLowerCase();
+      if(!/^(?:--[\w-]+|-?[a-z][a-z0-9-]*)$/.test(name))return;
+      let value=part.slice(colon+1).trim(),priority='';if(/!\s*important\s*$/i.test(value)){priority='important';value=value.replace(/!\s*important\s*$/i,'').trim();}
+      if(value&&(!out.has(name)||priority||!out.get(name).priority))out.set(name,{value,priority});};
+    for(let i=0;i<=text.length;i++){const c=text[i];
+      if(comment){if(c==='*'&&text[i+1]==='/'){comment=false;i++;}continue;}
+      if(quote){if(c!==undefined)part+=c;if(c==='\\'&&i+1<text.length)part+=text[++i];else if(c===quote)quote='';continue;}
+      if(c==='/'&&text[i+1]==='*'){comment=true;part+=' ';i++;continue;}
+      if(c==='\\'&&i+1<text.length){part+=c+text[++i];continue;}
+      if(c==='"'||c==="'")quote=c;else if(c==='(')depth++;else if(c===')')depth=Math.max(0,depth-1);
+      if((c===';'&&depth===0)||i===text.length){add(part);part='';}else part+=c;
+    }
+    return out;
+  }
+  function styleFor(node) {
+    const read=()=>declarations(node.getAttribute('style')||'');
+    const name=key=>key==='cssFloat'?'float':String(key).replace(/[A-Z]/g,c=>'-'+c.toLowerCase());
+    const normalize=key=>{key=String(key).trim();return key.startsWith('--')?key:key.toLowerCase();};
+    const write=map=>node.setAttribute('style',[...map].map(([k,v])=>k+': '+v.value+(v.priority?' !important':'')+';').join(' '));
+    const remove=key=>{key=normalize(key);const map=read(),old=map.get(key);if(old){map.delete(key);write(map);}return old?.value||'';};
+    const set=(key,value,priority='')=>{key=normalize(key);value=String(value??'').trim();priority=String(priority).toLowerCase();
+      if(!/^(?:--[\w-]+|-?[a-z][a-z0-9-]*)$/.test(key))return;
+      if(!value){remove(key);return;}if(priority&&priority!=='important'||/!\s*important\s*$/i.test(value))return;
+      // A single value must not inject another declaration through setProperty.
+      const parsed=declarations(key+':'+value);if(parsed.size!==1||!parsed.has(key)||parsed.get(key).value!==value)return;
+      const map=read();map.set(key,{value,priority});write(map);};
+    return new Proxy(Object.create(null),{
+      get(target,key){if(typeof key!=='string')return undefined;
+        if(key==='setProperty')return set;if(key==='removeProperty')return remove;
+        if(key==='getPropertyValue')return key=>read().get(normalize(key))?.value||'';
+        if(key==='getPropertyPriority')return key=>read().get(normalize(key))?.priority||'';
+        if(key==='cssText')return node.getAttribute('style')||'';if(key==='length')return read().size;
+        if(key==='item')return index=>[...read().keys()][Number(index)]||'';
+        if(/^\d+$/.test(key))return [...read().keys()][Number(key)]||'';
+        return read().get(name(key))?.value||'';},
+      set(target,key,value){if(key==='cssText')node.setAttribute('style',String(value??''));else if(typeof key==='string')set(name(key),value);return true;},
+      deleteProperty(target,key){if(typeof key==='string')remove(name(key));return true;}
+    });
+  }
   class Node extends Target {
     constructor(tag, text = '') {
       super(); if (records.size >= 10000) throw new RangeError('DOM node limit reached');
       this._id = nextId++; records.set(this._id,this); this.nodeName = tag === '#text' ? tag : tag.toUpperCase();
       this.nodeType = tag === '#text' ? 3 : 1; this.tagName = this.nodeName;
       this.childNodes = []; this.parentNode = null; this._text = text; this._attrs = Object.create(null);
-      this.style = new Proxy(Object.create(null), {set(target,key,value){if(target[key]!==value){target[key]=value;changed();}return true;},deleteProperty(target,key){if(Object.hasOwn(target,key)){delete target[key];changed();}return true;}});
+      this.style = styleFor(this);
     }
     get children() { return this.childNodes.filter(x => x.nodeType === 1); }
     get firstChild() { return this.childNodes[0] || null; }
@@ -160,7 +203,7 @@
   root.parentNode=document;
   Object.assign(globalThis,{window:globalThis,self:globalThis,document,EventTarget:Target,Event:AsterEvent,KeyboardEvent:AsterEvent,MouseEvent:AsterEvent,Node,HTMLElement:Node,HTMLMediaElement,HTMLVideoElement:HTMLMediaElement,HTMLAudioElement:HTMLMediaElement,
     addEventListener:win.addEventListener.bind(win),removeEventListener:win.removeEventListener.bind(win),dispatchEvent:win.dispatchEvent.bind(win),
-    navigator:Object.freeze({userAgent:'AsterEnginePreview/0.7 QuickJS',getGamepads:()=>nativePads()}),
+    navigator:Object.freeze({userAgent:'AsterEnginePreview/0.8 QuickJS',getGamepads:()=>nativePads()}),
     performance:Object.freeze({now:()=>clock}),console:Object.freeze({log:(...args)=>warn(args.join(' ')),warn:(...args)=>warn(args.join(' ')),error:(...args)=>warn(args.join(' '))})});
   function schedule(fn,ms,repeat,args) {
     if(typeof fn!=='function') throw new TypeError('Timer callback must be a function');
@@ -189,8 +232,6 @@
       if(hidden.has(tag)) return '';
       if(!/^[a-z][a-z0-9-]*$/.test(tag)) return '';
       let attrs=''; for(const k of ['href','src','alt','id','class','style','type','controls','width','height','hidden','rel','media','crossorigin','integrity','disabled']) if(n.hasAttribute(k)) attrs+=' '+k+'="'+escape(n.getAttribute(k))+'"';
-      const css=Object.entries(n.style).map(([k,v])=>k.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+':'+String(v)).join(';');
-      if(css) attrs=attrs.replace(/ style="[^"]*"/,'')+' style="'+escape(css)+'"';
       attrs+=' data-aster-action="'+n._id+'"';
       return '<'+tag+attrs+'>'+n.childNodes.map(c=>render(c,depth+1)).join('')+(voids.has(tag)?'':'</'+tag+'>');
     };

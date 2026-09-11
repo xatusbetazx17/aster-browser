@@ -10,6 +10,7 @@ import sys
 import urllib.request
 import urllib.error
 import time
+import zipfile
 
 ROOT = Path(__file__).resolve().parent
 BUILD = ROOT / 'build'
@@ -72,6 +73,8 @@ def javafx():
     if platform is None or machine.machine().lower() not in {'x86_64','amd64'}:
         raise RuntimeError('Desktop scripting/media packages currently target Linux/Windows x64; Android core is built separately')
     lock = json.loads((ROOT/'desktop/native/javafx.lock.json').read_text())
+    if lock['version'] != '21.0.12':
+        raise RuntimeError('Rebase or retire the pinned Aster HLS source correction before updating OpenJFX')
     artifacts = [item for item in lock['artifacts'] if item['platform']==platform]
     def fetch(item):
         target=BUILD/'deps/javafx'/item['name']; checked_download(item['url'],target,item['sha256'])
@@ -84,5 +87,30 @@ def javafx():
         output=BUILD/'jar/legal/javafx'/item['name'];output.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(cached,output)
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(notice,lock['notices']))
-    (BUILD/'jar/legal/javafx/SOURCE.txt').write_text('OpenJFX '+lock['version']+'\nUpstream source: '+lock['source_url']+'\nExact-version Java source artifacts:\n'+'\n'.join(lock['java_sources'])+'\nMaven artifacts and SHA-256 pins are in desktop/native/javafx.lock.json.\nOnly base, graphics, media and Swing components are included; javafx.web is absent.\n')
+    # Build the reviewed Java-only HLS correction against the pinned distribution.
+    # Keep source and attribution in every package containing the modified module.
+    patches=ROOT/'desktop/native/javafx-patches'
+    patch_classes=BUILD/'javafx-patch-classes'
+    if patch_classes.exists():
+        shutil.rmtree(patch_classes)
+    patch_classes.mkdir(parents=True)
+    compiler=[shutil.which('javac')] if shutil.which('javac') else ['java','com.sun.tools.javac.Main']
+    subprocess.run([*compiler,'--release','17','-encoding','UTF-8','-cp',os.pathsep.join(map(str,libraries)),
+                    '-d',str(patch_classes),*map(str,sorted(patches.rglob('*.java')))],check=True)
+    media=BUILD/'jar/lib/javafx-media.jar'
+    replacement=media.with_suffix('.patched.jar')
+    with zipfile.ZipFile(media) as original,zipfile.ZipFile(replacement,'w',zipfile.ZIP_DEFLATED) as patched:
+        updated={p.relative_to(patch_classes).as_posix():p for p in patch_classes.rglob('*.class')
+                 if not any(part.startswith('.') for part in p.relative_to(patch_classes).parts)}
+        for entry in original.infolist():
+            if entry.filename not in updated:
+                patched.writestr(entry,original.read(entry.filename))
+        for name,path in sorted(updated.items()):
+            patched.write(path,name)
+    replacement.replace(media)
+    distributed_patches=BUILD/'jar/legal/javafx/aster-patches'
+    if distributed_patches.exists():
+        shutil.rmtree(distributed_patches)
+    shutil.copytree(patches,distributed_patches,ignore=shutil.ignore_patterns('.*'))
+    (BUILD/'jar/legal/javafx/SOURCE.txt').write_text('OpenJFX '+lock['version']+'\nUpstream source: '+lock['source_url']+'\nExact-version Java source artifacts:\n'+'\n'.join(lock['java_sources'])+'\nMaven artifacts and SHA-256 pins are in desktop/native/javafx.lock.json.\nAster modifies HLSConnectionHolder to handle zero-duration bitrate samples and integer overflow. Complete modified source and provenance: aster-patches/.\nOnly base, graphics, media and Swing components are included; javafx.web is absent.\n')
     return os.pathsep.join(map(str,libraries))

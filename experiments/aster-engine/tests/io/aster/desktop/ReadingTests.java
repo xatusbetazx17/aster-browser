@@ -46,7 +46,7 @@ public final class ReadingTests {
             check(Engine.parseInteractive(site,first.get("html").toString()).runs.get(0).style.color==0xff0000ff,"Stylesheet lost when scripts start");
             for(int i=0;i<100;i++)check(((Map<?,?>)script.eval("__aster.tick("+(i*50)+")")).get("html")==null,"Idle tick copied full page");
             Map<?,?> changed=(Map<?,?>)script.eval("document.getElementById('x').style.color='red';__aster.tick(5010)");
-            check(changed.get("html").toString().contains("color:red"),"Style mutation missed");
+            check(Engine.parseInteractive(site,changed.get("html").toString()).runs.get(0).style.color==0xffff0000,"Style mutation did not reach rendered color");
             check(((Map<?,?>)script.eval("__aster.tick(5020)")).get("html")==null,"Mutation was repeatedly sent");
             check(((Map<?,?>)script.eval("document.getElementById('x').textContent='Updated';__aster.tick(5030)")).get("html").toString().contains("Updated"),"Text mutation missed");
             Map<?,?> sheet=(Map<?,?>)script.eval("delete document.getElementById('x').style.color;document.getElementById('sheet').textContent='h1 {color:green}';__aster.tick(5040)");

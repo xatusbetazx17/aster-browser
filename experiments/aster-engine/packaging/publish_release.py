@@ -116,7 +116,7 @@ def notes(metadata, signing, apk_name, tag):
         "This test APK cannot promise an in-place update from another CI run. Do not uninstall an older app containing data you need.")
     return f"""Aster {metadata['version']} — experimental original engine, built from `{metadata['commit']}`.
 
-This update adds CDN stylesheet/image loading with CORS, stylesheet integrity and isolated cookies, responsive CSS media queries, stylesheet source order and important priorities in the supported CSS subset. Desktop resizing/zoom and script snapshots retain styling; Android shares the engine changes. Site protection, HTTP APIs, sessions, dark workspace, reading/notes and tab parking remain included. Android JavaScript/video is still unfinished. WINDOWS-BENCHMARK.json and LINUX-BENCHMARK.json contain scoped renderer results; they do not compare Aster with other browsers. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
+This update adds flex rows/columns, wrapping, growth/shrink, constraints, gaps and alignment in the shared engine. Desktop style changes preserve existing inline declarations. A reproducible HLS bitrate arithmetic error is corrected, with complete modified component source included; native checks now require three restarts. CDN resources, responsive CSS and isolated cookies remain included. Android shares the layout changes. Site protection, HTTP APIs, sessions, dark workspace, reading/notes and tab parking remain included. Android JavaScript/video is still unfinished. WINDOWS-BENCHMARK.json and LINUX-BENCHMARK.json contain scoped renderer results; they do not compare Aster with other browsers. No GitHub account is needed to download the release assets. They have no 14-day artifact expiry.
 
 | Device | Download | Install or update |
 | --- | --- | --- |
@@ -124,13 +124,13 @@ This update adds CDN stylesheet/image loading with CORS, stylesheet integrity an
 | Linux x64 with Flatpak | [Download Linux installer]({base}/install-linux.sh) · [Flatpak bundle]({base}/aster-linux-x64.flatpak) | Run `bash install-linux.sh --run`, or open the Flatpak with your software installer. Running the script again installs updates. |
 | Android 8+ | [Download Android APK]({base}/{apk_name}) | {android_update} |
 
-Windows includes Java; no separate Java installation is required. The Windows package is unsigned and Windows may display an unknown-publisher warning. Windows video/HLS remains unreliable; read WINDOWS-BUILD-STATUS.txt. Basic session fixtures now pass; full web compatibility, advanced account flows, Netflix, Prime Video and cloud gaming remain unfinished.
+Windows includes Java; no separate Java installation is required. The Windows package is unsigned and Windows may display an unknown-publisher warning. Read WINDOWS-BUILD-STATUS.txt for the native video/HLS result of this build; passing fixtures do not establish general stream compatibility. Basic session fixtures now pass; full web compatibility, advanced account flows, Netflix, Prime Video and cloud gaming remain unfinished.
 
 Linux uses the same `io.aster.browser.EnginePreview` application and `preview` branch for replacements. Its Flatpak profile stays separate from the native tarball profile. Flatpak is intended to cover many desktop distributions, including immutable systems with Flatpak support; every Linux distribution/CPU/device has not been verified. Desktop packages are x64 only.
 
 Older Qt/Chromium kits, WebKit builds and differently signed Android test APKs are separate installations. Their data is not automatically converted. Close Aster before updating; downloads already saved outside the application remain in place. Updates are initiated by downloading a newer package; there is no background auto-updater.
 
-See [responsive CSS, CDN resources and current limitations](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.7.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
+See [Flexbox, HLS fixes and current limitations](https://github.com/{REPO}/blob/{metadata['commit']}/experiments/aster-engine/RELEASE_0.8.md), and [installation and update help](https://github.com/{REPO}/blob/codex/aster-webkit-desktop/DOWNLOADS.md). The portable Windows ZIP and Linux tarball are optional alternatives under Assets. SHA256SUMS.txt covers every delivered package and its verification reports.
 """
 
 

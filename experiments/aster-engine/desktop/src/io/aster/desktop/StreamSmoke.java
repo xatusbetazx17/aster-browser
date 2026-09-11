@@ -66,11 +66,15 @@ final class StreamSmoke {
             waitFor("page media controls",()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''&&"+(hls?"seekResult==='NotSupportedError'&&v.seekable.length===0":"seekResult==='accepted'&&seekJump&&v.seekable.length===1"))));
             if(hls){
                 if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
-                decoded.set(false);edt(()->{app.current().media.evidence(Paths.get(output.replaceFirst("\\.png$","")+"-restart.png"),()->decoded.set(true),error::set);app.current().media.control("restart",null);});
-                waitFor("HLS restart decoded both colors again",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
+                for(int restart=1;restart<=3;restart++){
+                    int previousSegments=fixture.segments.get();Path evidence=Paths.get(output.replaceFirst("\\.png$","")+"-restart-"+restart+".png");
+                    decoded.set(false);edt(()->{app.current().media.evidence(evidence,()->decoded.set(true),error::set);app.current().media.control("restart",null);});
+                    waitFor("HLS restart "+restart+" decoded both colors again",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
+                    if(fixture.segments.get()<previousSegments+2)throw new AssertionError("HLS restart did not fetch two fresh segments");
+                }
             }
             edt(()->app.load(app.current(),URI.create("aster:home"),-1));if(js.alive())throw new AssertionError("Navigation left the streaming page alive");
-            System.out.println("Native streaming passed: "+(hls?"HLS master/variant/two segments, seek refusal and decoder restart":"progressive MP4 and an observed seek jump")+", real HTTP JSON, autoplay refused, rendered Play click, actual blue/red H.264 frames, page play Promise, pause/resume/volume/mute/events and navigation cleanup. Audio track="+(hls&&!fixture.videoOnly)+". Physical audio, bitrate switching, WebRTC and DRM not tested.");
+            System.out.println("Native streaming passed: "+(hls?"HLS master/variant/two segments, seek refusal and three decoder restarts":"progressive MP4 and an observed seek jump")+", real HTTP JSON, autoplay refused, rendered Play click, actual blue/red H.264 frames, page play Promise, pause/resume/volume/mute/events and navigation cleanup. Audio track="+(hls&&!fixture.videoOnly)+". Physical audio, bitrate switching, WebRTC and DRM not tested.");
         }edt(app::finishSmoke);
         }catch(Throwable e){e.printStackTrace();String detail=e.toString();try{ScriptSession js=app.current().script;if(js!=null&&js.alive())detail+="\nPage: "+js.eval("JSON.stringify({autoplay,httpReady,played,pauses,once,mediaError,state:v._media})");MediaPanel media=app.current().media;if(media!=null)detail+="\nNative: "+media.diagnostic();}catch(Exception diagnostic){detail+="\nDiagnostic: "+diagnostic;}System.err.println(detail);try{Files.writeString(Paths.get(output+".log"),detail);}catch(Exception ignored){}try{edt(app::finishSmoke);}catch(Exception ignored){}System.exit(1);}
     },"aster-native-stream-check").start();}

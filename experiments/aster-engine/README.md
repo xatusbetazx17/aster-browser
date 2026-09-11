@@ -1,6 +1,6 @@
 # Aster original engine preview
 
-**Version 0.7:** see [responsive CSS, CDN resources and current limitations](RELEASE_0.7.md). Stylesheets and images can load from other origins with explicit request policies, responsive CSS updates when the viewport changes, and stylesheet order and priority survive script snapshots. Site protection, HTTP APIs, sessions, reading, notes and downloads remain included. Full website compatibility is unfinished.
+**Version 0.8:** see [Flexbox, HLS fixes and current limitations](RELEASE_0.8.md). The shared engine adds flex rows, columns, wrapping, sizing and alignment; desktop scripts preserve inline styles during layout changes. A reproducible HLS bitrate error is corrected in the bundled reader. CDN resources, responsive CSS, protection, sessions, reading and downloads remain included. Full website compatibility is unfinished.
 
 This is a **new, limited engine implementation**, with its own HTML token handling,
 typography, line layout, link hit testing and display list. It uses no Chromium,
@@ -26,7 +26,7 @@ or silently remove that prototype's reader and local companion.
 | Area | Preview behavior |
 | --- | --- |
 | Navigation | HTTP/HTTPS address entry, relative links, bounded redirects, Back, Forward, Home |
-| Layout | Normal-flow boxes, width/min/max sizing, margin/padding, solid borders, flat backgrounds, radius, alignment; text, headings, lists, preformatted lines and word wrapping |
+| Layout | Normal-flow boxes and a block Flexbox subset: rows/columns, wrapping, growth/shrink, constraints, gaps, alignment, ordering and auto margins; spacing, borders, backgrounds and text wrapping |
 | Responsive CSS | Screen width/height/orientation media queries, nested `@media`, style/link media attributes, viewport resizing/zoom, stylesheet source order and author `!important` priorities within the supported selector subset |
 | Site protection | Shared offline hostname blocking, custom rules, saved origin exceptions and actual session activity; no full filter-list/cosmetic support |
 | Typography | Bold, italic, inherited size/color; inline `font-size` in px, six-digit hex `color`, bold/italic declarations |
@@ -38,7 +38,7 @@ or silently remove that prototype's reader and local companion.
 | Android DRM | Device Widevine query through Android `MediaDrm`; no provisioning/license request or playback |
 | Desktop scripting | Opt-in classic JavaScript, a small DOM/event bridge, timers/Promises and native input through QuickJS |
 | Desktop media | Progressive MP4/M4A/MP3/WAV and unencrypted HLS; page play/pause/volume/mute/events and file seeking. HLS seeking is disabled. JavaFX Media without JavaFX WebView |
-| Not implemented | Modern HTML recovery, full DOM/CSS/Flex/Grid, complete selectors, advanced forms, full cookie/site/storage semantics, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
+| Not implemented | Modern HTML recovery, full DOM/CSS, remaining Flexbox behavior, Grid, complete selectors, advanced forms, full cookie/site/storage semantics, per-site OS process sandbox, Android scripts/media, MSE/EME, WebRTC, PDF and the AI companion |
 
 Source limit: 1 MB, nesting: 64, text runs: 20,000, painted fragments: 100,000.
 Redirects cannot switch HTTPS to HTTP or invoke local/executable URL schemes.
@@ -109,7 +109,7 @@ Implemented script APIs: classic inline scripts and same-origin external JavaScr
 responses; basic DOM text/attribute changes, `getElementById`, tag/ID/class selectors,
 node creation/appending/removal, click listeners, keydown/keyup, title changes,
 DOMContentLoaded/load, Promises, timers, requestAnimationFrame and gamepad snapshots.
-Aster reparses text snapshots for its own renderer. This is not a complete DOM,
+Live inline style properties, cssText and bounded declaration methods now share the actual style attribute; changing one property preserves the others. Aster reparses text snapshots for its own renderer. This is not a complete DOM,
 HTML parser, CSS engine or event model. Scripts execute after initial parsing;
 modules, inline HTML event attributes, storage events/IndexedDB, JavaScript form handling and canvas/WebGL
 are not implemented. Native forms are available separately. The network and media bindings below are subsets. Keyboard
@@ -192,7 +192,7 @@ resource. Only an on-demand H.264/AAC MPEG-TS HLS fixture is tested. Live playli
 refresh and automatic bitrate switching rely on JavaFX and remain unverified;
 cross-origin CDNs and other HLS profiles may fail. Closing playback stops the
 transport; bundled samples use temporary files removed after decoder disposal.
-Native codec failures are reported in the player.
+Native codec failures are reported in the player. The 0.8 build includes a source-distributed correction for zero-time HLS bitrate samples and integer overflow; native restart checks remain separate from that regression test.
 
 This does not implement **WebRTC, MSE/DASH, EME or Widevine**. Prime Video,
 Boosteroid, GeForce NOW and Xbox Cloud Gaming remain

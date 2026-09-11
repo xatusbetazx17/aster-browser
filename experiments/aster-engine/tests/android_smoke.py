@@ -116,7 +116,7 @@ class Fixture(BaseHTTPRequestHandler):
             integrity = base64.b64encode(hashlib.sha384(Fixture.css).digest()).decode()
             html += f"<link rel='stylesheet' href='http://127.0.0.1:8766/cdn.css' crossorigin integrity='sha384-{integrity}'>"
             html += "<img src='http://127.0.0.1:8766/image.png' crossorigin width='80' height='40' alt='Aster image fixture'><form action='/submitted' method='post'><input name='q' value='android8'></form>"
-            html += "<section style='background:#ff0000;padding:12px;border:2px solid #267861;margin:8px 0'><p style='margin:0'>Native CSS box fixture.</p></section>"
+            html += "<section style='background:#ff0000;padding:12px;border:2px solid #267861;margin:8px 0'><p style='margin:0'>Native CSS box fixture.</p><div style='display:flex;gap:10px;margin-top:6px'><span style='flex:1;min-width:0;height:28px;background:#e6b54a'>Flex one</span><span style='flex:1;min-width:0;height:28px;background:#a6c7f5'>Flex two</span></div></section>"
         if "login=android8" in self.headers.get("Cookie", ""):
             html += "<p>Session cookie restored.</p>"
         body = html.encode()
@@ -188,7 +188,17 @@ def main():
         (OUT / 'aster-android-images.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
         if Fixture.cross_origin_errors:
             raise AssertionError(Fixture.cross_origin_errors)
-        print('CORS CDN image, verified stylesheet, responsive CSS and important cascade rendered by native Android Canvas.', flush=True)
+        flex_bounds = []
+        for color in (b'\xe6\xb5\x4a', b'\xa6\xc7\xf5'):
+            locations = [i // 4 for i in range(0, len(pixels), 4) if pixels[i:i + 3] == color]
+            if len(locations) < 100:
+                raise AssertionError('Android did not paint both flex item backgrounds')
+            flex_bounds.append((min(i % width for i in locations), min(i // width for i in locations),
+                                max(i % width for i in locations), max(i // width for i in locations)))
+        a, b = flex_bounds
+        if abs(a[1] - b[1]) > 1 or abs(a[3] - b[3]) > 1 or a[2] >= b[0] or abs((a[2] - a[0]) - (b[2] - b[0])) > 2:
+            raise AssertionError(f'Android flex growth/gap/row placement is wrong: {flex_bounds}')
+        print('CORS CDN image, verified responsive stylesheet and two equal flex items with a gap rendered by native Android Canvas.', flush=True)
         menu('Site protection')
         tap(wait_text('Custom blocked hostnames', exact=True))
         adb('shell', 'input', 'text', '127.0.0.1')
