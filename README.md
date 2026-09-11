@@ -20,9 +20,9 @@ Windows setup and Linux Flatpak replace an older original-engine installation wh
 
 Aster is being developed as a **standalone browser with its own interface and page engine**. The original-engine Windows/Linux/Android application is the destination for new development. It opens directly as Aster and embeds no Chrome, Firefox, WebKit or WebView. The older Linux WebKit prototype remains available separately.
 
-**Status: experimental.** Aster 0.7 adds CDN stylesheet/image loading, responsive CSS media queries, correct stylesheet source order and `!important` priority in the supported cascade. Styles survive resizing, zoom and script updates. Site protection, HTTP APIs, sessions/storage and the native reader, notes, tab parking and downloads remain included. Full web compatibility, Netflix/Prime Video, cloud gaming, permanent Android signing and validated Steam Deck support remain unfinished. No performance superiority over other browsers has been established.
+**Status: experimental.** Aster 0.8 adds a shared Flexbox subset for rows, columns, wrapping and alignment, live inline style updates, and a reproducible HLS bitrate correction. CDN resources, responsive CSS, stylesheet ordering and priority remain included. Native HLS checks require three successive restarts. Site protection, HTTP APIs, sessions/storage and the native reader, notes, tab parking and downloads remain included. Full web compatibility, Netflix/Prime Video, cloud gaming, permanent Android signing and validated Steam Deck support remain unfinished. No performance superiority over other browsers has been established.
 
-Read [Aster 0.7 compatibility improvements and current limitations](experiments/aster-engine/RELEASE_0.7.md).
+Read [Aster 0.8 layout, HLS fixes and current limitations](experiments/aster-engine/RELEASE_0.8.md).
 
 Read [the project direction and remaining work](PROJECT_DIRECTION.md).
 

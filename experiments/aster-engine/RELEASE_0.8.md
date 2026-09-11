@@ -94,6 +94,13 @@ a video-only HLS fixture; Linux additionally has a silent AAC track and virtual
 audio output. Physical sound, live HLS and general adaptive playback still need
 separate validation. Read the build-status files for the exact downloaded build.
 
+Playback waits until its Swing video surface is visible and has painted the new
+scene. Frame checks use asynchronous JavaFX pulse snapshots rather than blocking
+the rendering thread. A decoder's end event can precede presentation of its last
+frame; three post-end render samples still require both decoded colors and
+advancing playback time before passing. Windows stores native output and decoder
+logs alongside the screenshots for both file and HLS checks.
+
 ## Verification
 
 `python experiments/aster-engine/build.py desktop --test` runs the full existing

@@ -113,10 +113,14 @@ jobs:
         shell: pwsh
         run: |
           $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-media-frame.png'
-          $asterVideo = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--media-smoke', $asterFrame) -PassThru
+          $asterDecoder = "$asterFrame.decoder.log"
+          $asterPlayback = "$asterFrame.native.log"
+          $asterVideo = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--media-smoke', $asterFrame) -RedirectStandardError $asterDecoder -RedirectStandardOutput $asterPlayback -PassThru
           if (-not $asterVideo.WaitForExit(40000)) { $asterVideo.Kill(); throw 'Aster video did not finish its playback check' }
+          if (Test-Path $asterPlayback) { Get-Content -LiteralPath $asterPlayback -Tail 12 }
           if ($asterVideo.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) {
             if (Test-Path "$asterFrame.log") { Get-Content -LiteralPath "$asterFrame.log" }
+            if (Test-Path $asterDecoder) { Get-Content -LiteralPath $asterDecoder -Tail 100 }
             throw 'Aster EXE did not decode the test video'
           }
       - name: Stream real HLS and control it from a page on Windows
@@ -128,8 +132,10 @@ jobs:
           Get-CimInstance Win32_SoundDevice | Select-Object Name, Status
           $asterFrame = Join-Path $PWD 'experiments/aster-engine/build/aster-stream-frame.png'
           $asterDecoder = "$asterFrame.decoder.log"
-          $asterStream = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--stream-smoke', $asterFrame) -RedirectStandardError $asterDecoder -PassThru
+          $asterPlayback = "$asterFrame.native.log"
+          $asterStream = Start-Process -FilePath './experiments/aster-engine/build/native/AsterEnginePreview/AsterEnginePreview.exe' -ArgumentList @('--stream-smoke', $asterFrame) -RedirectStandardError $asterDecoder -RedirectStandardOutput $asterPlayback -PassThru
           if (-not $asterStream.WaitForExit(90000)) { $asterStream.Kill(); throw 'Aster streaming check timed out' }
+          if (Test-Path $asterPlayback) { Get-Content -LiteralPath $asterPlayback -Tail 12 }
           if ($asterStream.ExitCode -ne 0 -or -not (Test-Path $asterFrame)) {
             if (Test-Path "$asterFrame.log") { Get-Content -LiteralPath "$asterFrame.log" }
             if (Test-Path $asterDecoder) { Get-Content -LiteralPath $asterDecoder -Tail 100 }
