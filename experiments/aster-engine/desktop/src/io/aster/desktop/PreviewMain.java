@@ -518,6 +518,9 @@ public final class PreviewMain {
                 String canonical=sample?"aster-sample.mp4":uri.toString();
                 if(tab.mediaId==id&&tab.media!=null&&tab.media.usable()&&tab.mediaSource.equals(canonical)){tab.media.control("play",null);continue;}
                 if(!gesture){mediaReply(tab,id,"denied",Map.of(),"Click this page's Play button to allow playback",request);continue;}
+                Object volume=c.get("volume"),muted=c.get("muted"),time=c.get("time");
+                try{validMediaNumber(volume,0,1);validMediaNumber(time,0,86400*365);if(!(muted instanceof Boolean))throw new IllegalArgumentException("Invalid mute value");}
+                catch(IllegalArgumentException e){mediaReply(tab,id,"error",Map.of(),"Media could not start: "+e.getMessage(),request);continue;}
                 if(tab.media!=null){int old=tab.mediaId;tab.script.mediaEvents.invalidateSource();tab.media.close();if(old>0&&old!=id)mediaReply(tab,old,"emptied",Map.of("paused",true,"readyState",0),null,0);}
                 tab.mediaId=id;tab.mediaSource=canonical;ScriptSession owner=tab.script;final URI source=uri,page=tab.original.uri;
                 MediaEvents.Source events=owner.mediaEvents.source();
@@ -528,10 +531,8 @@ public final class PreviewMain {
                         if(!owner.alive())return;Map<String,Object> copy=new LinkedHashMap<>(state);copy.put("src",canonical);
                         String code="__aster.mediaUpdate("+id+","+Json.stringify(copy)+","+Json.quote(event)+","+(event.equals("error")?Json.quote(String.valueOf(state.get("message"))):"null")+",0);void 0";
                         events.post(event,code);
-                    });
+                    },((Number)volume).doubleValue(),(Boolean)muted,((Number)time).doubleValue());
                     tab.media.setPreferredSize(new Dimension(800,340));JPanel content=new JPanel(new BorderLayout());content.setBackground(PAPER);content.add(tab.media,BorderLayout.NORTH);content.add(tab.canvas,BorderLayout.CENTER);tab.setViewportView(content);
-                    for(String property:Arrays.asList("volume","muted")){Object v=c.get(property);if(property.equals("volume"))validMediaNumber(v,0,1);else if(!(v instanceof Boolean))throw new IllegalArgumentException("Invalid mute value");tab.media.control(property,v);}
-                    Object time=c.get("time");validMediaNumber(time,0,86400*365);tab.media.control("seek",time);
                 }catch(Throwable e){owner.mediaEvents.invalidateSource();if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"error",Map.of(),"Media could not start: "+e.getMessage(),request);}
             }else if(tab.mediaId==id&&tab.media!=null){
                 if(kind.equals("unload")){tab.script.mediaEvents.invalidateSource();tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0,"currentTime",0),null,0);}

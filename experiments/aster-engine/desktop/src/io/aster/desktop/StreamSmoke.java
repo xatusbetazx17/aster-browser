@@ -36,10 +36,10 @@ final class StreamSmoke {
         }
         URI uri(){return URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/");}
         private String page(){return "<title>Aster streaming test</title><h1>Video streamed inside Aster</h1><video id='clip' src='"+(hls?"/master.m3u8":"/clip.mp4")+"'></video><button id='play'>Stream</button><p id='result'>Waiting</p><script>"+
-            "var v=document.getElementById('clip'),autoplay='',httpReady=false,played=0,pauses=0,once=false,mediaError='',seekResult='',observedTime=0,seekJump=false;fetch('/api').then(r=>r.json()).then(j=>httpReady=j.ready);v.play().catch(e=>autoplay=e.name);"+
+            "var v=document.getElementById('clip'),autoplay='',httpReady=false,played=0,pauses=0,once=false,mediaError='',seekResult='',observedTime=0,seekJump=false,initialSettings=false;v.volume=.7;v.muted=true;v.addEventListener('loadedmetadata',()=>{initialSettings=Math.abs(v.volume-.7)<.01&&v.muted;});fetch('/api').then(r=>r.json()).then(j=>httpReady=j.ready);v.play().catch(e=>autoplay=e.name);"+
             "document.getElementById('play').addEventListener('click',()=>v.play().then(()=>played++).catch(e=>mediaError=e.name));"+
             "v.addEventListener('timeupdate',()=>{if(once&&v.currentTime-observedTime>.5)seekJump=true;observedTime=v.currentTime;document.getElementById('result').textContent='Time: '+v.currentTime.toFixed(1);if(v.currentTime>.25&&!once){once=true;v.pause();}});"+
-            "v.addEventListener('pause',()=>{pauses++;try{v.currentTime=1.2;seekResult='accepted';}catch(e){seekResult=e.name;}v.volume=.3;v.muted=true;v.play().then(()=>played++).catch(e=>mediaError=e.name);});"+
+            "v.addEventListener('pause',()=>{pauses++;try{v.currentTime=1.2;seekResult='accepted';}catch(e){seekResult=e.name;}v.volume=.3;v.muted=false;v.play().then(()=>played++).catch(e=>mediaError=e.name);});"+
             "v.addEventListener('error',()=>mediaError=v.error.message);</script>";}
         public void close(){server.stop(0);}
     }
@@ -64,7 +64,7 @@ final class StreamSmoke {
             AtomicBoolean decoded=new AtomicBoolean();AtomicReference<String> error=new AtomicReference<>();
             edt(()->app.current().media.evidence(frame,()->decoded.set(true),error::set));
             waitFor("decoded blue/red "+(hls?"HLS":"MP4")+" frames",()->{if(error.get()!=null)throw new AssertionError(error.get());return decoded.get();});
-            waitFor("page media controls",()->Boolean.TRUE.equals(js.eval("played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&v.muted&&v.currentTime>=2&&mediaError===''&&"+(hls?"seekResult==='NotSupportedError'&&v.seekable.length===0":"seekResult==='accepted'&&seekJump&&v.seekable.length===1"))));
+            waitFor("page media controls",()->Boolean.TRUE.equals(js.eval("initialSettings&&played>=2&&pauses>=1&&v.videoWidth===160&&v.videoHeight===90&&Math.abs(v.volume-.3)<.01&&!v.muted&&v.currentTime>=2&&mediaError===''&&"+(hls?"seekResult==='NotSupportedError'&&v.seekable.length===0":"seekResult==='accepted'&&seekJump&&v.seekable.length===1"))));
             if(hls){
                 if(fixture.manifests.get()<2||fixture.requested.size()<2)throw new AssertionError("HLS did not fetch a master, variant and two segments");
                 for(int restart=1;restart<=3;restart++){

@@ -109,10 +109,16 @@ remain coalesced and bounded. `MediaEventsTests` exercises deliberately delayed
 callbacks and separate real QuickJS sessions. The native fixture also requires
 each new page's media timeline to start at zero before its Play click.
 
+Initial volume, mute and start time are validated before replacing a player and
+installed before its loader starts. A new player does not receive a redundant
+asynchronous seek to zero after it has begun playing. The native page fixture
+checks its initial volume/mute at metadata delivery, then changes both during
+playback. Nonzero initial HLS seeking is explicitly rejected.
+
 ## Verification
 
 `python experiments/aster-engine/build.py desktop --test` runs the full existing
-suite plus `FlexLayoutTests` and `HlsDecoderTests`:
+suite plus `FlexLayoutTests`, `HlsDecoderTests` and `MediaEventsTests`:
 
 - Numeric geometry for growth/shrink, constraints, wrapping/reversal/order,
   alignment, auto margins, nested percentages, long pages and work bounds.

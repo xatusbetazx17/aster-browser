@@ -46,24 +46,33 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     private volatile java.util.function.Consumer<String> failed;
     MediaPanel(Source source,Runnable back) {this(source,back,null);}
     MediaPanel(Source source,Runnable back,java.util.function.BiConsumer<String,java.util.Map<String,Object>> listener) {
+        this(source,back,listener,.5,false,0);
+    }
+    MediaPanel(Source source,Runnable back,java.util.function.BiConsumer<String,java.util.Map<String,Object>> listener,double volume,boolean muted,double startTime) {
+        if(!Double.isFinite(volume)||volume<0||volume>1||!Double.isFinite(startTime)||startTime<0||startTime>86400*365)throw new IllegalArgumentException("Invalid initial media settings");
         this.listener=listener;
+        // Publish the initial state before loading can queue prepare() on JavaFX.
+        // A fresh player already starts at zero; do not race a redundant seek
+        // against its first native frames after mounting the Swing component.
+        desiredVolume=volume;desiredMuted=muted;lastRequestedSeek=startTime;pendingSeek=startTime>0?startTime:Double.NaN;
         startupTimeout.setRepeats(false);startupTimeout.start();
         initialized=true;Platform.setImplicitExit(false);setLayout(new BorderLayout(8,8));setBackground(new Color(0xf7faf8));
         setBorder(BorderFactory.createEmptyBorder(18,24,24,24));setPreferredSize(new Dimension(800,530));
         status.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));add(status,BorderLayout.NORTH);video.setPreferredSize(new Dimension(640,360));add(video,BorderLayout.CENTER);
         JPanel controls=new JPanel(new FlowLayout(FlowLayout.LEFT,8,4));controls.setOpaque(false);
         pause.setEnabled(false);restart.setEnabled(false);controls.add(pause);controls.add(restart);
-        JSlider volume=new JSlider(0,100,50);volume.setPreferredSize(new Dimension(120,28));volume.setToolTipText("Volume");volume.getAccessibleContext().setAccessibleName("Media volume");controls.add(new JLabel("Volume"));controls.add(volume);
+        JSlider volumeSlider=new JSlider(0,100,(int)Math.round(desiredVolume*100));volumeSlider.setPreferredSize(new Dimension(120,28));volumeSlider.setToolTipText("Volume");volumeSlider.getAccessibleContext().setAccessibleName("Media volume");controls.add(new JLabel("Volume"));controls.add(volumeSlider);
         JButton done=new JButton("Close player");done.addActionListener(e->{close();back.run();});controls.add(done);add(controls,BorderLayout.SOUTH);
         pause.addActionListener(e->Platform.runLater(()->{if(player!=null)control(player.getStatus()==MediaPlayer.Status.PLAYING&&!ended?"pause":"play",null);}));
         restart.addActionListener(e->control("restart",null));
-        volume.addChangeListener(e->control("volume",volume.getValue()/100.0));
+        volumeSlider.addChangeListener(e->control("volume",volumeSlider.getValue()/100.0));
         video.addHierarchyListener(e->{surfaceShowing=video.isShowing();if(surfaceShowing)video.repaint();});
         worker.submit(()->{try{MediaResource loaded=source.load();resource=loaded;if(closed){loaded.close();return;}Platform.runLater(()->{if(closed){loaded.close();return;}prepare();});}catch(Exception e){error(e.toString());}finally{worker.shutdown();}});
     }
     private void prepare() {
         try {
             hls=resource.uri.getPath().toLowerCase(java.util.Locale.ROOT).endsWith(".m3u8");ready=false;readyPulses=0;playDeadline=0;playbackStarted=0;capturePending=false;endingCaptures=0;
+            if(hls&&!Double.isNaN(pendingSeek)&&pendingSeek>0){error("Seeking HLS is not supported in this preview. Restart opens the stream from the beginning.");return;}
             Media media=new Media(resource.uri.toString());player=new MediaPlayer(media);final MediaPlayer created=player;view=new MediaView(player);view.setPreserveRatio(true);
             StackPane root=new StackPane(view);root.setStyle("-fx-background-color: #112622;");view.fitWidthProperty().bind(root.widthProperty());view.fitHeightProperty().bind(root.heightProperty());video.setScene(new Scene(root,640,360));
             surfaceGeneration++;SwingUtilities.invokeLater(video::repaint);

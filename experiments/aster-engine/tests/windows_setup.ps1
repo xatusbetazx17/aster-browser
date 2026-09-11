@@ -22,7 +22,20 @@ New-ItemProperty -LiteralPath $asterProfile -Name 'upgrade-fixture' -Value 'book
 $asterInstalled = Join-Path $asterTarget 'application\AsterEnginePreview.exe'
 $asterExpectedHash = (Get-FileHash -LiteralPath $asterInstalled).Hash
 # A real replacement must repair old application bytes and retain the profile.
-[System.IO.File]::WriteAllText($asterInstalled, 'old application fixture')
+# A Windows file scanner can briefly hold a newly installed EXE. Wait only for
+# sharing/lock violations; other errors and a persistent lock still fail.
+$asterLockDeadline = [DateTime]::UtcNow.AddSeconds(20)
+$asterLockReported = $false
+while ($true) {
+    try { [System.IO.File]::WriteAllText($asterInstalled, 'old application fixture'); break }
+    catch {
+        $asterReason = $_.Exception.GetBaseException()
+        $asterWin32Code = $asterReason.HResult -band 0xffff
+        if ($asterReason -isnot [System.IO.IOException] -or $asterWin32Code -notin @(32, 33) -or [DateTime]::UtcNow -ge $asterLockDeadline) { throw }
+        if (-not $asterLockReported) { Write-Output 'Waiting for the installed EXE sharing lock before creating the upgrade fixture.'; $asterLockReported = $true }
+        Start-Sleep -Milliseconds 100
+    }
+}
 Install-Aster $asterSetup
 $asterMetadata = Get-Content -Raw -LiteralPath (Join-Path $asterBuild 'VERSION.json') | ConvertFrom-Json
 if ((Get-ItemPropertyValue -LiteralPath $asterUninstall -Name 'DisplayVersion') -ne $asterMetadata.version) { throw 'Installed version was not upgraded' }
