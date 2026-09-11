@@ -38,7 +38,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
     private volatile MediaResource resource; private MediaPlayer player; private MediaView view;
     private final java.util.function.BiConsumer<String,java.util.Map<String,Object>> listener;
     private boolean ended,wantPlay=true,desiredMuted,hls,ready;private int readyPulses;
-    private double desiredVolume=.5,pendingSeek=Double.NaN;private long playDeadline,lastPlayAttempt;
+    private double desiredVolume=.5,pendingSeek=Double.NaN,lastRequestedSeek;private long playDeadline,lastPlayAttempt;
     private volatile Path evidence; private volatile Runnable passed; private int firstColor,lastColor,samples; private double firstTime,lastTime; private boolean gotFirst,verified;
     private AnimationTimer monitor;
     private boolean capturePending;private int endingCaptures;private long playbackStarted;
@@ -108,7 +108,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
             case "volume":desiredVolume=Math.max(0,Math.min(1,((Number)value).doubleValue()));if(player!=null)player.setVolume(desiredVolume);break;
             case "muted":desiredMuted=Boolean.TRUE.equals(value);if(player!=null)player.setMute(desiredMuted);break;
             case "seek":{
-                double target=Math.max(0,((Number)value).doubleValue());
+                double target=Math.max(0,((Number)value).doubleValue());lastRequestedSeek=target;
                 if(target==0&&(player==null||player.getCurrentTime().toMillis()==0)&&!ended)break;
                 if(hls){error("Seeking HLS is not supported in this preview. Restart opens the stream from the beginning.");break;}
                 ended=false;if(wantPlay)playDeadline=System.nanoTime()+3_000_000_000L;
@@ -129,7 +129,7 @@ final class MediaPanel extends JPanel implements AutoCloseable {
             capturePending=false;verifyFrame(created.getCurrentTime().toSeconds(),media,result.getImage());
             // Three completed post-end render cycles allow queued final frames
             // to be presented. Still fail unless both colors and time were seen.
-            if(afterEnd&&!verified&&++endingCaptures>=3)error("Clip ended without two presented video frames: dimensions="+media.getWidth()+"x"+media.getHeight()+", samples="+samples+", blue="+gotFirst+", lastColor="+Integer.toHexString(lastColor)+", firstTime="+firstTime+", time="+lastTime+", wallSeconds="+(playbackStarted==0?0:(System.nanoTime()-playbackStarted)/1e9)+", surface="+surfaceShowing);
+            if(afterEnd&&!verified&&++endingCaptures>=3)error("Clip ended without two presented video frames: dimensions="+media.getWidth()+"x"+media.getHeight()+", samples="+samples+", blue="+gotFirst+", lastColor="+Integer.toHexString(lastColor)+", firstTime="+firstTime+", time="+lastTime+", requestedSeek="+lastRequestedSeek+", wallSeconds="+(playbackStarted==0?0:(System.nanoTime()-playbackStarted)/1e9)+", surface="+surfaceShowing);
             return null;
         },null,null);}catch(Throwable e){capturePending=false;error(e.toString());}
     }

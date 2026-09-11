@@ -10,6 +10,7 @@ import java.util.concurrent.*;
 
 /** One page, one QuickJS process. No remote Java objects cross this boundary. */
 final class ScriptSession implements AutoCloseable {
+    final MediaEvents mediaEvents=new MediaEvents();
     private final Process process;
     private final SiteData siteData;
     private final SiteData.Storage sessionStorage;
@@ -108,7 +109,7 @@ final class ScriptSession implements AutoCloseable {
     }
     @SuppressWarnings("unchecked") Map<String,Object> snapshot() throws IOException { return (Map<String,Object>)eval("__aster.snapshot()"); }
     public void close() {
-        if(closed)return; closed=true; if(network!=null)network.close();process.destroyForcibly(); watchdog.shutdownNow();
+        if(closed)return; closed=true;mediaEvents.close(); if(network!=null)network.close();process.destroyForcibly(); watchdog.shutdownNow();
         // Destroy first: closing a pipe must not block behind a hostile reader/writer.
         try{input.close();}catch(IOException ignored){} try{output.close();}catch(IOException ignored){}
     }

@@ -101,6 +101,14 @@ frame; three post-end render samples still require both decoded colors and
 advancing playback time before passing. Windows stores native output and decoder
 logs alongside the screenshots for both file and HLS checks.
 
+Media event queues now belong to the script session and use a separate token for
+each native player. Retiring a source atomically drops its queued native events;
+callbacks arriving later cannot refill the active timeline. Closing a session
+closes its mailbox. Control replies survive source replacement, and time updates
+remain coalesced and bounded. `MediaEventsTests` exercises deliberately delayed
+callbacks and separate real QuickJS sessions. The native fixture also requires
+each new page's media timeline to start at zero before its Play click.
+
 ## Verification
 
 `python experiments/aster-engine/build.py desktop --test` runs the full existing

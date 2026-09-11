@@ -178,8 +178,6 @@ public final class PreviewMain {
         JToggleButton controllerButton; JButton runScripts; Engine.Document original;
         MediaPanel media;
         int mediaId;String mediaSource="";
-        final java.util.concurrent.ConcurrentLinkedQueue<String> mediaEvents=new java.util.concurrent.ConcurrentLinkedQueue<>();
-        final java.util.concurrent.atomic.AtomicReference<String> mediaTime=new java.util.concurrent.atomic.AtomicReference<>();
         Tab() { setBorder(BorderFactory.createEmptyBorder()); setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.scale = pageScale; canvas.navigate = uri -> load(this, uri, -1); canvas.save = uri -> chooseDownload(uri, DownloadManager.filename(uri, null));
             canvas.openTab=uri->openLinkTab(uri,false);
             canvas.action=id->scriptCommand(this,"__aster.click("+id+")",true);
@@ -479,7 +477,7 @@ public final class PreviewMain {
         if(tab.scriptTask!=null){tab.scriptTask.cancel(true);tab.scriptTask=null;}
         if(tab.scriptTimer!=null){tab.scriptTimer.stop();tab.scriptTimer=null;}
         ScriptSession session=tab.script;tab.script=null;if(session!=null)session.close();tab.scriptBusy=false;tab.controllerAllowed=false;tab.scriptStarting=false;tab.inputCommands.clear();
-        if(tab.mediaId!=0){if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);}tab.mediaEvents.clear();tab.mediaTime.set(null);
+        if(tab.mediaId!=0){if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);}
         if(tab.controllerButton!=null){tab.controllerButton.setSelected(false);tab.controllerButton.setEnabled(false);}
         if(tab.runScripts!=null){tab.runScripts.setText("Run JavaScript");tab.runScripts.setEnabled(tab.original!=null&&!tab.original.scriptsBlocked);}
         if(session!=null&&tab.canvas.document!=null)tab.canvas.setDocument(Engine.withoutActions(tab.canvas.document));
@@ -489,8 +487,8 @@ public final class PreviewMain {
         if(tab.scriptBusy){if(!command.startsWith("__aster.tick(")&&tab.inputCommands.size()<32)tab.inputCommands.addLast(command);return;}
         tab.scriptBusy=true;int generation=tab.generation;boolean allow=tab.controllerAllowed;
         scripts.submit(()->{try{
-            session.controller(allow);session.pump();String mediaEvent;int count=0;while(count++<64&&(mediaEvent=tab.mediaEvents.poll())!=null)session.eval(mediaEvent);
-            String mediaTime=tab.mediaTime.getAndSet(null);if(mediaTime!=null)session.eval(mediaTime);
+            session.controller(allow);session.pump();String mediaEvent;int count=0;while(count++<64&&(mediaEvent=session.mediaEvents.poll())!=null)session.eval(mediaEvent);
+            String mediaTime=session.mediaEvents.takeTime();if(mediaTime!=null)session.eval(mediaTime);
             Map<String,Object> snapshot=(Map<String,Object>)session.eval(command);
             SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation&&tab.script==session){tab.scriptBusy=false;applySnapshot(tab,snapshot,click);if(!tab.inputCommands.isEmpty()){String next=tab.inputCommands.removeFirst();scriptCommand(tab,next,next.startsWith("__aster.click("));}}});
         }catch(Exception e){SwingUtilities.invokeLater(()->{if(!tab.closed&&tab.generation==generation&&tab.script==session){stopScripts(tab);tab.runScripts.setText("Run JavaScript");tab.message="JavaScript stopped: "+e.getMessage();sync();}});}});
@@ -520,22 +518,23 @@ public final class PreviewMain {
                 String canonical=sample?"aster-sample.mp4":uri.toString();
                 if(tab.mediaId==id&&tab.media!=null&&tab.media.usable()&&tab.mediaSource.equals(canonical)){tab.media.control("play",null);continue;}
                 if(!gesture){mediaReply(tab,id,"denied",Map.of(),"Click this page's Play button to allow playback",request);continue;}
-                if(tab.media!=null){int old=tab.mediaId;tab.media.close();tab.mediaTime.set(null);if(old>0&&old!=id)mediaReply(tab,old,"emptied",Map.of("paused",true,"readyState",0),null,0);}
-                tab.mediaId=id;tab.mediaSource=canonical;ScriptSession owner=tab.script;final URI source=uri;
+                if(tab.media!=null){int old=tab.mediaId;tab.script.mediaEvents.invalidateSource();tab.media.close();if(old>0&&old!=id)mediaReply(tab,old,"emptied",Map.of("paused",true,"readyState",0),null,0);}
+                tab.mediaId=id;tab.mediaSource=canonical;ScriptSession owner=tab.script;final URI source=uri,page=tab.original.uri;
+                MediaEvents.Source events=owner.mediaEvents.source();
                 try{
-                    tab.media=new MediaPanel(sample?MediaPanel::sample:()->MediaResource.remote(tab.original.uri,source,siteData),()->{
-                        if(tab.script==owner){mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0),null,0);tab.media=null;tab.mediaId=0;tab.mediaTime.set(null);tab.mediaSource="";tab.setViewportView(tab.canvas);}
+                    tab.media=new MediaPanel(sample?MediaPanel::sample:()->MediaResource.remote(page,source,siteData),()->{
+                        if(tab.script==owner&&events.active()){owner.mediaEvents.invalidateSource();mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0),null,0);tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);}
                     },(event,state)->{
                         if(!owner.alive())return;Map<String,Object> copy=new LinkedHashMap<>(state);copy.put("src",canonical);
                         String code="__aster.mediaUpdate("+id+","+Json.stringify(copy)+","+Json.quote(event)+","+(event.equals("error")?Json.quote(String.valueOf(state.get("message"))):"null")+",0);void 0";
-                        if(event.equals("timeupdate"))tab.mediaTime.set(code);else {tab.mediaTime.set(null);if(tab.mediaEvents.size()<64)tab.mediaEvents.add(code);}
+                        events.post(event,code);
                     });
                     tab.media.setPreferredSize(new Dimension(800,340));JPanel content=new JPanel(new BorderLayout());content.setBackground(PAPER);content.add(tab.media,BorderLayout.NORTH);content.add(tab.canvas,BorderLayout.CENTER);tab.setViewportView(content);
                     for(String property:Arrays.asList("volume","muted")){Object v=c.get(property);if(property.equals("volume"))validMediaNumber(v,0,1);else if(!(v instanceof Boolean))throw new IllegalArgumentException("Invalid mute value");tab.media.control(property,v);}
                     Object time=c.get("time");validMediaNumber(time,0,86400*365);tab.media.control("seek",time);
-                }catch(Throwable e){if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"error",Map.of(),"Media could not start: "+e.getMessage(),request);}
+                }catch(Throwable e){owner.mediaEvents.invalidateSource();if(tab.media!=null)tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"error",Map.of(),"Media could not start: "+e.getMessage(),request);}
             }else if(tab.mediaId==id&&tab.media!=null){
-                if(kind.equals("unload")){tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaTime.set(null);tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0,"currentTime",0),null,0);}
+                if(kind.equals("unload")){tab.script.mediaEvents.invalidateSource();tab.media.close();tab.media=null;tab.mediaId=0;tab.mediaSource="";tab.setViewportView(tab.canvas);mediaReply(tab,id,"emptied",Map.of("paused",true,"readyState",0,"currentTime",0),null,0);}
                 else if(kind.equals("pause"))tab.media.control(kind,null);
                 else if(kind.equals("seek")||kind.equals("volume")){validMediaNumber(c.get("value"),0,kind.equals("volume")?1:86400*365);tab.media.control(kind,c.get("value"));}
                 else if(kind.equals("muted")){if(!(c.get("value") instanceof Boolean))throw new IllegalArgumentException("Invalid mute value");tab.media.control(kind,c.get("value"));}
@@ -545,7 +544,7 @@ public final class PreviewMain {
     }
     private static void validMediaNumber(Object value,double min,double max){if(!(value instanceof Number)||!Double.isFinite(((Number)value).doubleValue())||((Number)value).doubleValue()<min||((Number)value).doubleValue()>max)throw new IllegalArgumentException("Invalid media control value");}
     private void mediaReply(Tab tab,int id,String event,Map<String,Object> state,String error,int request){
-        if(tab.mediaEvents.size()<64)tab.mediaEvents.add("__aster.mediaUpdate("+id+","+Json.stringify(state)+","+Json.quote(event)+","+(error==null?"null":Json.quote(error))+","+request+");void 0");
+        ScriptSession owner=tab.script;if(owner!=null)owner.mediaEvents.reply("__aster.mediaUpdate("+id+","+Json.stringify(state)+","+Json.quote(event)+","+(error==null?"null":Json.quote(error))+","+request+");void 0");
     }
     private void completed(Tab tab, Engine.Document document, int historyIndex) {
         tab.pending=null;tab.location=document.uri;tab.title=document.title;tab.parked=false;

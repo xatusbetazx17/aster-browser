@@ -55,6 +55,7 @@ final class StreamSmoke {
             waitFor("script start",()->{boolean[] loaded={false};edt(()->loaded[0]=app.current().script!=null&&!app.current().scriptStarting);return loaded[0];});
             ScriptSession js=app.current().script;
             waitFor("autoplay refusal and real HTTP JSON",()->Boolean.TRUE.equals(js.eval("autoplay==='NotAllowedError'&&httpReady")));
+            if(!Boolean.TRUE.equals(js.eval("v.currentTime===0&&!v.ended&&v.paused")))throw new AssertionError("A new page inherited another player's timeline");
             edt(()->{
                 PreviewMain.PageCanvas c=app.current().canvas;c.setSize(900,800);c.ensureLayout();Engine.Draw draw=c.layout.items.stream().filter(d->d.text.equals("Stream")).findFirst().orElseThrow(()->new AssertionError("Rendered Stream button missing"));
                 c.dispatchEvent(new MouseEvent(c,MouseEvent.MOUSE_CLICKED,System.currentTimeMillis(),0,(int)((draw.x+2)*c.scale),(int)((draw.y+4)*c.scale),1,false,MouseEvent.BUTTON1));
