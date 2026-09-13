@@ -1,6 +1,5 @@
 """Build the standalone single-file Aster-Browser-Setup.exe installer."""
 import os
-import shutil
 import subprocess
 import sys
 
@@ -8,11 +7,9 @@ def build():
     installer_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(os.path.dirname(installer_dir))
     
-    # 1. Ensure assets exist
     assets_script = os.path.join(installer_dir, "generate_assets.py")
     subprocess.run([sys.executable, assets_script], check=True)
     
-    # 2. Ensure app_bundle.zip exists
     bundle_script = os.path.join(installer_dir, "bundle_app.py")
     subprocess.run([sys.executable, bundle_script], check=True)
     

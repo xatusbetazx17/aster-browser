@@ -19,13 +19,18 @@ sudo apt install python3 curl
 
 On desktop Arch Linux, use `sudo pacman -S --needed python curl`. Keep Arch updated through your normal whole-system update process; this installer does not refresh its package databases or perform a partial system upgrade. On Fedora, use `sudo dnf install python3 curl`. All paths require Python 3.10+.
 
-Download the script, then run it:
+This page covers the **managed setup tool**, which downloads a verified revision and
+can update or roll back later. For a single self-contained install with no network
+download, use `bash install-linux.sh` from the repository root instead; it takes a
+different set of options (`--run`, `--uninstall`, `--with-drm-capsule`, `-y`).
+
+Download the setup tool, then run it:
 
 ```bash
 curl --fail --location --proto '=https' --proto-redir '=https' \
-  'https://raw.githubusercontent.com/xatusbetazx17/aster-browser/codex/aster-webkit-desktop/installers/install-linux.sh' \
-  --output install-aster-linux.sh
-bash install-aster-linux.sh --edition webkit
+  'https://raw.githubusercontent.com/xatusbetazx17/aster-browser/codex/aster-webkit-desktop/installers/setup.py' \
+  --output aster-setup.py
+python3 aster-setup.py --edition webkit
 ```
 
 The script installs/checks the native GTK/WebKit dependencies, then installs the verified Aster source. Automatic dependency commands cover Debian/Ubuntu families, Arch and Fedora; the distro must provide WebKitGTK's **6.0 API**. On other distributions, install the dependencies yourself and run with `--skip-dependencies` if the WebKitGTK 6.0 runtime is available. This is not a guarantee of compatibility with every distro.
@@ -53,13 +58,13 @@ The latest setup script can also be downloaded again to pick up bootstrap/runtim
 Check status without installing application files:
 
 ```bash
-bash install-aster-linux.sh --edition webkit --check
+python3 aster-setup.py --edition webkit --check
 ```
 
 Roll back to the previous downloaded code revision:
 
 ```bash
-bash install-aster-linux.sh --edition webkit --rollback
+python3 aster-setup.py --edition webkit --rollback
 ```
 
 Rollback does not restore or change browser-profile data. Old release directories are kept so custom files can be recovered; setup does not delete them automatically.
