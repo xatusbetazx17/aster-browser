@@ -55,15 +55,8 @@ jobs:
       - uses: actions/setup-python@v6.0.0
         with:
           python-version: '3.12'
-      - name: Rebuild install-linux.sh and check it matches the committed script
-        run: |
-          cp install-linux.sh "$RUNNER_TEMP/install-linux.committed.sh"
-          python installers/build_linux_installer.py
-          if ! cmp -s install-linux.sh "$RUNNER_TEMP/install-linux.committed.sh"; then
-            echo "::error::install-linux.sh is stale against Aster-Browser-Windows-Kit-v16.zip."
-            echo "Regenerate it with: python installers/build_linux_installer.py"
-            exit 1
-          fi
+      - name: Check install-linux.sh matches the kit it is generated from
+        run: python -m unittest installers.tests.test_installer_sync -v
       - name: Check the payload carries its localization
         run: |
           bash install-linux.sh --extract-only "$RUNNER_TEMP/aster-payload"
