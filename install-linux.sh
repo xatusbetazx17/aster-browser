@@ -24,8 +24,8 @@ RESET_NETWORK_STATE=0
 WITH_DRM_CAPSULE=0
 SKIP_NSS_DB_REFRESH=1
 
-msg() { printf '[Aster Installer] %s\\n' "$*"; }
-die() { printf '[Aster Installer] ERROR: %s\\n' "$*" >&2; exit 1; }
+msg() { printf '[Aster Installer] %s\n' "$*"; }
+die() { printf '[Aster Installer] ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'USAGE'

@@ -106,6 +106,43 @@ class InstallerScriptHeader(unittest.TestCase):
                         "install-linux.sh's script body differs from build_linux_installer.py's "
                         f"SCRIPT_HEADER. Edit the generator, not the script. {REGENERATE}")
 
+    def test_progress_messages_end_in_a_real_newline(self):
+        """Every installer message ran together, each ending in a literal \\n.
+
+        SCRIPT_HEADER is a raw Python string, so the printf format written as
+        '%s\\n' reached the shell with both backslashes intact and printf emitted
+        one backslash followed by an n instead of ending the line. The functions
+        are extracted and run here rather than pattern-matched, because the bug
+        survived two readings of the source and only shows up in the output.
+        """
+        import subprocess
+
+        body = INSTALLER.read_text(encoding="utf-8", errors="replace")
+        definitions = [line for line in body.splitlines()
+                       if line.startswith(("msg() {", "die() {"))]
+        self.assertEqual(len(definitions), 2, f"msg/die are not defined as expected in install-linux.sh. {REGENERATE}")
+
+        script = "\n".join(definitions) + '\nmsg "first"\nmsg "second"\n'
+        result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "[Aster Installer] first\n[Aster Installer] second\n",
+            "install-linux.sh prints a literal backslash-n instead of ending each message. "
+            f"Fix the printf format in build_linux_installer.py. {REGENERATE}",
+        )
+
+    def test_die_reports_on_stderr_and_fails(self):
+        import subprocess
+
+        body = INSTALLER.read_text(encoding="utf-8", errors="replace")
+        definition = next(line for line in body.splitlines() if line.startswith("die() {"))
+        result = subprocess.run(["bash", "-c", definition + '\ndie "broken"\n'],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "[Aster Installer] ERROR: broken\n")
+        self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()
