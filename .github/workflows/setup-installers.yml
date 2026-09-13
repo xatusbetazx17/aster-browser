@@ -33,6 +33,16 @@ jobs:
         run: python -m compileall -q installers
       - name: Test portable reading and assistant logic
         run: python -m unittest discover -s experiments/webkit/tests -p 'test_*.py' -v
+      - name: Check install-linux.sh matches the kit it is generated from
+        if: runner.os == 'Linux'
+        run: |
+          cp install-linux.sh "$RUNNER_TEMP/install-linux.committed.sh"
+          python installers/build_linux_installer.py
+          if ! cmp -s install-linux.sh "$RUNNER_TEMP/install-linux.committed.sh"; then
+            echo "::error::install-linux.sh is stale against Aster-Browser-Windows-Kit-v16.zip."
+            echo "Regenerate it with: python installers/build_linux_installer.py"
+            exit 1
+          fi
       - name: Validate Linux bootstrap
         if: runner.os == 'Linux'
         run: |
@@ -40,6 +50,8 @@ jobs:
           bash install-linux.sh --help
           bash install-linux.sh --extract-only "$RUNNER_TEMP/aster-check"
           test -f "$RUNNER_TEMP/aster-check/run_aster.py"
+          test -f "$RUNNER_TEMP/aster-check/aster_browser/translations.py"
+          test -d "$RUNNER_TEMP/aster-check/aster_browser/locales"
       - name: Check Windows availability without installing another browser
         if: runner.os == 'Windows'
         shell: pwsh

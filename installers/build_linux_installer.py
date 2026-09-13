@@ -1,5 +1,6 @@
 """Generate the single standalone install-linux.sh for Aster Browser v16."""
 import base64
+import gzip
 import io
 import os
 import tarfile
@@ -374,8 +375,13 @@ def generate():
     print(f"Reading files from {source_zip}...")
     prefix = "aster-browser-windows-kit/"
     
+    # Build the payload reproducibly: gzip stamps the current time into its header
+    # by default, which made every regeneration differ and hid the fact that the
+    # committed install-linux.sh had gone stale against the kit. Pinning mtime to 0
+    # here lets CI diff a fresh build against the committed script.
     tar_buf = io.BytesIO()
-    with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+    gz = gzip.GzipFile(fileobj=tar_buf, mode="wb", compresslevel=9, mtime=0)
+    with tarfile.open(fileobj=gz, mode="w") as tar:
         with zipfile.ZipFile(source_zip, "r") as z:
             for item in z.infolist():
                 if item.filename.startswith(prefix):
@@ -387,10 +393,14 @@ def generate():
                     data = z.read(item.filename)
                     ti = tarfile.TarInfo(name="./" + rel_name)
                     ti.size = len(data)
-                    ti.mtime = int(item.date_time[0]) if len(item.date_time) > 0 else 0
+                    # The zip's date_time[0] is the year, so the old code stamped
+                    # "2025 seconds after the epoch" onto every entry. Nothing reads
+                    # these timestamps, so pin them flat and keep the build stable.
+                    ti.mtime = 0
                     ti.mode = 0o755 if rel_name.endswith((".sh", ".py")) else 0o644
                     tar.addfile(ti, io.BytesIO(data))
-                    
+
+    gz.close()
     compressed_bytes = tar_buf.getvalue()
     b64_payload = base64.b64encode(compressed_bytes).decode("ascii")
     

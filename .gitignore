@@ -26,6 +26,12 @@ build/
 installers/**/build/
 installers/windows_installer/app_bundle.zip
 
+# Release artifacts, built by .github/workflows/release.yml and published to
+# GitHub Releases rather than committed. Rebuild locally with:
+#   python installers/windows_installer/build_exe.py   (Windows)
+Aster-Browser-Setup.exe
+dist/
+
 # Assistant / agent internal folders (safeguard)
 .gemini/
 .antigravity/

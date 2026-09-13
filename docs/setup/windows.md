@@ -15,6 +15,13 @@ still belongs to the legacy Chromium-based edition.
 
 `installers/install-windows.ps1` is retained at its former download location to prevent misleading installation. It reports the missing standalone build and exits with status 2. With `-Check`, it reports status and exits successfully. It installs no browser or runtime and changes no existing application data.
 
+The graphical `Aster-Browser-Setup.exe` — which installs the legacy v16 kit, not the
+standalone port described above — is no longer committed to this repository. It is
+built from `Aster-Browser-Windows-Kit-v16.zip` by `.github/workflows/release.yml` on
+each `v*` tag and attached to the matching [GitHub Release](https://github.com/xatusbetazx17/aster-browser/releases/latest)
+with a `SHA256SUMS.txt`. To build it locally on Windows, run
+`python installers/windows_installer/build_exe.py`.
+
 ## Required Windows implementation
 
 - Build and test the standalone Aster application and an engine integration that meets the project's requirements.

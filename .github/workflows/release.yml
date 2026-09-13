@@ -1,0 +1,107 @@
+name: Publish Aster installers
+
+# Installer binaries are built here and attached to a GitHub Release instead of
+# being committed. Push a tag (for example v16.1) to publish; a manual run only
+# builds the artifacts so the pipeline can be exercised without cutting a release.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pyinstaller pillow customtkinter
+      - name: Build Aster-Browser-Setup.exe
+        run: python installers/windows_installer/build_exe.py
+      - name: Check the bundled app carries its localization
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $bundle = [IO.Compression.ZipFile]::OpenRead("$PWD/installers/windows_installer/app_bundle.zip")
+          $names = $bundle.Entries.FullName
+          $bundle.Dispose()
+          if ($names -notcontains 'aster_browser/translations.py') { throw 'app_bundle.zip is missing aster_browser/translations.py' }
+          $locales = @($names | Where-Object { $_ -like 'aster_browser/locales/*.py' })
+          if ($locales.Count -lt 12) { throw "app_bundle.zip carries only $($locales.Count) locale catalogs" }
+          Write-Output "Bundle OK: $($locales.Count) locale catalogs"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: aster-windows-installer
+          path: Aster-Browser-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-installer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Rebuild install-linux.sh and check it matches the committed script
+        run: |
+          cp install-linux.sh "$RUNNER_TEMP/install-linux.committed.sh"
+          python installers/build_linux_installer.py
+          if ! cmp -s install-linux.sh "$RUNNER_TEMP/install-linux.committed.sh"; then
+            echo "::error::install-linux.sh is stale against Aster-Browser-Windows-Kit-v16.zip."
+            echo "Regenerate it with: python installers/build_linux_installer.py"
+            exit 1
+          fi
+      - name: Check the payload carries its localization
+        run: |
+          bash install-linux.sh --extract-only "$RUNNER_TEMP/aster-payload"
+          test -f "$RUNNER_TEMP/aster-payload/run_aster.py"
+          test -f "$RUNNER_TEMP/aster-payload/aster_browser/translations.py"
+          test "$(find "$RUNNER_TEMP/aster-payload/aster_browser/locales" -name '*.py' | wc -l)" -ge 12
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: aster-linux-installer
+          path: install-linux.sh
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [windows-installer, linux-installer]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6.0.0
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Record checksums
+        working-directory: release-assets
+        run: |
+          sha256sum Aster-Browser-Setup.exe install-linux.sh | tee SHA256SUMS.txt
+      - name: Attach the installers to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Aster Browser $TAG" \
+            --generate-notes \
+            release-assets/Aster-Browser-Setup.exe \
+            release-assets/install-linux.sh \
+            release-assets/SHA256SUMS.txt
