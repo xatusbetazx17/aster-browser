@@ -24,6 +24,7 @@ Desktop.ini
 *.spec
 build/
 installers/**/build/
+installers/windows_installer/app_bundle.zip
 
 # Assistant / agent internal folders (safeguard)
 .gemini/

@@ -5,12 +5,10 @@ from PIL import Image, ImageDraw
 def generate_aster_assets(output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
     
-    # Render at 512x512 high resolution
     size = 512
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Dark rounded background (#1f2430)
     pad = int(size * (2 / 24))
     radius = int(size * (6 / 24))
     draw.rounded_rectangle(
@@ -37,15 +35,12 @@ def generate_aster_assets(output_dir: str):
     scale = size / 24.0
     pts = [(x * scale, y * scale) for x, y in pts_24]
     
-    # Cyan star (#8be9fd)
     draw.polygon(pts, fill="#8be9fd")
     
-    # Save PNG logo
     png_path = os.path.join(output_dir, "aster_logo.png")
     img.save(png_path, format="PNG")
     print(f"Generated {png_path}")
     
-    # Save multi-resolution Windows ICO
     ico_path = os.path.join(output_dir, "aster.ico")
     img.save(
         ico_path,

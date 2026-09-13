@@ -13,7 +13,6 @@ import threading
 import subprocess
 import time
 import winreg
-from pathlib import Path
 from PIL import Image
 
 try:
@@ -34,9 +33,6 @@ def get_bundle_path() -> str:
     local_p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_bundle.zip")
     if os.path.exists(local_p):
         return local_p
-    parent_p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "windows_installer", "app_bundle.zip")
-    if os.path.exists(parent_p):
-        return parent_p
     raise FileNotFoundError("app_bundle.zip was not found.")
 
 def get_asset_path(filename: str) -> str | None:
@@ -75,11 +71,9 @@ class AsterInstallerApp(ctk.CTk):
         self.geometry("640x530")
         self.resizable(False, False)
         
-        # Modern Dark Palette
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
-        # Set window icon if available
         ico_path = get_asset_path("aster.ico")
         if ico_path and os.path.exists(ico_path):
             try:
@@ -108,7 +102,6 @@ class AsterInstallerApp(ctk.CTk):
         header_frame = ctk.CTkFrame(self.container, fg_color="transparent")
         header_frame.pack(fill="x", padx=30, pady=(25, 15))
         
-        # Logo
         png_path = get_asset_path("aster_logo.png")
         if png_path and os.path.exists(png_path):
             try:
@@ -144,7 +137,6 @@ class AsterInstallerApp(ctk.CTk):
             subtitle=f"Sürüm: v{APP_VERSION}  |  Hafif, Bağımsız ve Gizlilik Odaklı Web Tarayıcısı"
         )
         
-        # Main Card Frame
         card = ctk.CTkFrame(self.container, fg_color="#1c212c", corner_radius=12, border_width=1, border_color="#2a3242")
         card.pack(fill="both", expand=True, padx=30, pady=(5, 20))
         
@@ -179,11 +171,9 @@ class AsterInstallerApp(ctk.CTk):
         )
         browse_btn.pack(side="right")
         
-        # Space requirement label
         space_lbl = ctk.CTkLabel(card, text="Gereken disk alanı: ~25 MB", font=ctk.CTkFont(family="Segoe UI", size=11), text_color="#64748b")
         space_lbl.pack(anchor="w", padx=20, pady=(0, 15))
         
-        # Divider
         divider = ctk.CTkFrame(card, height=1, fg_color="#2a3242")
         divider.pack(fill="x", padx=20, pady=(0, 15))
         
@@ -224,7 +214,6 @@ class AsterInstallerApp(ctk.CTk):
         self.chk_launch.select()
         self.chk_launch.pack(anchor="w", padx=25, pady=(2, 10))
         
-        # Footer Action Buttons
         footer = ctk.CTkFrame(self.container, fg_color="transparent")
         footer.pack(fill="x", padx=30, pady=(0, 20))
         
@@ -298,7 +287,6 @@ class AsterInstallerApp(ctk.CTk):
         self.progress_bar.pack(fill="x", padx=20, pady=(0, 15))
         self.progress_bar.set(0.05)
         
-        # Log Box
         self.log_box = ctk.CTkTextbox(
             card,
             font=ctk.CTkFont(family="Consolas", size=10),
@@ -361,13 +349,11 @@ class AsterInstallerApp(ctk.CTk):
             self._set_status("Başlatıcı ve sistem konfigürasyonu yapılıyor...", 0.75)
             self._log("[3/5] Başlatıcı ve ortam ayarlanıyor...")
             
-            # Ensure aster.ico is in root as well
             ico_src = get_asset_path("aster.ico")
             ico_dest = os.path.join(root, "aster.ico")
             if ico_src and os.path.exists(ico_src):
                 shutil.copy2(ico_src, ico_dest)
             
-            # Create AsterBrowser.bat launcher
             launcher_bat = os.path.join(root, "AsterBrowser.bat")
             bat_content = (
                 "@echo off\r\n"
@@ -387,7 +373,6 @@ class AsterInstallerApp(ctk.CTk):
                 f.write(bat_content)
             self._log(f"Başlatıcı oluşturuldu: {launcher_bat}")
             
-            # Create Uninstall.bat
             uninst_bat = os.path.join(root, "Uninstall.bat")
             desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", f"{APP_NAME}.lnk")
             start_menu_dir = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", APP_NAME)
@@ -495,7 +480,6 @@ class AsterInstallerApp(ctk.CTk):
         )
         loc_lbl.pack(pady=(0, 15))
         
-        # Footer Action Buttons
         footer = ctk.CTkFrame(self.container, fg_color="transparent")
         footer.pack(fill="x", padx=30, pady=(0, 20))
         
@@ -526,7 +510,6 @@ class AsterInstallerApp(ctk.CTk):
         launch_btn.pack(side="right")
         
         if self.launch_after:
-            # Trigger immediate launch
             self._launch_app()
 
     def _launch_app(self):

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'installers/**'
+      - 'install-linux.sh'
       - 'docs/setup/**'
       - 'experiments/webkit/aster_webkit/documents.py'
       - 'experiments/webkit/aster_webkit/assistant.py'
@@ -35,9 +36,10 @@ jobs:
       - name: Validate Linux bootstrap
         if: runner.os == 'Linux'
         run: |
-          bash -n installers/install-linux.sh
-          bash installers/install-linux.sh --help
-          bash installers/install-linux.sh --edition webkit --check --install-dir "$RUNNER_TEMP/aster-check"
+          bash -n install-linux.sh
+          bash install-linux.sh --help
+          bash install-linux.sh --extract-only "$RUNNER_TEMP/aster-check"
+          test -f "$RUNNER_TEMP/aster-check/run_aster.py"
       - name: Check Windows availability without installing another browser
         if: runner.os == 'Windows'
         shell: pwsh

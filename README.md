@@ -57,6 +57,6 @@ The original parking, adblock customization, containers, Lite renderer and plugi
 
 ## Historical experiments
 
-The v15 ZIPs and legacy installers in this repository run the older Qt/Chromium edition. The Firefox companion was a separate experiment and is **retired from the active product and installation path**. Neither is presented as the new standalone Aster browser. Historical files are retained for reference; new setup commands use the standalone Linux application.
+The legacy release ZIPs for the older Qt/Chromium edition have been removed from this repository; only `Aster-Browser-Windows-Kit-v16.zip` remains, because the Windows and Linux installers are built from it. The Firefox companion was a separate experiment and is **retired from the active product and installation path**. It is not presented as the new standalone Aster browser; new setup commands use the standalone Linux application.
 
 Aster source is covered by the repository's MIT license. Its engine and other dependencies retain their own licenses.
