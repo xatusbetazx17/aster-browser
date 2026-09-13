@@ -37,6 +37,7 @@ jobs:
           if ($names -notcontains 'aster_browser/translations.py') { throw 'app_bundle.zip is missing aster_browser/translations.py' }
           $locales = @($names | Where-Object { $_ -like 'aster_browser/locales/*.py' })
           if ($locales.Count -lt 12) { throw "app_bundle.zip carries only $($locales.Count) locale catalogs" }
+          if ($names -notcontains 'bundle_info.json') { throw 'app_bundle.zip is missing bundle_info.json, so the installer cannot tell which kit it carries' }
           Write-Output "Bundle OK: $($locales.Count) locale catalogs"
       - uses: actions/upload-artifact@v7.0.1
         with:
@@ -55,8 +56,8 @@ jobs:
       - uses: actions/setup-python@v6.0.0
         with:
           python-version: '3.12'
-      - name: Check install-linux.sh matches the kit it is generated from
-        run: python -m unittest installers.tests.test_installer_sync -v
+      - name: Check the installer guards, including the kit payload sync
+        run: python -m unittest discover -s installers/tests -v
       - name: Check the payload carries its localization
         run: |
           bash install-linux.sh --extract-only "$RUNNER_TEMP/aster-payload"

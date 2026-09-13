@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import os
 import sys
+import hashlib
+import json
 import shutil
 import zipfile
 import threading
@@ -45,6 +47,73 @@ def get_asset_path(filename: str) -> str | None:
     if os.path.exists(local_p):
         return local_p
     return None
+
+MANIFEST_NAME = "bundle_info.json"
+
+# Created by Python as it runs and by the app as it works, so their presence
+# says nothing about whether a human edited the installation.
+IGNORED_DIRS = {"__pycache__"}
+IGNORED_SUFFIXES = (".pyc", ".pyo", ".log")
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_manifest(app_dir: str) -> dict | None:
+    """Return what the previous install recorded writing, if it recorded anything."""
+    path = os.path.join(app_dir, MANIFEST_NAME)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except Exception:
+        return None
+    return manifest if isinstance(manifest.get("files"), dict) else None
+
+
+def _is_ignorable(rel: str) -> bool:
+    parts = rel.split("/")
+    if any(part in IGNORED_DIRS for part in parts[:-1]):
+        return True
+    return rel == MANIFEST_NAME or rel.endswith(IGNORED_SUFFIXES)
+
+
+def find_local_edits(app_dir: str, manifest: dict) -> tuple[list[str], list[str], list[str]]:
+    """Compare the installed files against what the last install actually wrote.
+
+    Anything that does not match is someone's work - a patched module, an added
+    plugin - and the installer is about to delete the directory it lives in.
+    """
+    recorded = manifest["files"]
+    modified: list[str] = []
+    removed: list[str] = []
+    added: list[str] = []
+    seen: set[str] = set()
+
+    for rel, digest in recorded.items():
+        path = os.path.join(app_dir, rel.replace("/", os.sep))
+        seen.add(os.path.normcase(os.path.abspath(path)))
+        if not os.path.isfile(path):
+            removed.append(rel)
+        elif sha256_file(path) != digest:
+            modified.append(rel)
+
+    for dirpath, dirnames, filenames in os.walk(app_dir):
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS]
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            if os.path.normcase(os.path.abspath(full)) in seen:
+                continue
+            rel = os.path.relpath(full, app_dir).replace(os.sep, "/")
+            if not _is_ignorable(rel):
+                added.append(rel)
+
+    return sorted(modified), sorted(removed), sorted(added)
+
 
 def create_windows_shortcut(target: str, shortcut_path: str, working_dir: str, icon_path: str = "", arguments: str = "") -> None:
     """Create a Windows .lnk shortcut via PowerShell COM WScript.Shell."""
@@ -312,6 +381,51 @@ class AsterInstallerApp(ctk.CTk):
         self.status_lbl.configure(text=text)
         self.progress_bar.set(progress)
 
+    def _preserve_existing_app(self, root: str, app_dir: str) -> None:
+        """Clear the old application, keeping a copy if anyone had edited it.
+
+        The installer used to delete this directory outright, which quietly threw
+        away patched modules and reinstated whatever code the exe was built with.
+        An install should never be the reason someone's work disappears, so an
+        edited directory is moved aside instead of removed.
+        """
+        manifest = read_manifest(app_dir)
+        if manifest is None:
+            # An older install, or one someone has rearranged. Unverifiable is not
+            # the same as unmodified, so it is kept rather than assumed disposable.
+            headline = "Mevcut kurulumun içeriği doğrulanamadı (kurulum kaydı yok)."
+            edits = None
+        else:
+            modified, removed, added = find_local_edits(app_dir, manifest)
+            edits = modified + removed + added
+            if not edits:
+                self._log("Mevcut kurulum değiştirilmemiş, güvenle temizleniyor.")
+                shutil.rmtree(app_dir, ignore_errors=True)
+                return
+            headline = (
+                f"Mevcut kurulumda yerel değişiklik var: {len(modified)} değiştirilmiş, "
+                f"{len(added)} eklenmiş, {len(removed)} silinmiş dosya."
+            )
+
+        backup_dir = os.path.join(root, "app-backup-" + time.strftime("%Y%m%d-%H%M%S"))
+        self._log("")
+        self._log(f"DİKKAT: {headline}")
+        if edits:
+            for rel in edits[:10]:
+                self._log(f"  - {rel}")
+            if len(edits) > 10:
+                self._log(f"  ... ve {len(edits) - 10} dosya daha")
+        try:
+            shutil.move(app_dir, backup_dir)
+            self._log(f"Silinmedi, yedeklendi: {backup_dir}")
+        except Exception as error:
+            # Better a failed install than a silent deletion of someone's work.
+            raise RuntimeError(
+                f"Mevcut uygulama yedeklenemedi ({error}). Kurulum durduruldu; "
+                f"'{app_dir}' klasörünü elle yedekleyip tekrar deneyin."
+            ) from error
+        self._log("")
+
     def _installation_worker(self):
         try:
             root = self.install_dir
@@ -326,8 +440,7 @@ class AsterInstallerApp(ctk.CTk):
             os.makedirs(state_dir, exist_ok=True)
             
             if os.path.exists(app_dir):
-                self._log("Eski uygulama dosyaları temizleniyor...")
-                shutil.rmtree(app_dir, ignore_errors=True)
+                self._preserve_existing_app(root, app_dir)
             os.makedirs(app_dir, exist_ok=True)
             
             # Step 2: Extract bundled app
@@ -344,6 +457,16 @@ class AsterInstallerApp(ctk.CTk):
                         self._set_status(f"Dosyalar çıkartılıyor ({i+1}/{total_files})...", p)
             
             self._log(f"Toplam {total_files} dosya başarıyla açıldı.")
+
+            installed = read_manifest(app_dir)
+            if installed:
+                self._log(
+                    f"Paket kaynağı: {installed.get('kit_name', '?')} "
+                    f"(sha256 {str(installed.get('kit_sha256', '?'))[:16]}, "
+                    f"derlenme {installed.get('built_at', '?')})"
+                )
+            else:
+                self._log("Uyarı: pakette kurulum kaydı yok; sürümü doğrulanamıyor.")
             
             # Step 3: Copy icons and generate batch launcher
             self._set_status("Başlatıcı ve sistem konfigürasyonu yapılıyor...", 0.75)
