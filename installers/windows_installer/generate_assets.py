@@ -1,54 +1,35 @@
-"""Generate aster.ico and aster_logo.png from the vector SVG definition."""
-import os
-from PIL import Image, ImageDraw
+"""Write the Windows installer's icon files from the shared brand definition.
 
-def generate_aster_assets(output_dir: str):
-    os.makedirs(output_dir, exist_ok=True)
-    
-    size = 512
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    pad = int(size * (2 / 24))
-    radius = int(size * (6 / 24))
-    draw.rounded_rectangle(
-        [pad, pad, size - pad, size - pad],
-        radius=radius,
-        fill="#1f2430"
-    )
-    
-    # Star coordinates from SVG viewBox="0 0 24 24"
-    pts_24 = [
-        (12.0, 4.5),
-        (13.7, 9.7),
-        (19.0, 9.0),
-        (15.0, 12.3),
-        (19.0, 15.6),
-        (13.7, 14.9),
-        (12.0, 19.5),
-        (10.3, 14.9),
-        (5.0, 15.6),
-        (9.0, 12.3),
-        (5.0, 9.0),
-        (10.3, 9.7),
-    ]
-    scale = size / 24.0
-    pts = [(x * scale, y * scale) for x, y in pts_24]
-    
-    draw.polygon(pts, fill="#8be9fd")
-    
-    png_path = os.path.join(output_dir, "aster_logo.png")
-    img.save(png_path, format="PNG")
-    print(f"Generated {png_path}")
-    
-    ico_path = os.path.join(output_dir, "aster.ico")
-    img.save(
-        ico_path,
-        format="ICO",
-        sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-    )
+build_exe.py runs this before PyInstaller, so the setup executable, its window
+and the browser it installs all carry the same mark. The mark itself is defined
+once in assets/brand/aster_brand.py; assets/brand/build_brand_assets.py
+refreshes every copy of it in the repository, this one included.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "assets" / "brand"))
+
+import aster_brand as brand  # noqa: E402 - resolved via the path above
+
+
+def generate_aster_assets(output_dir: str) -> None:
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    ico_path = directory / "aster.ico"
+    brand.write_ico(ico_path)
     print(f"Generated {ico_path}")
 
+    # The installer window paints its own dark header, so the logo goes on it
+    # without a tile of its own.
+    png_path = directory / "aster_logo.png"
+    brand.render(512, "mark").save(png_path, format="PNG")
+    print(f"Generated {png_path}")
+
+
 if __name__ == "__main__":
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    generate_aster_assets(current_dir)
+    generate_aster_assets(str(Path(__file__).resolve().parent))

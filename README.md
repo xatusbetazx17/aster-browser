@@ -1,10 +1,14 @@
+<img src="assets/brand/aster-logo.png" alt="Aster" width="76">
+
 # Aster Browser
 
 Aster is being developed as a **standalone browser with its own interface and features**. The active prototype opens directly as Aster. Its Linux application uses GTK4, WebKitGTK and JavaScriptCore, with no Firefox, Chrome or Chromium installation required.
 
 **Status: experimental.** The standalone application does not yet have all original v15 features, native Windows/Android ports, a validated Steam Deck package or verified premium streaming. WebKit is an existing rendering engine; a complete Aster engine written from scratch has not been implemented.
 
-Read [the project direction and remaining work](PROJECT_DIRECTION.md).
+Read [the project direction and remaining work](PROJECT_DIRECTION.md). The logo is
+defined once in [`assets/brand`](assets/brand/README.md) and written from there into the
+browser, the installers and the extension.
 
 ## Original engine development preview
 

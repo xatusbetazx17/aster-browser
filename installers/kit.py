@@ -1,0 +1,65 @@
+"""Read and replace files inside the kit both installers are built from.
+
+The Qt application's own source lives in Aster-Browser-Windows-Kit-v16.zip
+rather than in the working tree, so changing the browser means rewriting entries
+in that archive. The Windows installer bundles the kit directly and
+install-linux.sh embeds a copy of it, so after replacing anything here rebuild
+the Linux script with installers/build_linux_installer.py - otherwise its
+payload still carries the old files and installers/tests/test_installer_sync.py
+fails.
+"""
+from __future__ import annotations
+
+import io
+from pathlib import Path
+from typing import Mapping
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+KIT = ROOT / "Aster-Browser-Windows-Kit-v16.zip"
+PREFIX = "aster-browser-windows-kit/"
+
+
+def read(name: str) -> bytes:
+    with zipfile.ZipFile(KIT) as kit:
+        return kit.read(PREFIX + name)
+
+
+def read_text(name: str) -> str:
+    return read(name).decode("utf-8")
+
+
+def names() -> list[str]:
+    with zipfile.ZipFile(KIT) as kit:
+        return [item.filename[len(PREFIX):] for item in kit.infolist()
+                if item.filename.startswith(PREFIX) and not item.is_dir()]
+
+
+def replace(updates: Mapping[str, bytes | str]) -> bool:
+    """Rewrite the kit with these files replaced. True when anything changed.
+
+    Every other entry is copied across untouched, keeping its timestamp and
+    compression, so an unrelated file is never rewritten by a logo change.
+    """
+    payload = {PREFIX + name: (data.encode("utf-8") if isinstance(data, str) else data)
+               for name, data in updates.items()}
+
+    with zipfile.ZipFile(KIT) as source:
+        missing = sorted(set(payload) - set(source.namelist()))
+        if missing:
+            raise KeyError(f"{KIT.name} does not contain {[n[len(PREFIX):] for n in missing]}")
+        if all(source.read(name) == data for name, data in payload.items()):
+            return False
+        items = [(item, payload.get(item.filename) or source.read(item.filename))
+                 for item in source.infolist()]
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target:
+        for item, data in items:
+            info = zipfile.ZipInfo(item.filename, date_time=item.date_time)
+            info.compress_type = item.compress_type
+            info.external_attr = item.external_attr
+            info.create_system = item.create_system
+            target.writestr(info, data)
+    KIT.write_bytes(buffer.getvalue())
+    return True
