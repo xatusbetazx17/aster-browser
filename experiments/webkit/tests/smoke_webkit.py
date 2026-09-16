@@ -46,6 +46,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="aster-webkit-smoke-") as profile:
         os.environ["ASTER_WEBKIT_PROFILE_DIR"] = profile
         from aster_webkit.app import BrowserApplication, GLib
+        from aster_webkit.capsules import UNAVAILABLE, CapsuleManager
         from aster_webkit.core import BookmarkStore
 
         context = GLib.MainContext.default()
@@ -136,6 +137,26 @@ def main():
             window.set_fullscreen_ui(False)
             assert window.toolbar.get_visible()
 
+            # A capsule must start a separate runtime or say plainly that it cannot.
+            # Handing the address back to the desktop opener would re-enter Aster and
+            # look like DRM support, so a missing runtime has to refuse instead.
+            capsule_page = window.new_tab(origin + "/first")
+            wait_for(lambda: not capsule_page.view.is_loading(), "Capsule test page failed to load")
+            window.tools.capsules = CapsuleManager(runtime=UNAVAILABLE)
+            window.tools.open_in_capsule()
+            wait_for(lambda: "setup_chromium_drm_capsule.sh" in window.tools.buffer_text(window.tools.media_result),
+                     "A missing capsule runtime was not reported")
+            received = Path(profile) / "capsule-url.txt"
+            window.tools.capsules = CapsuleManager(
+                command_override=f"/bin/sh -c 'printf %s \"$1\" > {received}' aster-capsule {{url}}")
+            window.tools.open_in_capsule()
+            wait_for(received.exists, "The capsule runtime was never started")
+            wait_for(lambda: received.read_text(encoding="utf-8") == origin + "/first",
+                     "The capsule did not receive the page address")
+            wait_for(lambda: "Aster supplies no CDM" in window.tools.buffer_text(window.tools.media_result),
+                     "The capsule launch did not report its limits")
+            window.close_tab()
+
             def javascript(body):
                 completed = []
                 failures = []
@@ -210,7 +231,7 @@ def main():
                 wait_for(lambda: window.tools_revealer.get_child_revealed(), "Reader panel did not open")
                 ImageGrab.grab().save(destination.with_name("aster-reader.png"))
             assert not callback_errors
-            print("PASS: real WebKit HTML/JS, navigation, tabs, bookmarks, cookies, Word reader, offline assistant commands/excerpts, fullscreen UI, VP8 video playback and speech synthesis")
+            print("PASS: real WebKit HTML/JS, navigation, tabs, bookmarks, cookies, Word reader, offline assistant commands/excerpts, fullscreen UI, DRM capsule launch and refusal, VP8 video playback and speech synthesis")
         finally:
             if window:
                 window.close()

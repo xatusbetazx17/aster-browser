@@ -45,8 +45,9 @@ See [preview installation and update limitations](experiments/aster-engine/READM
 - An in-browser companion with offline commands/excerpts, optional local GGUF inference and Vosk voice input.
 - Fullscreen controls, camera/microphone and mouse-capture prompts, and a media capability check.
 - A refreshed Aster new-tab page and a docked Read / Ask / Play panel.
+- An optional DRM capsule that opens one protected service in a separate licensed runtime, with a per-service profile.
 
-Read the [document and local assistant setup](docs/setup/assistant.md) and the [streaming compatibility details](docs/setup/streaming.md). Optional AI/voice models are separate downloads. The streaming controls do not supply Widevine or prove Prime Video/Boosteroid playback.
+Read the [document and local assistant setup](docs/setup/assistant.md) and the [streaming compatibility details](docs/setup/streaming.md). Optional AI/voice models are separate downloads. The streaming controls do not supply Widevine or prove Prime Video/Boosteroid playback. The [DRM capsule](docs/setup/streaming.md#the-drm-capsule) routes a protected service to a separate runtime that carries its own licensed CDM; Aster redistributes no CDM, and no subscribed session has been verified.
 
 See the [standalone application's instructions and test details](experiments/webkit/README.md).
 

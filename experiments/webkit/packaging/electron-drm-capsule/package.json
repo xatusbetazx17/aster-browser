@@ -1,0 +1,15 @@
+{
+  "name": "aster-drm-capsule",
+  "version": "0.2.0",
+  "description": "Aster Browser DRM capsule using CastLabs Electron for Content Security.",
+  "main": "main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "check": "node ./scripts/check-runtime.js",
+    "verify": "electron . -- --aster-verify"
+  },
+  "devDependencies": {
+    "electron": "https://github.com/castlabs/electron-releases#v42.0.0+wvcus"
+  }
+}
