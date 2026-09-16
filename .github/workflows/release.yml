@@ -91,11 +91,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+        # The tag arrives one of two ways. Pushed from a clone, there is no
+        # release yet and this makes one. Created by publishing a release in the
+        # web interface, the release is already there and creating it again
+        # fails - so the assets are uploaded into it instead.
         run: |
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Aster Browser $TAG" \
-            --generate-notes \
-            release-assets/Aster-Browser-Setup.exe \
-            release-assets/install-linux.sh \
-            release-assets/SHA256SUMS.txt
+          assets=(release-assets/Aster-Browser-Setup.exe
+                  release-assets/install-linux.sh
+                  release-assets/SHA256SUMS.txt)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Aster Browser $TAG" \
+              --generate-notes \
+              "${assets[@]}"
+          fi
