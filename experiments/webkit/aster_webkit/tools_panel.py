@@ -11,6 +11,8 @@ import threading
 from gi.repository import GLib, Gtk
 
 from .assistant import generate_local, local_answer, parse_command
+from .capsules import CapsuleManager, service_label
+from .core import is_web_uri
 from .documents import read_document
 from .media import MEDIA_PROBE, report_text
 from .speech import Speech
@@ -46,6 +48,7 @@ class ToolsPanel(Gtk.Box):
         self.choosers = set()
         self.voice_process = None
         self.model_cancel = threading.Event()
+        self.capsules = CapsuleManager()
         title = Gtk.Box(spacing=8)
         heading = Gtk.Label(label="Aster companion", xalign=0, hexpand=True)
         heading.add_css_class("title-3")
@@ -142,8 +145,21 @@ class ToolsPanel(Gtk.Box):
                           ("Open Xbox Cloud Gaming", "https://www.xbox.com/play"),
                           ("Open GeForce NOW", "https://play.geforcenow.com/")):
             box.append(button(name, lambda address=uri: self.window.new_tab(address)))
-        box.append(button("Check this page's streaming support", self.check_media))
-        box.append(button("Fullscreen (F11)", self.window.toggle_fullscreen))
+        row = Gtk.Box(spacing=6, homogeneous=True)
+        row.append(button("Check this page's streaming support", self.check_media))
+        row.append(button("Fullscreen (F11)", self.window.toggle_fullscreen))
+        box.append(row)
+        label = Gtk.Label(label="Protected services usually cannot play in an Aster tab: distribution WebKitGTK "
+                                "builds ship without encrypted media. Run the check above to see this build. A "
+                                "capsule opens one service in a separate runtime carrying its own licensed CDM.",
+                          wrap=True, xalign=0)
+        label.add_css_class("dim-label")
+        box.append(label)
+        row = Gtk.Box(spacing=6, homogeneous=True)
+        row.append(button("Open this page in the DRM capsule", self.open_in_capsule))
+        row.append(button("DRM capsule status", self.capsule_status))
+        box.append(row)
+        box.append(button("Reset this service's capsule sign-in", self.reset_capsule))
         self.media_result, scroll = text_area()
         self.media_result.get_buffer().set_text("Open an HTTPS page, then run the check to see codec, controller, cloud connection and protected-media support on this device.")
         box.append(scroll)
@@ -364,6 +380,55 @@ class ToolsPanel(Gtk.Box):
                 self.page_text(answer_with)
         else:
             answer_with("")
+
+    def capsule_uri(self):
+        """The current page, or None with a message when it cannot go to a capsule."""
+        tab = self.window.current
+        uri = tab.uri if tab else ""
+        if not is_web_uri(uri):
+            self.media_result.get_buffer().set_text("Open an http or https page first, then use the capsule.")
+            return None
+        return uri
+
+    def capsule_job(self, job, done):
+        """Run capsule work off the main loop: detection can probe Flatpak."""
+        self.media_result.get_buffer().set_text("Checking the DRM capsule…")
+        self.run_job(job, done, lambda message: self.media_result.get_buffer().set_text(message))
+
+    def capsule_status(self):
+        self.show("media")
+        self.capsule_job(self.capsules.status_text,
+                         lambda text: self.media_result.get_buffer().set_text(text))
+
+    def open_in_capsule(self):
+        self.show("media")
+        uri = self.capsule_uri()
+        if not uri:
+            return
+
+        def done(result):
+            detail = result.note + "\n\nCommand: " + result.command_text()
+            if result.profile_dir:
+                detail += "\nProfile: " + result.profile_dir
+            self.media_result.get_buffer().set_text(detail)
+            if not result.ok:
+                self.window.notify(result.note)
+
+        self.capsule_job(lambda: self.capsules.launch(uri), done)
+
+    def reset_capsule(self):
+        self.show("media")
+        uri = self.capsule_uri()
+        if not uri:
+            return
+        service = service_label(uri)
+
+        def done(removed):
+            self.media_result.get_buffer().set_text(
+                f"Cleared the capsule profile for {service}. You will sign in again next time."
+                if removed else f"{service} has no capsule profile to clear.")
+
+        self.capsule_job(lambda: self.capsules.reset_profile(service), done)
 
     def check_media(self):
         self.show("media")

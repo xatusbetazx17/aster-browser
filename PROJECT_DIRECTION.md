@@ -30,6 +30,7 @@ A custom interface and browser features can be developed within this standalone 
 | Standalone Android app | Original-engine Canvas app and APK packaging added; full browser port incomplete |
 | SteamOS/Steam Deck package | Not yet validated or shipped |
 | Prime Video and other protected streams inside Aster | Not verified; licensing, codecs and service approval remain unresolved |
+| Protected streams via the DRM capsule | Implemented routing to a separate licensed runtime, with per-service profiles and a Widevine verification command; no subscribed session verified |
 | Aster rendering engine written from scratch | Initial basic HTML/text parser, layout and link renderer implemented; modern web platform absent |
 
 Legacy Qt installers and the retired companion source remain available as historical development work. They are not substitutes for the standalone product described here.

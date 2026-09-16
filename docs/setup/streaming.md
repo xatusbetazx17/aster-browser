@@ -40,11 +40,68 @@ Website fullscreen hides Aster's controls; **Escape/F11** returns to the browser
 
 **Check this page's streaming support** inspects codecs, MSE, WebRTC, controller/mouse/fullscreen APIs and requests temporary Widevine key-system access. Run it on an HTTPS page. It distinguishes an absent API, declined/unsupported key system and unverified available access. It does not contact a license server, decode a protected stream, change the user agent, install a CDM or launch another browser.
 
+## The DRM capsule
+
+Aster cannot play protected video in its own tab, and no setting changes that.
+Rather than leave the gap unaddressed, the standalone application can hand one
+protected service to a **capsule**: a separate runtime that carries its own
+licensed CDM, opened in its own per-service profile directory.
+
+The bundled capsule is [CastLabs Electron for Content Security](https://github.com/castlabs/electron-releases),
+a Chromium-family runtime that installs its own Widevine CDM from Google's
+component service on first launch, and whose [EVS service](https://github.com/castlabs/electron-releases/wiki/EVS)
+provides production VMP signing without a separate Google agreement. If it is not
+installed, Aster falls back to an already-installed Chrome, Chromium, Brave, Edge
+or Firefox. Firefox is relevant here because Amazon
+[lists it among supported computer browsers](https://www.primevideo.com/help?nodeId=GUX9FYHU5D8LC9EJ).
+
+```bash
+bash experiments/webkit/tools/setup_chromium_drm_capsule.sh --install-deps --verify
+```
+
+In Aster: **companion panel → Play → Open this page in the DRM capsule**, or the
+same entry in the Aster menu. **Reset this service's capsule sign-in** clears one
+service's profile and leaves the others signed in.
+
+### What the capsule is and is not
+
+- Aster downloads, bundles and redistributes **no CDM**. The capsule runtime
+  installs its own on the user's machine, under that runtime's licence. Nothing
+  licensed is committed to this repository.
+- It does not bypass DRM, paywalls, age checks or region checks, and it does not
+  copy a CDM out of Chrome, spoof a user agent or disable a sandbox.
+- A detected or launched capsule is **not** evidence that a service plays. No
+  Prime Video, Netflix or other subscribed session has been verified in a capsule
+  for this project. Services may still require production VMP signing, supported
+  codecs, or a runtime they have approved.
+- CastLabs documents full support on Windows and macOS and partial support on
+  Linux, where persistent licences are unavailable. Expect L3 (SD) at best.
+- When no capsule runtime is installed, Aster **refuses and says so**. It never
+  falls back to the desktop opener, which would re-enter Aster when Aster is the
+  default browser and would look like DRM support that does not exist.
+
+### Verifying a capsule for real
+
+Installing Electron is not the same as having a working CDM. The capsule ships a
+check that distinguishes them:
+
+```bash
+cd experiments/webkit/packaging/electron-drm-capsule
+npm run check    # is the runtime installed?
+npm run verify   # does it actually expose a Widevine key system?
+```
+
+`npm run verify` requests `com.widevine.alpha` key-system access, creates media
+keys, prints the result as JSON and exits non-zero when Widevine is unavailable.
+That result, plus a real subscribed session, is what "DRM works" means here.
+
 ## Why Prime Video is not solved by a browser setting
 
 Protected playback needs a compatible encrypted-media implementation, an integrated content decryption module, codecs, the service's license exchange and any device/output restrictions it requires. Google's [Widevine documentation](https://developers.google.com/widevine/drm/overview) describes the license agreement and integration; [Prime Video's computer requirements](https://www.primevideo.com/help?nodeId=GUX9FYHU5D8LC9EJ) list supported browsers. Aster is not currently on that list. WebKit's encrypted-media switch does not supply Widevine or make Aster service-approved.
 
 There is no licensed Widevine integration or successful Prime Video session in this repository. Copying a CDM from an unrelated browser or changing a browser name is not an implementation of that integration. A legitimate integration/distribution arrangement, platform implementation and subscribed service tests are still needed. No HD/4K claim is made.
+
+The capsule described above does not change that conclusion for *Aster's own engine*. It routes one service to a runtime that already holds a licence, which is a different thing from Aster gaining protected playback. Aster's own EME path still needs either a WebKitGTK build with `ENABLE_ENCRYPTED_MEDIA` and Thunder/OpenCDM, or the Widevine agreement described in the [integration brief](../development/widevine-integration.md).
 
 ## Cloud gaming checks
 
@@ -52,7 +109,7 @@ The [Boosteroid requirements](https://help.boosteroid.com/en/content/general-req
 
 The CI fixture decodes and plays an authored, unencrypted VP8 clip. It uses no paid account or public service. Prime Video, Boosteroid, GeForce NOW and Xbox Cloud Gaming have **not** passed an Aster service-level test. A subscribed test account, supported physical hardware/controller and the actual target package are still required for those checks.
 
-The actual Ubuntu CI package (WebKitGTK 2.52.6) did **not** expose WebRTC or encrypted-media APIs. Enabling settings cannot add features compiled out of that engine. A maintained engine build with these features and its required integration must come before a cloud-game/DRM trial. WebKit's [GTK build options](https://github.com/WebKit/WebKit/blob/main/Source/cmake/OptionsGTK.cmake) put WebRTC and encrypted media behind experimental build options by default; this repository does not ship such a rebuilt engine.
+The actual Ubuntu CI package (WebKitGTK 2.52.6) did **not** expose WebRTC or encrypted-media APIs. Enabling settings cannot add features compiled out of that engine. WebKit's `OptionsGTK.cmake` defaults `ENABLE_ENCRYPTED_MEDIA` to `ENABLE_EXPERIMENTAL_FEATURES` and `ENABLE_THUNDER` to `ENABLE_DEVELOPER_MODE`, so distribution packages ship with both off; Thunder/OpenCDM is the only CDM backend WebKitGTK supports for Widevine. A maintained engine build with these features and its required integration must come before a cloud-game/DRM trial. WebKit's [GTK build options](https://github.com/WebKit/WebKit/blob/main/Source/cmake/OptionsGTK.cmake) put WebRTC and encrypted media behind experimental build options by default; this repository does not ship such a rebuilt engine.
 
 ## Independence and native ports
 

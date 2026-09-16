@@ -100,9 +100,29 @@ The browser accepts HTTP/HTTPS web addresses. Local IP addresses, localhost, and
 
 WebKit's certificate validation remains enabled. The shell does not disable engine sandboxing or enable a remote debugging listener. Camera/microphone, mouse-capture and protected-media requests have native one-request prompts; other permission types are denied. Background-tab requests and prompts made stale by navigation/tab switching are denied. Persistent HTTP-auth credential storage is disabled; this is not a password manager or a private-browsing mode.
 
+## Protected streaming: the DRM capsule
+
+Distribution WebKitGTK builds compile encrypted media out, so no Aster tab can
+hold a Widevine session. Aster instead opens one protected service in a separate
+runtime that carries its own licensed CDM, in its own per-service profile:
+
+```bash
+bash experiments/webkit/tools/setup_chromium_drm_capsule.sh --install-deps --verify
+```
+
+Then use **companion panel → Play → Open this page in the DRM capsule**, or the
+Aster menu entry. Without the bundled CastLabs Electron runtime, Aster uses an
+installed Chrome, Chromium, Brave, Edge or Firefox; with none of them, it says so
+rather than handing the address to the desktop opener, which would re-enter Aster.
+
+Aster supplies no CDM and bypasses no DRM, and a capsule that launches is not
+evidence that a service plays. See
+[the streaming notes](../../docs/setup/streaming.md#the-drm-capsule) and
+[the capsule README](packaging/electron-drm-capsule/README.md).
+
 ## What still needs work
 
-This is an experimental engine path, **not full Chrome or existing Aster feature parity**. It has no Chrome Web Store extension support, Google account sync, password manager, browser-history UI, crash/session restore, private mode, or verified DRM streaming. Location, notifications and other unimplemented permission types remain denied.
+This is an experimental engine path, **not full Chrome or existing Aster feature parity**. It has no Chrome Web Store extension support, Google account sync, password manager, browser-history UI, crash/session restore, private mode, or verified DRM streaming. The capsule routes protected services to a runtime that already holds a licence; it does not give Aster's own engine protected playback, and no subscribed session has been verified in it. Location, notifications and other unimplemented permission types remain denied.
 
 The original ad-block rules, containers, tab parking and Lite mode have not been ported. The native companion is an initial local implementation, not complete assistant parity. WebKit ITP is not a replacement for an ad blocker. Media/codec availability depends on distro packaging. Lower memory consumption and performance improvements have not been measured or claimed.
 
@@ -117,7 +137,7 @@ python3 -m unittest discover -s experiments/webkit/tests -p 'test_*.py' -v
 python3 -m compileall -q experiments/webkit
 ```
 
-These cover navigation/search parsing, rejected schemes and malformed input, bookmark persistence, corrupt files, failed-write recovery, and profile selection. They do not validate the GTK interface.
+These cover navigation/search parsing, rejected schemes and malformed input, bookmark persistence, corrupt files, failed-write recovery, profile selection, and the capsule's service routing, address validation, per-service profiles and refusal when no runtime is installed. They do not validate the GTK interface, and they do not prove any service plays.
 
 The real-engine smoke test requires the native packages and a Linux graphical session:
 
