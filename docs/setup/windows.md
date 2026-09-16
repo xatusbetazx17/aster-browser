@@ -16,21 +16,11 @@ still belongs to the legacy Chromium-based edition.
 `installers/install-windows.ps1` is retained at its former download location to prevent misleading installation. It reports the missing standalone build and exits with status 2. With `-Check`, it reports status and exits successfully. It installs no browser or runtime and changes no existing application data.
 
 The graphical `Aster-Browser-Setup.exe` — which installs the legacy v16 kit, not the
-standalone port described above — is built from `Aster-Browser-Windows-Kit-v16.zip`
-and committed at the repository root. It is not produced by a checkout, so it is only
-as new as the last build: rebuild and commit it whenever the kit, the logo or the
-interface changes, on a Windows machine with Python 3.10+:
-
-```powershell
-python -m pip install --upgrade pyinstaller pillow customtkinter
-python installers\windows_installer\build_exe.py
-```
-
-That regenerates the icons from `asterlogo.png`, repacks the kit into
-`app_bundle.zip` and writes the executable to the repository root.
-`.github/workflows/release.yml` builds the same file on each `v*` tag and attaches it
-to the matching [GitHub Release](https://github.com/xatusbetazx17/aster-browser/releases/latest)
-with a `SHA256SUMS.txt`, which is the copy to verify a download against.
+standalone port described above — is no longer committed to this repository. It is
+built from `Aster-Browser-Windows-Kit-v16.zip` by `.github/workflows/release.yml` on
+each `v*` tag and attached to the matching [GitHub Release](https://github.com/xatusbetazx17/aster-browser/releases/latest)
+with a `SHA256SUMS.txt`. To build it locally on Windows, run
+`python installers/windows_installer/build_exe.py`.
 
 ## Required Windows implementation
 

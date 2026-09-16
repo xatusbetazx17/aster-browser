@@ -30,7 +30,7 @@ See [preview installation and update limitations](experiments/aster-engine/READM
   bash install-linux.sh
   ```
   Options: `--run` (start immediately), `--uninstall` (clean removal), `--with-drm-capsule`, `-y` (non-interactive).
-- **Windows**: Run `Aster-Browser-Setup.exe` from the repository root, or download it from the [latest release](https://github.com/xatusbetazx17/aster-browser/releases/latest). A visual installer window will guide you through directory selection, desktop/start menu shortcut creation, and installation. Verify the download against the `SHA256SUMS.txt` published alongside it.
+- **Windows**: Download `Aster-Browser-Setup.exe` from the [latest release](https://github.com/xatusbetazx17/aster-browser/releases/latest) and run it. A visual installer window will guide you through directory selection, desktop/start menu shortcut creation, and installation. Verify the download against the `SHA256SUMS.txt` published alongside it.
 - [Linux installation, updates and rollback details](docs/setup/linux.md)
 - [Windows build status](docs/setup/windows.md)
 - [Android build status](docs/setup/android.md)
