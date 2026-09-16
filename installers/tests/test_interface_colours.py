@@ -170,6 +170,28 @@ class RetiredAccents(unittest.TestCase):
                 self.assertEqual(moved, self.config.DEFAULT_ACCENT,
                                  f"a configuration still on {retired} keeps an accent nobody picked")
 
+    def test_the_move_is_written_back_to_the_file(self):
+        """Doing it only in memory left the file on the old colour for ever."""
+        import json
+
+        for retired in self.config.RETIRED_ACCENTS:
+            with self.subTest(accent=retired):
+                stored = Path(self.directory) / "aster.json"
+                stored.write_text(json.dumps({"accent_color": retired, "theme": "black_arc"}), encoding="utf-8")
+                self.assertEqual(self.config.load_config(stored).accent_color, self.config.DEFAULT_ACCENT)
+                self.assertEqual(json.loads(stored.read_text(encoding="utf-8"))["accent_color"],
+                                 self.config.DEFAULT_ACCENT,
+                                 "the file still carries the accent that was moved off")
+
+    def test_a_file_that_needs_no_move_is_left_alone(self):
+        import json
+
+        stored = Path(self.directory) / "chosen.json"
+        stored.write_text(json.dumps({"accent_color": "#f2c744"}), encoding="utf-8")
+        before = stored.stat().st_mtime_ns
+        self.assertEqual(self.config.load_config(stored).accent_color, "#f2c744")
+        self.assertEqual(stored.stat().st_mtime_ns, before, "a configuration nobody had to move was rewritten")
+
     def test_an_accent_somebody_picked_is_left_alone(self):
         for chosen in ("#f2c744", "#7a1f66", "#31c48d"):
             with self.subTest(accent=chosen):
