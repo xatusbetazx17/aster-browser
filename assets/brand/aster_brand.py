@@ -352,11 +352,16 @@ def render(size: int, variant: str = "logo"):
 
 
 def write_ico(path: str | pathlib.Path) -> None:
-    """An .ico holding a PNG per size, so 16 px and 256 px are both sharp."""
+    """An .ico holding a PNG per size, so 16 px and 256 px are both sharp.
+
+    The mark, not the tile: a taskbar, a title bar and a desktop each supply
+    their own background, and a black square of ours sitting on them is the one
+    thing that would make the icon look pasted on.
+    """
     images = []
     for size in ICO_SIZES:
         buffer = io.BytesIO()
-        render(size, "icon").save(buffer, format="PNG")
+        render(size, "mark").save(buffer, format="PNG")
         images.append((size, buffer.getvalue()))
 
     header = struct.pack("<HHH", 0, 1, len(images))

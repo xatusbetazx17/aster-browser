@@ -26,15 +26,16 @@ import kit as kit_archive  # noqa: E402
 
 BRAND_DIR = ROOT / "assets" / "brand"
 
-# Where each variant belongs. The mark (no tile) is for surfaces that are
-# already dark; the icon (black tile) is for launchers, tabs and title bars.
+# Where each variant belongs. The mark (no tile) is for anything that brings its
+# own background - a desktop, a taskbar, a dark panel; the icon (black tile) is
+# for surfaces that may be light, where a white mark alone would disappear.
 SVG_COPIES = {
     "experiments/firefox/extension/icon.svg": "icon",
     "experiments/webkit/aster_webkit/aster-icon.svg": "icon",
 }
 KIT_SVG_COPIES = {
     "aster_browser/assets/icons/aster_logo.svg": "mark",
-    "packaging/linux/aster.svg": "icon",
+    "packaging/linux/aster.svg": "mark",
 }
 # Pages that carry the mark inline, between <!--aster-logo--> markers. The new
 # tab page is handed to WebKit as a string with about:blank as its base, so a

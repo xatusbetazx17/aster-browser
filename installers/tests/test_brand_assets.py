@@ -42,7 +42,8 @@ COPIES = {
 }
 KIT_COPIES = {
     "aster_browser/assets/icons/aster_logo.svg": "mark",
-    "packaging/linux/aster.svg": "icon",
+    # The desktop entry: the mark alone, on whatever the desktop puts behind it.
+    "packaging/linux/aster.svg": "mark",
 }
 
 

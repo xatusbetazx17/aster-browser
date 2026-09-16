@@ -18,9 +18,9 @@ trace follows the bitmap to within half a pixel at 512 px.
 | File | What it is | Where it is used |
 | --- | --- | --- |
 | `aster-logo.svg` / `aster-logo.png` | the artwork's own framing, margin and all | the README, anywhere the logo is shown as artwork |
-| `aster-icon.svg` | the same mark enlarged to fill the square | launchers, the desktop entry, the extension, the new tab page, the GTK tab strip |
-| `aster-mark.svg` / `aster-mark.png` | the glyph alone, no tile | dark surfaces that supply their own background: the title bar button, the browser's home page, the installer window's header |
-| `aster.ico` | 16-256 px, one PNG per size | the Windows setup executable, its window, and the installed browser |
+| `aster-icon.svg` | the same mark enlarged to fill the square | surfaces that may be light: the extension, the new tab page, the GTK tab strip |
+| `aster-mark.svg` / `aster-mark.png` | the glyph alone, no tile | anything that supplies its own background: the Linux desktop entry, the title bar button, the browser's home page, the installer window's header |
+| `aster.ico` | 16-256 px, one transparent PNG per size | the Windows setup executable, its window, and the installed browser |
 
 The icon framing exists because at 16 px the artwork's margin leaves too little
 glyph to recognise. It is the same mark, scaled - not a second logo.
