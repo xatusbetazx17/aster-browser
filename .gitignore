@@ -26,10 +26,12 @@ build/
 installers/**/build/
 installers/windows_installer/app_bundle.zip
 
-# Release artifacts, built by .github/workflows/release.yml and published to
-# GitHub Releases rather than committed. Rebuild locally with:
-#   python installers/windows_installer/build_exe.py   (Windows)
-Aster-Browser-Setup.exe
+# Build intermediates only. Aster-Browser-Setup.exe itself is committed, so it
+# is deliberately absent from this list: rebuild it on Windows with
+#   python installers/windows_installer/build_exe.py
+# after changing the kit, the logo or the theme, and commit the new one. Each
+# rebuild adds its ~20 MB to the repository's history for good, so rebuild it
+# for a release rather than for every change.
 dist/
 
 # Assistant / agent internal folders (safeguard)
