@@ -12,9 +12,13 @@ file names and hashes checks what actually matters and passes on every runner.
 from __future__ import annotations
 
 import base64
+from functools import lru_cache
 import hashlib
 import io
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import tarfile
 import unittest
 import zipfile
@@ -26,6 +30,36 @@ KIT_PREFIX = "aster-browser-windows-kit/"
 SKIPPED_PREFIX = "tools/legacy-update-scripts/"
 PAYLOAD_MARKER = "__ASTER_PAYLOAD_BELOW__"
 REGENERATE = "Regenerate it with: python installers/build_linux_installer.py"
+
+
+@lru_cache(maxsize=1)
+def working_bash() -> str | None:
+    """A bash that can actually run a POSIX snippet, or None if there is none.
+
+    The two tests below run install-linux.sh's own msg/die functions rather than
+    pattern-matching them, so they need a real shell. On the Windows runner the
+    `bash` first on PATH is C:\Windows\System32\bash.exe, the WSL launcher,
+    which exits 1 without writing to stderr when no distribution is installed:
+    both tests failed with an empty message instead of a result. Git Bash ships
+    with that image and does run the snippets, so probe each candidate and take
+    the first that answers.
+    """
+    candidates = []
+    found = shutil.which("bash")
+    if found:
+        candidates.append(found)
+    if os.name == "nt":
+        candidates += [r"C:\Program Files\Git\bin\bash.exe",
+                       r"C:\Program Files (x86)\Git\bin\bash.exe"]
+    for candidate in candidates:
+        try:
+            probe = subprocess.run([candidate, "-c", "printf ok"],
+                                   capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if probe.returncode == 0 and probe.stdout.strip() == "ok":
+            return candidate
+    return None
 
 
 def kit_entries() -> dict[str, str]:
@@ -115,7 +149,9 @@ class InstallerScriptHeader(unittest.TestCase):
         are extracted and run here rather than pattern-matched, because the bug
         survived two readings of the source and only shows up in the output.
         """
-        import subprocess
+        shell = working_bash()
+        if shell is None:
+            self.skipTest("no working bash to run install-linux.sh's own functions")
 
         body = INSTALLER.read_text(encoding="utf-8", errors="replace")
         definitions = [line for line in body.splitlines()
@@ -123,8 +159,8 @@ class InstallerScriptHeader(unittest.TestCase):
         self.assertEqual(len(definitions), 2, f"msg/die are not defined as expected in install-linux.sh. {REGENERATE}")
 
         script = "\n".join(definitions) + '\nmsg "first"\nmsg "second"\n'
-        result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        result = subprocess.run([shell, "-c", script], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, f"{shell} failed: {result.stderr or result.stdout!r}")
         self.assertEqual(
             result.stdout,
             "[Aster Installer] first\n[Aster Installer] second\n",
@@ -133,13 +169,15 @@ class InstallerScriptHeader(unittest.TestCase):
         )
 
     def test_die_reports_on_stderr_and_fails(self):
-        import subprocess
+        shell = working_bash()
+        if shell is None:
+            self.skipTest("no working bash to run install-linux.sh's own functions")
 
         body = INSTALLER.read_text(encoding="utf-8", errors="replace")
         definition = next(line for line in body.splitlines() if line.startswith("die() {"))
-        result = subprocess.run(["bash", "-c", definition + '\ndie "broken"\n'],
+        result = subprocess.run([shell, "-c", definition + '\ndie "broken"\n'],
                                 capture_output=True, text=True, timeout=30)
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 1, f"{shell}: {result.stderr or result.stdout!r}")
         self.assertEqual(result.stderr, "[Aster Installer] ERROR: broken\n")
         self.assertEqual(result.stdout, "")
 
