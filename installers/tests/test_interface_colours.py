@@ -159,12 +159,14 @@ class Accent(unittest.TestCase):
                                  f"{chosen} should carry {'dark' if expect_dark_text else 'light'} text")
 
 
-class Blooms(unittest.TestCase):
-    """The new tab page's blooms stay blue behind the white interface.
+class Backdrop(unittest.TestCase):
+    """The new tab page's light, and the ground the content sits on.
 
     widgets.py cannot be imported without PyQt6, so the backdrop is read rather
-    than run: what matters is that it keeps a blue of its own and falls back to
-    it whenever the accent has no hue, which white does not.
+    than run. What matters here is that the page colour is what goes back over
+    the middle: the logo, the search field and the tiles have to sit on the same
+    surface as the rest of the browser, not on a black hole punched in the
+    light, and not on the light itself.
     """
 
     def setUp(self):
@@ -173,16 +175,34 @@ class Blooms(unittest.TestCase):
         self.backdrop = next(node for node in ast.walk(tree)
                              if isinstance(node, ast.ClassDef) and node.name == "AuroraBackdrop")
 
-    def test_the_backdrop_keeps_a_blue_of_its_own(self):
-        colours = [node.value.value for node in self.backdrop.body
-                   if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
-                   and getattr(node.targets[0], "id", "") == "BLOOM_BLUE"]
-        self.assertEqual(len(colours), 1, "AuroraBackdrop no longer names its own colour")
-        self.assertTrue(is_blue(colours[0]), f"the blooms are no longer blue: {colours[0]}")
+    def constant(self, name: str):
+        for node in self.backdrop.body:
+            if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == name:
+                return ast.literal_eval(node.value)
+        raise AssertionError(f"AuroraBackdrop no longer defines {name}")
 
-    def test_a_white_accent_falls_back_to_that_blue(self):
-        self.assertIn("hue = QColor(self.BLOOM_BLUE).hue()", self.source,
-                      "a white accent would leave the blooms without a hue to use")
+    def test_the_content_keeps_the_page_colour_behind_it(self):
+        centre = next(node for node in self.backdrop.body
+                      if isinstance(node, ast.FunctionDef) and node.name == "_paint_centre")
+        painted = ast.dump(centre)
+        self.assertIn("PAGE_BACKGROUND", painted,
+                      "the middle of the new tab page is no longer laid back in the page colour")
+        self.assertNotIn("Constant(value=0), Constant(value=0), Constant(value=0)", painted,
+                         "the middle is being painted black again")
+        self.assertGreaterEqual(self.constant("CENTRE")[0][1], 0.9,
+                                "the content no longer has solid ground under it")
+
+    def test_a_fan_of_light_comes_in_from_every_corner(self):
+        self.assertEqual(len(self.constant("CORNERS")), 4)
+        self.assertEqual(self.constant("BEAMS_PER_CORNER"), 8)
+        self.assertEqual(len(self.constant("PALETTE")), 8, "the shafts have lost their palette")
+
+    def test_the_light_is_additive_over_the_page(self):
+        render = next(node for node in self.backdrop.body
+                      if isinstance(node, ast.FunctionDef) and node.name == "_render")
+        painted = ast.dump(render)
+        self.assertIn("CompositionMode_Plus", painted, "crossing shafts no longer brighten")
+        self.assertIn("PAGE_BACKGROUND", painted, "the backdrop no longer starts from the page colour")
 
 
 if __name__ == "__main__":

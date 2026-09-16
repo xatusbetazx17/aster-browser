@@ -26,6 +26,20 @@ APP_NAME = "Aster Browser"
 APP_VERSION = "16.0.0"
 DEFAULT_INSTALL_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "AsterBrowser")
 
+# The installer wears the browser's palette, so setup and the browser it
+# installs read as one product: the surface Aster paints its own pages in, and
+# the white accent of its mark with near-black on top of it.
+PAGE = "#12161c"
+CARD = "#1c212c"
+CARD_BORDER = "#2a3242"
+FIELD = "#141720"
+TITLE_TEXT = "#f8fafc"
+BODY_TEXT = "#cbd5e1"
+MUTED_TEXT = "#94a3b8"
+ACCENT = "#ffffff"
+ACCENT_HOVER = "#e3e8f1"
+ACCENT_TEXT = "#0c0e12"
+
 def get_bundle_path() -> str:
     """Find bundled app_bundle.zip inside PyInstaller _MEIPASS or local dir."""
     if hasattr(sys, "_MEIPASS"):
@@ -141,6 +155,8 @@ class AsterInstallerApp(ctk.CTk):
         self.resizable(False, False)
         
         ctk.set_appearance_mode("dark")
+        # customtkinter ships blue, dark-blue and green; nothing below leaves
+        # an accent to it, every accented widget is coloured by hand.
         ctk.set_default_color_theme("blue")
         
         ico_path = get_asset_path("aster.ico")
@@ -155,7 +171,7 @@ class AsterInstallerApp(ctk.CTk):
         self.create_startmenu_sc = True
         self.launch_after = True
         
-        self.container = ctk.CTkFrame(self, fg_color="#12151c", corner_radius=0)
+        self.container = ctk.CTkFrame(self, fg_color=PAGE, corner_radius=0)
         self.container.pack(fill="both", expand=True)
         
         if self.uninstall_mode:
@@ -206,7 +222,7 @@ class AsterInstallerApp(ctk.CTk):
             subtitle=f"Sürüm: v{APP_VERSION}  |  Hafif, Bağımsız ve Gizlilik Odaklı Web Tarayıcısı"
         )
         
-        card = ctk.CTkFrame(self.container, fg_color="#1c212c", corner_radius=12, border_width=1, border_color="#2a3242")
+        card = ctk.CTkFrame(self.container, fg_color=CARD, corner_radius=12, border_width=1, border_color=CARD_BORDER)
         card.pack(fill="both", expand=True, padx=30, pady=(5, 20))
         
         # 1. Directory selection section
@@ -220,7 +236,7 @@ class AsterInstallerApp(ctk.CTk):
             dir_box,
             font=ctk.CTkFont(family="Segoe UI", size=12),
             height=36,
-            fg_color="#141720",
+            fg_color=FIELD,
             border_color="#333d52",
             text_color="#f1f5f9"
         )
@@ -243,7 +259,7 @@ class AsterInstallerApp(ctk.CTk):
         space_lbl = ctk.CTkLabel(card, text="Gereken disk alanı: ~25 MB", font=ctk.CTkFont(family="Segoe UI", size=11), text_color="#64748b")
         space_lbl.pack(anchor="w", padx=20, pady=(0, 15))
         
-        divider = ctk.CTkFrame(card, height=1, fg_color="#2a3242")
+        divider = ctk.CTkFrame(card, height=1, fg_color=CARD_BORDER)
         divider.pack(fill="x", padx=20, pady=(0, 15))
         
         # 2. Options Checkboxes
@@ -255,8 +271,9 @@ class AsterInstallerApp(ctk.CTk):
             text="Masaüstüne kısayol simgesi ekle",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#cbd5e1",
-            fg_color="#0284c7",
-            hover_color="#0369a1"
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            checkmark_color=ACCENT_TEXT
         )
         self.chk_desktop.select()
         self.chk_desktop.pack(anchor="w", padx=25, pady=(2, 6))
@@ -266,8 +283,9 @@ class AsterInstallerApp(ctk.CTk):
             text="Başlat menüsü programlarına ekle",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#cbd5e1",
-            fg_color="#0284c7",
-            hover_color="#0369a1"
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            checkmark_color=ACCENT_TEXT
         )
         self.chk_startmenu.select()
         self.chk_startmenu.pack(anchor="w", padx=25, pady=(2, 6))
@@ -277,8 +295,9 @@ class AsterInstallerApp(ctk.CTk):
             text="Kurulum tamamlandığında Aster Browser'ı başlat",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#cbd5e1",
-            fg_color="#0284c7",
-            hover_color="#0369a1"
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            checkmark_color=ACCENT_TEXT
         )
         self.chk_launch.select()
         self.chk_launch.pack(anchor="w", padx=25, pady=(2, 10))
@@ -305,9 +324,9 @@ class AsterInstallerApp(ctk.CTk):
             width=160,
             height=40,
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            fg_color="#0284c7",
-            hover_color="#0369a1",
-            text_color="#ffffff",
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            text_color=ACCENT_TEXT,
             command=self._start_installation
         )
         install_btn.pack(side="right")
@@ -335,14 +354,14 @@ class AsterInstallerApp(ctk.CTk):
             subtitle="Lütfen kurulum adımları tamamlanırken bekleyin..."
         )
         
-        card = ctk.CTkFrame(self.container, fg_color="#1c212c", corner_radius=12, border_width=1, border_color="#2a3242")
+        card = ctk.CTkFrame(self.container, fg_color=CARD, corner_radius=12, border_width=1, border_color=CARD_BORDER)
         card.pack(fill="both", expand=True, padx=30, pady=(5, 20))
         
         self.status_lbl = ctk.CTkLabel(
             card,
             text="Kurulum hazırlanıyor...",
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            text_color="#38bdf8"
+            text_color=TITLE_TEXT
         )
         self.status_lbl.pack(anchor="w", padx=20, pady=(20, 8))
         
@@ -350,8 +369,8 @@ class AsterInstallerApp(ctk.CTk):
             card,
             height=12,
             corner_radius=6,
-            fg_color="#141720",
-            progress_color="#0284c7"
+            fg_color=FIELD,
+            progress_color=ACCENT
         )
         self.progress_bar.pack(fill="x", padx=20, pady=(0, 15))
         self.progress_bar.set(0.05)
@@ -359,7 +378,7 @@ class AsterInstallerApp(ctk.CTk):
         self.log_box = ctk.CTkTextbox(
             card,
             font=ctk.CTkFont(family="Consolas", size=10),
-            fg_color="#141720",
+            fg_color=FIELD,
             text_color="#94a3b8",
             corner_radius=8,
             border_width=1,
@@ -576,7 +595,7 @@ class AsterInstallerApp(ctk.CTk):
             subtitle=f"{APP_NAME} bilgisayarınıza başarıyla kuruldu."
         )
         
-        card = ctk.CTkFrame(self.container, fg_color="#1c212c", corner_radius=12, border_width=1, border_color="#2a3242")
+        card = ctk.CTkFrame(self.container, fg_color=CARD, corner_radius=12, border_width=1, border_color=CARD_BORDER)
         card.pack(fill="both", expand=True, padx=30, pady=(5, 20))
         
         check_lbl = ctk.CTkLabel(
@@ -625,9 +644,9 @@ class AsterInstallerApp(ctk.CTk):
             width=180,
             height=40,
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            fg_color="#0284c7",
-            hover_color="#0369a1",
-            text_color="#ffffff",
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            text_color=ACCENT_TEXT,
             command=self._launch_app_and_exit
         )
         launch_btn.pack(side="right")
@@ -654,7 +673,7 @@ class AsterInstallerApp(ctk.CTk):
             subtitle=f"{APP_NAME} uygulamasını sistemden kaldırmak istediğinizden emin misiniz?"
         )
         
-        card = ctk.CTkFrame(self.container, fg_color="#1c212c", corner_radius=12, border_width=1, border_color="#2a3242")
+        card = ctk.CTkFrame(self.container, fg_color=CARD, corner_radius=12, border_width=1, border_color=CARD_BORDER)
         card.pack(fill="both", expand=True, padx=30, pady=(5, 20))
         
         warn_lbl = ctk.CTkLabel(
