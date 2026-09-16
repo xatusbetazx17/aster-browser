@@ -20,6 +20,7 @@ import ast
 import importlib.util
 from pathlib import Path
 import re
+import shutil
 import sys
 import tempfile
 import unittest
@@ -57,6 +58,23 @@ PAGE_CLASSES = {
     "aster_browser/internal_pages.py": ("_PageShell", "AwarenessPageWidget"),
 }
 PAGE_OBJECT_NAME = "AsterInternalPage"
+
+
+def load_package():
+    """The kit's aster_browser package, importable without PyQt6.
+
+    config.py and theme.py reach no further than the standard library and each
+    other, which is what lets the colours be checked here rather than only in a
+    running browser.
+    """
+    directory = tempfile.mkdtemp()
+    for name in kit.names():
+        if not name.startswith("aster_browser/") or not name.endswith(".py"):
+            continue
+        target = Path(directory) / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(kit.read(name))
+    return directory
 
 
 def load_theme():
@@ -120,6 +138,42 @@ class PagesCarryTheName(unittest.TestCase):
                     }
                     self.assertIn(PAGE_OBJECT_NAME, names,
                                   f"{name} no longer paints itself as an aster: page")
+
+
+class RetiredAccents(unittest.TestCase):
+    """An accent nobody chose does not outlive the default that handed it out."""
+
+    def setUp(self):
+        self.directory = load_package()
+        sys.path.insert(0, self.directory)
+        for name in [name for name in sys.modules if name.startswith("aster_browser")]:
+            del sys.modules[name]
+        import aster_browser.config as config  # noqa: PLC0415 - needs the path above
+
+        self.config = config
+
+    def tearDown(self):
+        sys.path.remove(self.directory)
+        for name in [name for name in sys.modules if name.startswith("aster_browser")]:
+            del sys.modules[name]
+        shutil.rmtree(self.directory, ignore_errors=True)
+
+    def test_a_configuration_with_no_accent_gets_the_white_one(self):
+        self.assertEqual(self.config.coerce_browser_config({}).accent_color, self.config.DEFAULT_ACCENT)
+        self.assertEqual(self.config.DEFAULT_ACCENT, "#ffffff")
+
+    def test_every_accent_aster_used_to_ship_moves_on(self):
+        for retired in self.config.RETIRED_ACCENTS:
+            with self.subTest(accent=retired):
+                self.assertFalse(is_blue(self.config.DEFAULT_ACCENT))
+                moved = self.config.coerce_browser_config({"accent_color": retired}).accent_color
+                self.assertEqual(moved, self.config.DEFAULT_ACCENT,
+                                 f"a configuration still on {retired} keeps an accent nobody picked")
+
+    def test_an_accent_somebody_picked_is_left_alone(self):
+        for chosen in ("#f2c744", "#7a1f66", "#31c48d"):
+            with self.subTest(accent=chosen):
+                self.assertEqual(self.config.coerce_browser_config({"accent_color": chosen}).accent_color, chosen)
 
 
 class Accent(unittest.TestCase):
