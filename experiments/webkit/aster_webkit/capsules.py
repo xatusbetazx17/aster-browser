@@ -91,7 +91,10 @@ def matching_service(uri: str) -> ServiceRule | None:
     for rule in SERVICE_RULES:
         for candidate in rule.hosts:
             if host == candidate or host.endswith(f".{candidate}"):
-                if not rule.path_tokens or any(token in path for token in rule.path_tokens):
+                # Match whole path segments: a substring test also caught
+                # /gp/video-games, which is a store page, not Prime Video.
+                if not rule.path_tokens or any(path == token or path.startswith(f"{token}/")
+                                               for token in rule.path_tokens):
                     return rule
     return None
 

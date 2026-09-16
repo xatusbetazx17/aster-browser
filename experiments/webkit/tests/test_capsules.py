@@ -38,8 +38,18 @@ class ServiceRuleTests(unittest.TestCase):
 
     def test_amazon_store_pages_are_not_treated_as_prime_video(self):
         self.assertEqual(service_label("https://www.amazon.com/gp/video/storefront"), "Prime Video")
+        self.assertEqual(service_label("https://www.amazon.com/gp/video"), "Prime Video")
         self.assertIsNone(matching_service("https://www.amazon.com/gp/product/B09XYZ"))
         self.assertFalse(needs_capsule("https://www.amazon.com/gp/product/B09XYZ"))
+
+    def test_a_path_token_matches_whole_segments_only(self):
+        """A substring test sent Amazon's video-games store into a DRM capsule."""
+        for uri in ("https://www.amazon.com/gp/video-games/dp/B01",
+                    "https://www.amazon.com/video-games",
+                    "https://www.amazon.com/s?k=video+games"):
+            self.assertIsNone(matching_service(uri), uri)
+            self.assertFalse(needs_capsule(uri), uri)
+        self.assertEqual(service_label("https://www.xbox.com/play/games/x"), "Xbox Cloud Gaming")
 
     def test_unprotected_video_and_cloud_gaming_stay_in_aster(self):
         for uri in ("https://www.youtube.com/watch?v=1", "https://cloud.boosteroid.com/",

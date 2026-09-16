@@ -30,7 +30,15 @@ function hasFlag(name) {
 function webUrl(value) {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null;
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null;
+    }
+    // Credentials would land in this profile's history. Aster's own validation
+    // rejects them, and the capsule must not become the way around it.
+    if (parsed.username || parsed.password) {
+      return null;
+    }
+    return parsed.href;
   } catch (_) {
     return null;
   }
