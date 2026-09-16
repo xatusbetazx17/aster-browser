@@ -20,7 +20,8 @@ from .tools_panel import ToolsPanel
 HOME_HTML = Path(__file__).with_name("home.html").read_text(encoding="utf-8")
 CSS = b"""
 .aster-tabstrip { padding: 6px 8px; background: @headerbar_bg_color; }
-.aster-brand { font-weight: 800; letter-spacing: 1px; padding: 0 16px; color: #16876c; }
+.aster-logo { margin-left: 10px; border-radius: 6px; }
+.aster-brand { font-weight: 800; letter-spacing: 1px; padding: 0 14px 0 7px; color: #16876c; }
 .aster-toolbar { padding: 8px 12px; border-bottom: 1px solid alpha(@window_fg_color, 0.1); }
 .aster-address { border-radius: 24px; padding: 5px 14px; min-height: 28px; }
 .aster-find { padding: 6px 12px; }
@@ -177,6 +178,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         tabbar = Adw.TabBar(view=self.tabs, autohide=False, expand_tabs=False, hexpand=True)
         strip = Gtk.Box(spacing=4)
         strip.add_css_class("aster-tabstrip")
+        logo = Gtk.Image.new_from_file(str(Path(__file__).with_name("aster-icon.svg")))
+        logo.set_pixel_size(20)
+        logo.add_css_class("aster-logo")
+        strip.append(logo)
         brand = Gtk.Label(label="Aster")
         brand.add_css_class("aster-brand")
         strip.append(brand)

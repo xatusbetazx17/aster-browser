@@ -25,6 +25,8 @@ public final class PreviewMain {
 
     private PreviewMain() {
         window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        java.net.URL logo = PreviewMain.class.getResource("aster-logo.png");
+        if (logo != null) window.setIconImage(new ImageIcon(logo).getImage());
         window.addWindowListener(new WindowAdapter() { public void windowClosed(WindowEvent event) { network.shutdownNow(); } });
         JPanel top = new JPanel(new BorderLayout(8, 8));
         top.setBorder(BorderFactory.createEmptyBorder(12, 14, 10, 14));

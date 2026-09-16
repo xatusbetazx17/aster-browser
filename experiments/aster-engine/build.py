@@ -30,7 +30,7 @@ def compile_java(sources, output, classpath=None):
     run(*args, *sorted(sources))
 
 
-def make_jar(folder, target, main=None):
+def make_jar(folder, target, main=None, resources=()):
     target.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(ROOT.parents[1] / "LICENSE", "META-INF/LICENSE")
@@ -38,6 +38,8 @@ def make_jar(folder, target, main=None):
             archive.writestr("META-INF/MANIFEST.MF", f"Manifest-Version: 1.0\nMain-Class: {main}\n\n")
         for path in sorted(folder.rglob("*.class")):
             archive.write(path, path.relative_to(folder).as_posix())
+        for source, name in resources:
+            archive.write(source, name)
 
 
 def desktop(test=False, package=False):
@@ -48,7 +50,10 @@ def desktop(test=False, package=False):
         shutil.rmtree(classes)
     compile_java(list((ROOT / "core/src").rglob("*.java")) + list((ROOT / "desktop/src").rglob("*.java")), classes)
     jar = BUILD / "jar/aster-engine-preview.jar"
-    make_jar(classes, jar, "io.aster.desktop.PreviewMain")
+    # The window icon is the repository's own logo, read back at startup.
+    logo = ROOT.parents[1] / "assets/brand/aster-logo.png"
+    make_jar(classes, jar, "io.aster.desktop.PreviewMain",
+             [(logo, "io/aster/desktop/aster-logo.png")])
     if test:
         tests = BUILD / "tests"
         # The localhost HTTP fixture uses the JDK's test server (not shipped in the application).
