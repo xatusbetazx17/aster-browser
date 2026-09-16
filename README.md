@@ -7,8 +7,8 @@ Aster is being developed as a **standalone browser with its own interface and fe
 **Status: experimental.** The standalone application does not yet have all original v15 features, native Windows/Android ports, a validated Steam Deck package or verified premium streaming. WebKit is an existing rendering engine; a complete Aster engine written from scratch has not been implemented.
 
 Read [the project direction and remaining work](PROJECT_DIRECTION.md). The logo is
-defined once in [`assets/brand`](assets/brand/README.md) and written from there into the
-browser, the installers and the extension.
+the artwork in `asterlogo.png`, written from there into the browser, the installers and
+the extension by [`assets/brand`](assets/brand/README.md).
 
 ## Original engine development preview
 

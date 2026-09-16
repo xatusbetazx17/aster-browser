@@ -1,17 +1,21 @@
-"""The logo is defined once; check every copy of it still matches.
+"""The logo is one file; check every copy of it still matches.
 
-Aster's mark lives in assets/brand/aster_brand.py and is written out to the
-browser, the extension, the new tab page and both installers by
-assets/brand/build_brand_assets.py. Nothing at runtime re-derives those copies,
-so without this guard one of them silently keeps an older drawing - which is
-exactly how the repository ended up shipping two different icons before.
+The artwork is asterlogo.png in the repository root. assets/brand writes it out
+as the vector and icon copies the browser, the extension, the new tab page and
+both installers load, and nothing re-derives those at runtime - so without this
+guard one of them silently keeps an older drawing, which is how the repository
+ended up shipping three different marks before.
 
-Pillow is not installed on every runner, so the checks here stay on the vector
-and archive side: the SVG text, and the .ico container's own header.
+The copies are compared against the ones in assets/brand, which needs nothing
+but the standard library, so this runs on a bare CI runner. Where Pillow is
+installed the stricter check also runs: the vectors are traced from the bitmap
+again and have to come out identical, which is what ties every copy back to the
+artwork rather than to each other.
 """
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import struct
 import sys
 import unittest
@@ -19,41 +23,60 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "assets" / "brand"), str(ROOT / "installers")]
 
-import aster_brand as brand  # noqa: E402 - resolved via the paths above
+import aster_brand as brand  # noqa: E402 - resolved via the paths above; needs no Pillow to import
 import kit  # noqa: E402
 
 REBUILD = "Regenerate them with: python assets/brand/build_brand_assets.py"
 
+try:
+    import PIL  # noqa: F401 - only the re-derivation below needs it
+    HAS_PILLOW = True
+except ImportError:  # pragma: no cover - depends on the runner
+    HAS_PILLOW = False
 
-class SvgCopies(unittest.TestCase):
-    def test_repository_copies_match_the_definition(self):
-        for relative, variant in {
-            "assets/brand/aster-logo.svg": "logo",
-            "assets/brand/aster-icon.svg": "icon",
-            "assets/brand/aster-mark.svg": "mark",
-            "experiments/firefox/extension/icon.svg": "icon",
-            "experiments/webkit/aster_webkit/aster-icon.svg": "icon",
-        }.items():
+#: Where each variant is published, and which one it is.
+CANONICAL = {variant: f"assets/brand/aster-{variant}.svg" for variant in brand.VARIANTS}
+COPIES = {
+    "experiments/firefox/extension/icon.svg": "icon",
+    "experiments/webkit/aster_webkit/aster-icon.svg": "icon",
+}
+KIT_COPIES = {
+    "aster_browser/assets/icons/aster_logo.svg": "mark",
+    "packaging/linux/aster.svg": "icon",
+}
+
+
+def canonical(variant: str) -> str:
+    return (ROOT / CANONICAL[variant]).read_text(encoding="utf-8")
+
+
+def bare(svg: str) -> str:
+    """The same drawing however it was laid out or classed for its host."""
+    return re.sub(r'\s+class="[^"]*"', "", re.sub(r">\s+<", "><", svg.strip()))
+
+
+class Copies(unittest.TestCase):
+    def test_the_repository_copies_match_the_brand_files(self):
+        for relative, variant in COPIES.items():
             with self.subTest(file=relative):
-                self.assertEqual((ROOT / relative).read_text(encoding="utf-8"),
-                                 brand.svg(variant), f"{relative} is out of date. {REBUILD}")
+                self.assertEqual((ROOT / relative).read_text(encoding="utf-8"), canonical(variant),
+                                 f"{relative} is out of date. {REBUILD}")
 
     def test_the_kit_carries_the_same_logo(self):
         """The installed browser reads these two out of the kit at runtime."""
-        for name, variant in {
-            "aster_browser/assets/icons/aster_logo.svg": "mark",
-            "packaging/linux/aster.svg": "icon",
-        }.items():
+        for name, variant in KIT_COPIES.items():
             with self.subTest(file=name):
-                self.assertEqual(kit.read_text(name), brand.svg(variant),
+                self.assertEqual(kit.read_text(name), canonical(variant),
                                  f"the kit's {name} is out of date. {REBUILD}")
 
     def test_the_new_tab_page_inlines_the_logo(self):
         """WebKit gets that page as a string, so a linked file would not load."""
         page = (ROOT / "experiments/webkit/aster_webkit/home.html").read_text(encoding="utf-8")
-        inline = brand.svg("icon", class_name="mark", compact=True)
-        self.assertIn(f"<!--aster-logo-->{inline}<!--/aster-logo-->", page,
-                      f"the new tab page's inline logo is out of date. {REBUILD}")
+        inline = re.search(r"<!--aster-logo-->(.*?)<!--/aster-logo-->", page, re.S)
+        self.assertIsNotNone(inline, f"the new tab page has lost its logo markers. {REBUILD}")
+        self.assertEqual(bare(inline.group(1)), bare(canonical("icon")),
+                         f"the new tab page's inline logo is out of date. {REBUILD}")
+        self.assertIn('class="mark"', inline.group(1), "the inline logo lost the class the page styles it with")
 
 
 class WindowsIcon(unittest.TestCase):
@@ -85,6 +108,20 @@ class WindowsIcon(unittest.TestCase):
         self.assertEqual(self.entries(kit_icon), [(size, size) for size in brand.ICO_SIZES], REBUILD)
         self.assertEqual(kit_icon, (ROOT / "assets/brand/aster.ico").read_bytes(),
                          f"the kit's icon differs from the brand icon. {REBUILD}")
+
+
+@unittest.skipUnless(HAS_PILLOW, "Pillow is needed to read the artwork")
+class TracedFromTheArtwork(unittest.TestCase):
+    """The stricter half: the vectors still come out of asterlogo.png."""
+
+    def test_the_artwork_is_where_the_brand_files_expect_it(self):
+        self.assertTrue(brand.SOURCE.is_file(), f"{brand.SOURCE.name} is missing from the repository root")
+
+    def test_tracing_the_artwork_reproduces_the_brand_files(self):
+        for variant in brand.VARIANTS:
+            with self.subTest(variant=variant):
+                self.assertEqual(canonical(variant), brand.svg(variant),
+                                 f"assets/brand/aster-{variant}.svg no longer matches the artwork. {REBUILD}")
 
 
 if __name__ == "__main__":

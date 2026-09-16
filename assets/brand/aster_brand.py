@@ -1,13 +1,16 @@
-"""The Aster brand mark, defined once as geometry.
+"""Aster's logo: one drawing, read from asterlogo.png, written out everywhere.
 
-Every icon, favicon and window logo in this repository is drawn from the shapes
-below, so the browser, the installers and the web pages cannot drift apart: the
-mark is an italic A, an orbit sweeping around it into a tail, and a spark.
+`asterlogo.png` in the repository root is the artwork itself. Everything the
+project shows - the icon in the browser's title bar, the Linux desktop entry,
+the Windows setup executable and its window, the extension, the new tab page -
+is derived from that one file here, so replacing the logo means dropping in a
+new bitmap rather than hunting down a dozen copies.
 
-The shapes are described as path commands rather than as a hand-written SVG
-string, because two outputs are needed from the same definition - SVG text for
-the vector copies, and flattened polygons for the PNG/ICO rasters that Windows
-and the installers use. Deriving both from one source keeps them identical.
+The vector copies are traced from the bitmap rather than drawn by hand. The mark
+is two colours with straight runs and smooth arcs, which a contour trace with
+corner detection reproduces closely, and tracing keeps the SVG and the rasters
+the same drawing instead of two drawings that merely resemble each other. The
+rasters come straight from the bitmap, so they are exactly the artwork.
 """
 from __future__ import annotations
 
@@ -16,18 +19,37 @@ import math
 import pathlib
 import struct
 
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "asterlogo.png"
+
 CANVAS = 512
 BACKGROUND = "#000000"
 FOREGROUND = "#FFFFFF"
+
+#: A pixel this bright or brighter is part of the mark. The artwork is a flat
+#: white on a flat black, so anything near the middle is an antialiased edge.
+THRESHOLD = 128
+#: How far, in source pixels, a traced outline may leave the bitmap's own edge.
+#: Large enough to drop the staircase along a diagonal, small enough to keep the
+#: shoulders of the letter and the point of the bolt.
+SIMPLIFY = 1.4
+#: A vertex that turns the outline by more than this stays a corner; gentler
+#: ones are curved through. The arcs here turn by around 15 degrees a step at
+#: the simplification above, and every real corner in the mark is far sharper.
+CORNER_DEGREES = 45.0
 
 Point = tuple[float, float]
 
 
 class Path:
-    """A minimal path: straight lines and cubic curves, to SVG or to a polygon."""
+    """A path of lines and cubics, which can be written as SVG or flattened."""
 
     def __init__(self, start: Point):
         self.commands: list[tuple] = [("M", start)]
+
+    def move(self, point: Point) -> "Path":
+        self.commands.append(("M", point))
+        return self
 
     def line(self, point: Point) -> "Path":
         self.commands.append(("L", point))
@@ -37,24 +59,13 @@ class Path:
         self.commands.append(("C", control1, control2, point))
         return self
 
-    def through(self, points: list[Point]) -> "Path":
-        """Append a smooth curve through every point (Catmull-Rom as cubics)."""
-        current = self.commands[-1][-1]
-        knots = [current, current, *points, points[-1]]
-        for i in range(1, len(knots) - 2):
-            p0, p1, p2, p3 = knots[i - 1], knots[i], knots[i + 1], knots[i + 2]
-            c1 = (p1[0] + (p2[0] - p0[0]) / 6.0, p1[1] + (p2[1] - p0[1]) / 6.0)
-            c2 = (p2[0] - (p3[0] - p1[0]) / 6.0, p2[1] - (p3[1] - p1[1]) / 6.0)
-            self.curve(c1, c2, p2)
-        return self
-
     def close(self) -> "Path":
         self.commands.append(("Z",))
         return self
 
     def to_svg(self) -> str:
         def fmt(value: float) -> str:
-            return f"{value:.2f}".rstrip("0").rstrip(".")
+            return f"{value:.1f}".rstrip("0").rstrip(".")
 
         def pt(point: Point) -> str:
             return f"{fmt(point[0])} {fmt(point[1])}"
@@ -69,14 +80,11 @@ class Path:
                 parts.append(command[0] + pt(command[1]))
         return "".join(parts)
 
-    def to_polygon(self, steps: int = 18) -> list[Point]:
+    def to_polygon(self, steps: int = 12) -> list[Point]:
         points: list[Point] = []
         current: Point = (0.0, 0.0)
         for command in self.commands:
-            if command[0] == "M":
-                current = command[1]
-                points.append(current)
-            elif command[0] == "L":
+            if command[0] in ("M", "L"):
                 current = command[1]
                 points.append(current)
             elif command[0] == "C":
@@ -84,169 +92,190 @@ class Path:
                 for step in range(1, steps + 1):
                     t = step / steps
                     u = 1 - t
-                    x = (u ** 3 * current[0] + 3 * u * u * t * c1[0]
-                         + 3 * u * t * t * c2[0] + t ** 3 * end[0])
-                    y = (u ** 3 * current[1] + 3 * u * u * t * c1[1]
-                         + 3 * u * t * t * c2[1] + t ** 3 * end[1])
-                    points.append((x, y))
+                    points.append((
+                        u ** 3 * current[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t ** 3 * end[0],
+                        u ** 3 * current[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t ** 3 * end[1],
+                    ))
                 current = end
         return points
 
 
-# --- The italic A -----------------------------------------------------------
-# Both strokes start as a point at the apex and widen downwards, the right one
-# far more than the left, which is what gives the letter its written feel.
+# --- Reading the artwork ----------------------------------------------------
 
-APEX = (264.0, 118.0)
+_cache: dict[str, object] = {}
 
 
-def letter_path() -> Path:
-    path = Path(APEX)
-    path.curve((300.0, 202.0), (340.0, 286.0), (380.0, 366.0))   # right stroke, outer
-    path.line((334.0, 366.0))                                     # right foot
-    path.curve((306.0, 278.0), (282.0, 204.0), (257.0, 150.0))    # right stroke, inner
-    path.curve((240.0, 200.0), (223.0, 258.0), (208.0, 318.0))    # left stroke, inner
-    path.line((176.0, 330.0))                                     # left foot, tucked into the tail
-    path.curve((196.0, 250.0), (228.0, 178.0), APEX)              # left stroke, outer
-    return path.close()
+def _source():
+    """The artwork as greyscale. Its brightness doubles as the mark's coverage."""
+    if "source" not in _cache:
+        from PIL import Image  # imported here: only the build path needs Pillow
+
+        if not SOURCE.is_file():
+            raise FileNotFoundError(f"the logo artwork is missing: {SOURCE}")
+        _cache["source"] = Image.open(SOURCE).convert("L")
+    return _cache["source"]
 
 
-# --- The orbit --------------------------------------------------------------
-# An ellipse seen almost edge on. It is open at the left, where the lower edge
-# carries on past the ellipse and thins into the tail.
+def _contours() -> list[list[Point]]:
+    """Closed outlines around the mark, in source pixels (marching squares).
 
-ORBIT_CENTRE = (262.0, 256.0)
-ORBIT_RX = 128.0
-ORBIT_RY = 41.0
-ORBIT_TILT = math.radians(-22.0)
+    Each cell of the pixel grid contributes the piece of outline that crosses
+    it; the pieces are then stitched end to end into loops. Holes come out as
+    loops of their own, which is why the paths below are filled even-odd.
+    """
+    if "contours" in _cache:
+        return _cache["contours"]
 
-TAIL_TIP = (120.0, 366.0)
-TAIL_TIP_DIRECTION = (0.88, -0.47)
-TAIL_TIP_REACH = 86.0
-TAIL_JOIN_REACH = 52.0
+    image = _source()
+    width, height = image.size
+    pixels = image.load()
+    rows = [[pixels[x, y] >= THRESHOLD for x in range(width)] for y in range(height)]
 
-_ATTACH = 0.70 * math.pi          # where the tail meets the ellipse
-_OPEN_END = -0.97 * math.pi       # where the orbit stops, above the tail
-_HALF_WIDTH = 9.4
-_TAPER = 0.13 * math.pi           # how long the open end takes to reach a point
+    def inside(x: int, y: int) -> bool:
+        return 0 <= x < width and 0 <= y < height and rows[y][x]
 
-# How thick the band is around the orbit: heaviest at the front, lightest where
-# it passes behind the letter and reaches the spark.
-_WIDTH_PROFILE = [
-    (_ATTACH, 1.0),
-    (0.35 * math.pi, 0.95),
-    (0.0, 0.78),
-    (-0.35 * math.pi, 0.62),
-    (-0.70 * math.pi, 0.52),
-    (_OPEN_END, 0.46),
-]
+    # Which mid-edge points a cell joins, by its corners: top-left 1, top-right
+    # 2, bottom-right 4, bottom-left 8. The two saddle cases (5 and 10) are cut
+    # the same way every time, so the loops always close.
+    joins = {
+        1: ((3, 0),), 2: ((0, 1),), 3: ((3, 1),), 4: ((1, 2),),
+        5: ((3, 0), (1, 2)), 6: ((0, 2),), 7: ((3, 2),), 8: ((2, 3),),
+        9: ((2, 0),), 10: ((0, 1), (2, 3)), 11: ((2, 1),), 12: ((1, 3),),
+        13: ((1, 0),), 14: ((0, 3),),
+    }
+    steps: dict[Point, list[Point]] = {}
+    for y in range(-1, height):
+        for x in range(-1, width):
+            code = ((1 if inside(x, y) else 0) | (2 if inside(x + 1, y) else 0)
+                    | (4 if inside(x + 1, y + 1) else 0) | (8 if inside(x, y + 1) else 0))
+            if code in (0, 15):
+                continue
+            edges = ((x + 0.5, y), (x + 1.0, y + 0.5), (x + 0.5, y + 1.0), (x, y + 0.5))
+            for start, end in joins[code]:
+                steps.setdefault(edges[start], []).append(edges[end])
 
-
-def _orbit_point(t: float) -> Point:
-    x, y = ORBIT_RX * math.cos(t), ORBIT_RY * math.sin(t)
-    return (ORBIT_CENTRE[0] + x * math.cos(ORBIT_TILT) - y * math.sin(ORBIT_TILT),
-            ORBIT_CENTRE[1] + x * math.sin(ORBIT_TILT) + y * math.cos(ORBIT_TILT))
-
-
-def _orbit_heading(t: float) -> Point:
-    """Unit vector along the direction the band is drawn (t decreasing)."""
-    dx, dy = ORBIT_RX * math.sin(t), -ORBIT_RY * math.cos(t)
-    x = dx * math.cos(ORBIT_TILT) - dy * math.sin(ORBIT_TILT)
-    y = dx * math.sin(ORBIT_TILT) + dy * math.cos(ORBIT_TILT)
-    length = math.hypot(x, y) or 1.0
-    return (x / length, y / length)
-
-
-def _profile_width(t: float) -> float:
-    for (t0, w0), (t1, w1) in zip(_WIDTH_PROFILE, _WIDTH_PROFILE[1:]):
-        if t1 <= t <= t0:
-            ratio = (t0 - t) / (t0 - t1)
-            factor = w0 + (w1 - w0) * ratio
-            break
-    else:
-        factor = _WIDTH_PROFILE[-1][1]
-    taper = min(1.0, max(0.0, (t - _OPEN_END) / _TAPER))
-    return _HALF_WIDTH * factor * math.sin(taper * math.pi / 2)
-
-
-def _bezier(p0: Point, c1: Point, c2: Point, p1: Point, t: float) -> Point:
-    u = 1 - t
-    return (u ** 3 * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t ** 3 * p1[0],
-            u ** 3 * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t ** 3 * p1[1])
+    contours = []
+    for first in list(steps):
+        while steps.get(first):
+            loop = [first]
+            point = first
+            while True:
+                onward = steps.get(point)
+                if not onward:
+                    break
+                point = onward.pop()
+                loop.append(point)
+                if point == first:
+                    break
+            if len(loop) > 12:
+                contours.append(loop)
+    contours.sort(key=len, reverse=True)
+    _cache["contours"] = contours
+    return contours
 
 
-def _orbit_centreline() -> list[tuple[Point, Point, float]]:
-    """Samples of (point, heading, half width) from the tail tip to the open end."""
-    samples: list[tuple[Point, Point, float]] = []
-
-    join = _orbit_point(_ATTACH)
-    join_heading = _orbit_heading(_ATTACH)
-    c1 = (TAIL_TIP[0] + TAIL_TIP_DIRECTION[0] * TAIL_TIP_REACH,
-          TAIL_TIP[1] + TAIL_TIP_DIRECTION[1] * TAIL_TIP_REACH)
-    c2 = (join[0] - join_heading[0] * TAIL_JOIN_REACH,
-          join[1] - join_heading[1] * TAIL_JOIN_REACH)
-    tail_steps = 7
-    join_width = _profile_width(_ATTACH)
-    for step in range(tail_steps):
-        t = step / tail_steps
-        point = _bezier(TAIL_TIP, c1, c2, join, t)
-        ahead = _bezier(TAIL_TIP, c1, c2, join, min(1.0, t + 0.004))
-        heading = (ahead[0] - point[0], ahead[1] - point[1])
-        length = math.hypot(*heading) or 1.0
-        samples.append(((point[0], point[1]), (heading[0] / length, heading[1] / length),
-                        join_width * (t ** 0.62)))
-
-    orbit_steps = 22
-    for step in range(orbit_steps + 1):
-        t = _ATTACH + (_OPEN_END - _ATTACH) * step / orbit_steps
-        samples.append((_orbit_point(t), _orbit_heading(t), _profile_width(t)))
-    return samples
-
-
-def orbit_path() -> Path:
-    samples = _orbit_centreline()
-    left: list[Point] = []
-    right: list[Point] = []
-    for point, heading, width in samples:
-        normal = (-heading[1], heading[0])
-        left.append((point[0] + normal[0] * width, point[1] + normal[1] * width))
-        right.append((point[0] - normal[0] * width, point[1] - normal[1] * width))
-    path = Path(left[0])
-    path.through(left[1:])
-    path.through(list(reversed(right)))
-    return path.close()
+def _simplify(points: list[Point], epsilon: float) -> list[Point]:
+    """Douglas-Peucker, run over the loop without recursing into deep stacks."""
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    pending = [(0, len(points) - 1)]
+    while pending:
+        start, end = pending.pop()
+        if end <= start + 1:
+            continue
+        ax, ay = points[start]
+        bx, by = points[end]
+        dx, dy = bx - ax, by - ay
+        length = math.hypot(dx, dy)
+        worst, index = -1.0, start
+        for i in range(start + 1, end):
+            px, py = points[i]
+            if length == 0:
+                distance = math.hypot(px - ax, py - ay)
+            else:
+                distance = abs(dy * px - dx * py + bx * ay - by * ax) / length
+            if distance > worst:
+                worst, index = distance, i
+        if worst > epsilon:
+            keep[index] = True
+            pending.append((start, index))
+            pending.append((index, end))
+    return [point for point, kept in zip(points, keep) if kept]
 
 
-# --- The spark --------------------------------------------------------------
+def _path_from_contour(points: list[Point], scale: float) -> list[tuple]:
+    """Turn one traced loop into path commands, curving through everything
+    except the corners.
 
-SPARK_CENTRE = (386.0, 166.0)
-SPARK_RX = 34.0
-SPARK_RY = 42.0
-_SPARK_WAIST = 0.19
+    Each edge gets a cubic whose handles reach towards the neighbouring points
+    where the outline is smooth, and lie on the edge itself where it meets a
+    corner. An edge between two corners therefore comes out as a straight line,
+    which is what most of this mark is.
+    """
+    ring = [(x * scale, y * scale) for x, y in points[:-1]]
+    count = len(ring)
+    if count < 3:
+        return []
+
+    limit = math.cos(math.radians(CORNER_DEGREES))
+    tangents: list[Point | None] = []
+    for i in range(count):
+        ax, ay = ring[i - 1]
+        bx, by = ring[i]
+        cx, cy = ring[(i + 1) % count]
+        first = (bx - ax, by - ay)
+        second = (cx - bx, cy - by)
+        len1 = math.hypot(*first) or 1.0
+        len2 = math.hypot(*second) or 1.0
+        turn = (first[0] * second[0] + first[1] * second[1]) / (len1 * len2)
+        if turn <= limit:
+            tangents.append(None)  # a corner: the handles stay on their edges
+            continue
+        span = ((cx - ax), (cy - ay))
+        length = math.hypot(*span) or 1.0
+        tangents.append((span[0] / length, span[1] / length))
+
+    commands: list[tuple] = [("M", ring[0])]
+    for i in range(count):
+        start = ring[i]
+        end = ring[(i + 1) % count]
+        head, tail = tangents[i], tangents[(i + 1) % count]
+        if head is None and tail is None:
+            commands.append(("L", end))
+            continue
+        # Handles reach a third of the way along this edge, which is what keeps
+        # an unevenly sampled outline from bulging between distant points.
+        reach = math.hypot(end[0] - start[0], end[1] - start[1]) / 3.0
+        edge = ((end[0] - start[0]) / (reach * 3 or 1.0), (end[1] - start[1]) / (reach * 3 or 1.0))
+        head = head or edge
+        tail = tail or edge
+        commands.append(("C",
+                         (start[0] + head[0] * reach, start[1] + head[1] * reach),
+                         (end[0] - tail[0] * reach, end[1] - tail[1] * reach),
+                         end))
+    commands.append(("Z",))
+    return commands
 
 
-def spark_path() -> Path:
-    cx, cy = SPARK_CENTRE
-    ox, oy = SPARK_RX * _SPARK_WAIST, SPARK_RY * _SPARK_WAIST
-    # Each quarter bows in towards the centre, which is what makes the points.
-    path = Path((cx, cy - SPARK_RY))
-    path.curve((cx + ox, cy - oy), (cx + SPARK_RX - ox * 2, cy - oy), (cx + SPARK_RX, cy))
-    path.curve((cx + SPARK_RX - ox * 2, cy + oy), (cx + ox, cy + oy), (cx, cy + SPARK_RY))
-    path.curve((cx - ox, cy + oy), (cx - SPARK_RX + ox * 2, cy + oy), (cx - SPARK_RX, cy))
-    path.curve((cx - SPARK_RX + ox * 2, cy - oy), (cx - ox, cy - oy), (cx, cy - SPARK_RY))
-    return path.close()
+def mark_path() -> Path:
+    """The whole mark as one even-odd path, scaled into the 512 canvas."""
+    if "path" not in _cache:
+        width, height = _source().size
+        scale = CANVAS / max(width, height)
+        commands: list[tuple] = []
+        for contour in _contours():
+            commands += _path_from_contour(_simplify(contour, SIMPLIFY), scale)
+        path = Path(commands[0][1])
+        path.commands = commands
+        _cache["path"] = path
+    return _cache["path"]
 
 
-def mark_paths() -> list[Path]:
-    """The three shapes of the mark, in drawing order."""
-    return [orbit_path(), letter_path(), spark_path()]
-
-
-# --- Output ----------------------------------------------------------------
-# Three framings of one mark. "logo" is the brand image as drawn above. "icon"
-# is the same mark enlarged to fill a launcher tile, because at 16 px the logo's
-# generous margin leaves too little glyph to recognise. "mark" is that framing
-# without the black tile, for surfaces that are already dark.
+# --- Framings ---------------------------------------------------------------
+# One mark, three framings. "logo" is the artwork as it was drawn. "icon" is the
+# same mark enlarged to fill a launcher tile, because at 16 px the artwork's
+# margin leaves too little glyph to recognise. "mark" is that framing without
+# the black tile, for surfaces that are already dark.
 
 ICON_FILL = 0.88
 VARIANTS = ("logo", "icon", "mark")
@@ -255,12 +284,10 @@ ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
 def mark_bounds() -> tuple[float, float, float, float]:
-    xs: list[float] = []
-    ys: list[float] = []
-    for path in mark_paths():
-        for x, y in path.to_polygon(steps=12):
-            xs.append(x)
-            ys.append(y)
+    """The mark's own extent inside the canvas, ignoring the artwork's margin."""
+    points = mark_path().to_polygon()
+    xs = [x for x, _ in points]
+    ys = [y for _, y in points]
     return min(xs), min(ys), max(xs), max(ys)
 
 
@@ -270,9 +297,9 @@ def variant_transform(variant: str) -> tuple[float, float, float]:
         return 1.0, 0.0, 0.0
     left, top, right, bottom = mark_bounds()
     scale = CANVAS * ICON_FILL / max(right - left, bottom - top)
-    dx = (CANVAS - (right - left) * scale) / 2 - left * scale
-    dy = (CANVAS - (bottom - top) * scale) / 2 - top * scale
-    return scale, dx, dy
+    return (scale,
+            (CANVAS - (right - left) * scale) / 2 - left * scale,
+            (CANVAS - (bottom - top) * scale) / 2 - top * scale)
 
 
 def svg(variant: str = "logo", size: int | None = None, title: str = "Aster",
@@ -289,12 +316,11 @@ def svg(variant: str = "logo", size: int | None = None, title: str = "Aster",
     lines = [f'<svg {attrs} role="img" aria-label="{title}">']
     if variant != "mark":
         lines.append(f'  <rect width="{CANVAS}" height="{CANVAS}" fill="{BACKGROUND}"/>')
-    group = f'<g fill="{FOREGROUND}"'
+    group = f'<g fill="{FOREGROUND}" fill-rule="evenodd"'
     if (scale, dx, dy) != (1.0, 0.0, 0.0):
-        group += f' transform="translate({dx:.2f} {dy:.2f}) scale({scale:.4f})"'
+        group += f' transform="translate({dx:.1f} {dy:.1f}) scale({scale:.4f})"'
     lines.append("  " + group + ">")
-    for path in mark_paths():
-        lines.append(f'    <path d="{path.to_svg()}"/>')
+    lines.append(f'    <path d="{mark_path().to_svg()}"/>')
     lines.append("  </g>")
     lines.append("</svg>")
     if compact:
@@ -302,24 +328,27 @@ def svg(variant: str = "logo", size: int | None = None, title: str = "Aster",
     return "\n".join(lines) + "\n"
 
 
-def render(size: int, variant: str = "logo", supersample: int = 4):
-    """Rasterise a variant with Pillow, which the Windows icons are built from.
+def render(size: int, variant: str = "logo"):
+    """One variant as a bitmap, scaled from the artwork itself."""
+    from PIL import Image  # imported here: only the build path needs Pillow
 
-    Drawn large and scaled down, because Pillow fills polygons without
-    antialiasing and the mark is nothing but curves.
-    """
-    from PIL import Image, ImageDraw  # imported here so the SVG side needs no Pillow
+    if variant not in VARIANTS:
+        raise ValueError(f"unknown variant: {variant!r}")
+    grey = _source()
+    if variant == "logo":
+        return grey.convert("RGB").resize((size, size), Image.LANCZOS)
 
-    canvas = size * supersample
-    mode, background = ("RGBA", (0, 0, 0, 0)) if variant == "mark" else ("RGB", BACKGROUND)
-    image = Image.new(mode, (canvas, canvas), background)
-    draw = ImageDraw.Draw(image)
-    scale, dx, dy = variant_transform(variant)
-    unit = canvas / CANVAS
-    for path in mark_paths():
-        points = [((x * scale + dx) * unit, (y * scale + dy) * unit) for x, y in path.to_polygon()]
-        draw.polygon(points, fill=FOREGROUND)
-    return image.resize((size, size), Image.LANCZOS)
+    glyph = Image.new("RGBA", grey.size, (255, 255, 255, 0))
+    glyph.putalpha(grey)
+    glyph = glyph.crop(grey.point(lambda value: 255 if value >= THRESHOLD else 0).getbbox())
+    side = max(1, round(size * ICON_FILL))
+    scale = side / max(glyph.size)
+    glyph = glyph.resize((max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))),
+                         Image.LANCZOS)
+
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0) if variant == "mark" else (0, 0, 0, 255))
+    canvas.alpha_composite(glyph, ((size - glyph.width) // 2, (size - glyph.height) // 2))
+    return canvas if variant == "mark" else canvas.convert("RGB")
 
 
 def write_ico(path: str | pathlib.Path) -> None:

@@ -1,6 +1,6 @@
-"""Write every copy of the Aster logo from assets/brand/aster_brand.py.
+"""Write every copy of the Aster logo from the artwork in asterlogo.png.
 
-Run this after changing the mark:
+Run this after replacing that file:
 
     python assets/brand/build_brand_assets.py
 
