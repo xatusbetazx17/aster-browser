@@ -189,28 +189,26 @@ class Accent(unittest.TestCase):
                 self.assertFalse(is_blue(tokens["accent"]),
                                  f"{name} still accents the interface in blue: {tokens['accent']}")
 
-    def test_what_sits_on_the_accent_stays_readable(self):
-        """A white button with white text is the whole risk of this change."""
-        for name, tokens in self.theme._THEME_TOKENS.items():
-            for state in ("accent", "accent_hover", "accent_pressed"):
-                with self.subTest(theme=name, state=state):
-                    ratio = contrast(tokens[state], tokens["accent_text"])
-                    self.assertGreaterEqual(ratio, 4.5,
-                                            f"{name}: text on {state} ({tokens[state]}) has {ratio:.1f}:1")
+    def test_a_button_reads_against_its_own_label(self):
+        """Buttons carry the field surface now, so the label has to clear it."""
+        for name in self.theme._THEME_TOKENS:
+            with self.subTest(theme=name):
+                sheet = self.theme.stylesheet_for(name, background_transparency_percent=0)
+                surface = background_of(sheet, "QPushButton")
+                label = re.search(r"QPushButton \{[^}]*?color:\s*([^;]+);", sheet, re.S).group(1).strip()
+                self.assertGreaterEqual(contrast(surface, label), 4.5,
+                                        f"{name}: a button's label does not clear its own surface")
+                self.assertNotEqual(surface.lower(), background_of(sheet, f"QWidget#{PAGE_OBJECT_NAME}").lower(),
+                                    f"{name}: a button is the same colour as the page it sits on")
 
-    def test_a_chosen_accent_brings_its_own_states(self):
-        """Picking an accent used to leave the pressed state on the old colour."""
-        for chosen, expect_dark_text in (("#ffffff", True), ("#f2c744", True), ("#7a1f66", False)):
+    def test_a_chosen_accent_replaces_the_theme_accent(self):
+        """Picking an accent used to leave parts of the interface on the old one."""
+        for chosen in ("#f2c744", "#7a1f66"):
             with self.subTest(accent=chosen):
                 sheet = self.theme.stylesheet_for("black_arc", 0, chosen)
                 self.assertNotIn("#50bfe9", sheet, "the theme's own accent survived the choice")
-                pressed = background_of(sheet, "QPushButton:pressed")
-                self.assertNotEqual(pressed.lower(), chosen.lower(), "pressed looks the same as resting")
-                colour = re.search(r"QPushButton \{[^}]*?color:\s*([^;]+);", sheet).group(1).strip()
-                self.assertEqual(contrast(chosen, colour) >= 4.5, True,
-                                 f"text on {chosen} is {colour}, which is not readable")
-                self.assertEqual(colour.lower() in ("#0c0e12",), expect_dark_text,
-                                 f"{chosen} should carry {'dark' if expect_dark_text else 'light'} text")
+                self.assertNotIn(self.theme.ACCENT_PRESSED, sheet, "the default's pressed state survived")
+                self.assertIn(chosen, sheet.lower(), "the chosen accent never reached the interface")
 
 
 class Backdrop(unittest.TestCase):
