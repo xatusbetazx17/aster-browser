@@ -34,6 +34,10 @@ def build():
         f"--add-data={png_path};.",
         "--collect-all",
         "customtkinter",
+        # aster_runtime sits next to installer_gui.py. PyInstaller normally
+        # finds a sibling module anyway, but a miss here would only show up as
+        # an exe that dies on its first import, so say where it is.
+        f"--paths={installer_dir}",
         "--distpath",
         root_dir,
         "--workpath",

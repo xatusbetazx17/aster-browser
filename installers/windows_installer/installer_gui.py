@@ -22,6 +22,8 @@ try:
 except ImportError:
     raise SystemExit("customtkinter is required. Install with: pip install customtkinter")
 
+import aster_runtime
+
 APP_NAME = "Aster Browser"
 APP_VERSION = "16.0.0"
 DEFAULT_INSTALL_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "AsterBrowser")
@@ -61,6 +63,73 @@ def get_asset_path(filename: str) -> str | None:
     if os.path.exists(local_p):
         return local_p
     return None
+
+
+# The launcher the shortcuts point at. It is written verbatim, so what runs on a
+# machine is exactly what is reviewed here.
+#
+# The runtime is found relative to the script, not baked in as an absolute path,
+# so moving the installation folder does not break it. Both layouts are checked
+# because a venv puts the interpreter in Scripts\\ and a private python.org
+# install puts it at the top.
+LAUNCHER_BAT = r"""@echo off
+setlocal
+set "ASTER_HOME=%~dp0"
+set "ASTER_PORTABLE=1"
+set "ASTER_PORTABLE_ROOT=%ASTER_HOME%state"
+set "QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu-sandbox --enable-features=VaapiVideoDecoder"
+cd /d "%ASTER_HOME%app"
+
+set "ASTER_PYW="
+if exist "%ASTER_HOME%runtime\pythonw.exe" set "ASTER_PYW=%ASTER_HOME%runtime\pythonw.exe"
+if exist "%ASTER_HOME%runtime\Scripts\pythonw.exe" set "ASTER_PYW=%ASTER_HOME%runtime\Scripts\pythonw.exe"
+
+if defined ASTER_PYW (
+    start "" "%ASTER_PYW%" "%ASTER_HOME%app\run_aster.py" %*
+    exit /b 0
+)
+
+echo.
+echo Aster Browser baslatilamadi: Python ortami bulunamadi.
+echo Beklenen konum: %ASTER_HOME%runtime
+echo.
+echo Kurulumu tekrar calistirin. Ayrintili hata icin:
+echo     "%ASTER_HOME%Sorun-Giderme.bat"
+echo.
+pause
+exit /b 1
+"""
+
+#: The same launch, on the console interpreter, with nothing hidden.
+DEBUG_BAT = r"""@echo off
+setlocal
+set "ASTER_HOME=%~dp0"
+set "ASTER_PORTABLE=1"
+set "ASTER_PORTABLE_ROOT=%ASTER_HOME%state"
+cd /d "%ASTER_HOME%app"
+
+set "ASTER_PY="
+if exist "%ASTER_HOME%runtime\python.exe" set "ASTER_PY=%ASTER_HOME%runtime\python.exe"
+if exist "%ASTER_HOME%runtime\Scripts\python.exe" set "ASTER_PY=%ASTER_HOME%runtime\Scripts\python.exe"
+
+if not defined ASTER_PY (
+    echo Python ortami yok: %ASTER_HOME%runtime
+    echo Kurulumu tekrar calistirin.
+    pause
+    exit /b 1
+)
+
+echo Python : %ASTER_PY%
+echo.
+"%ASTER_PY%" -c "import PyQt6.QtWebEngineWidgets; print('bagimliliklar tamam')"
+echo.
+echo Aster konsoldan baslatiliyor. Hata olursa asagida gorunur.
+echo.
+"%ASTER_PY%" "%ASTER_HOME%app\run_aster.py" %*
+echo.
+echo Cikis kodu: %ERRORLEVEL%
+pause
+"""
 
 MANIFEST_NAME = "bundle_info.json"
 
@@ -450,11 +519,10 @@ class AsterInstallerApp(ctk.CTk):
             root = self.install_dir
             app_dir = os.path.join(root, "app")
             state_dir = os.path.join(root, "state")
-            runtime_dir = os.path.join(root, "runtime")
             
             # Step 1: Prepare directories
             self._set_status("Hedef dizin hazırlanıyor...", 0.15)
-            self._log(f"[1/5] Hedef dizin oluşturuluyor: {root}")
+            self._log(f"[1/6] Hedef dizin oluşturuluyor: {root}")
             os.makedirs(root, exist_ok=True)
             os.makedirs(state_dir, exist_ok=True)
             
@@ -465,7 +533,7 @@ class AsterInstallerApp(ctk.CTk):
             # Step 2: Extract bundled app
             self._set_status("Uygulama dosyaları arşivden çıkartılıyor...", 0.35)
             bundle_zip = get_bundle_path()
-            self._log(f"[2/5] Paket çıkartılıyor: {os.path.basename(bundle_zip)}")
+            self._log(f"[2/6] Paket çıkartılıyor: {os.path.basename(bundle_zip)}")
             
             with zipfile.ZipFile(bundle_zip, "r") as z:
                 total_files = len(z.infolist())
@@ -486,10 +554,22 @@ class AsterInstallerApp(ctk.CTk):
                 )
             else:
                 self._log("Uyarı: pakette kurulum kaydı yok; sürümü doğrulanamıyor.")
-            
-            # Step 3: Copy icons and generate batch launcher
-            self._set_status("Başlatıcı ve sistem konfigürasyonu yapılıyor...", 0.75)
-            self._log("[3/5] Başlatıcı ve ortam ayarlanıyor...")
+
+            # Step 3: Stand up the Python the browser runs on.
+            #
+            # Until this existed the launcher fell back to whatever `py -3`
+            # resolved to, so an install could finish and the browser still
+            # not start - and say nothing about why. Nothing below is allowed
+            # to touch a Python the person installed for themselves.
+            self._set_status("Python ortamı hazırlanıyor...", 0.45)
+            self._log("[3/6] Python ortamı ve bağımlılıklar hazırlanıyor...")
+            aster_runtime.provision_runtime(
+                root, app_dir, log=self._log, status=self._set_status,
+            )
+
+            # Step 4: Copy icons and generate batch launcher
+            self._set_status("Başlatıcı ve sistem konfigürasyonu yapılıyor...", 0.78)
+            self._log("[4/6] Başlatıcı ve ortam ayarlanıyor...")
             
             ico_src = get_asset_path("aster.ico")
             ico_dest = os.path.join(root, "aster.ico")
@@ -497,23 +577,18 @@ class AsterInstallerApp(ctk.CTk):
                 shutil.copy2(ico_src, ico_dest)
             
             launcher_bat = os.path.join(root, "AsterBrowser.bat")
-            bat_content = (
-                "@echo off\r\n"
-                "set \"ASTER_PORTABLE=1\"\r\n"
-                "set \"ASTER_PORTABLE_ROOT=%~dp0state\"\r\n"
-                "set \"QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu-sandbox --enable-features=VaapiVideoDecoder\"\r\n"
-                "cd /d \"%~dp0app\"\r\n"
-                "if exist \"%~dp0runtime\\Scripts\\pythonw.exe\" (\r\n"
-                "    start \"\" \"%~dp0runtime\\Scripts\\pythonw.exe\" \"%~dp0app\\run_aster.py\" %*\r\n"
-                ") else if exist \"%~dp0runtime\\Scripts\\python.exe\" (\r\n"
-                "    \"%~dp0runtime\\Scripts\\python.exe\" \"%~dp0app\\run_aster.py\" %*\r\n"
-                ") else (\r\n"
-                "    py -3 \"%~dp0app\\run_aster.py\" %* 2>nul || python \"%~dp0app\\run_aster.py\" %*\r\n"
-                ")\r\n"
-            )
-            with open(launcher_bat, "w", encoding="ascii") as f:
-                f.write(bat_content)
+            with open(launcher_bat, "w", encoding="ascii", newline="\r\n") as f:
+                f.write(LAUNCHER_BAT)
             self._log(f"Başlatıcı oluşturuldu: {launcher_bat}")
+
+            # A second launcher that keeps its console and prints the import
+            # error instead of swallowing it. The old launcher sent exactly
+            # that to nul, which is why a browser that would not start gave
+            # nobody anything to go on.
+            debug_bat = os.path.join(root, "Sorun-Giderme.bat")
+            with open(debug_bat, "w", encoding="ascii", newline="\r\n") as f:
+                f.write(DEBUG_BAT)
+            self._log(f"Sorun giderme betiği oluşturuldu: {debug_bat}")
             
             uninst_bat = os.path.join(root, "Uninstall.bat")
             desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", f"{APP_NAME}.lnk")
@@ -533,14 +608,19 @@ class AsterInstallerApp(ctk.CTk):
             with open(uninst_bat, "w", encoding="ascii") as f:
                 f.write(uninst_content)
             
-            # Step 4: Create Shortcuts
+            # Step 5: Create Shortcuts
             self._set_status("Kısayollar oluşturuluyor...", 0.88)
-            self._log("[4/5] Windows kısayolları oluşturuluyor...")
+            self._log("[5/6] Windows kısayolları oluşturuluyor...")
             
-            pythonw_target = os.path.join(runtime_dir, "Scripts", "pythonw.exe")
-            run_py = os.path.join(app_dir, "run_aster.py")
-            target_exe = pythonw_target if os.path.exists(pythonw_target) else launcher_bat
-            args = f'"{run_py}"' if target_exe == pythonw_target else ""
+            # Every shortcut goes through the launcher, never straight to
+            # pythonw. The launcher is what sets ASTER_PORTABLE and points
+            # ASTER_PORTABLE_ROOT at state\, so a shortcut that skipped it would
+            # put settings, containers and parked tabs under the user profile
+            # instead - and an install started one way would not see the data
+            # the other way wrote. It cost a console window for a fraction of a
+            # second; two data directories cost a lot more.
+            target_exe = launcher_bat
+            args = ""
 
             if self.create_desktop_sc:
                 create_windows_shortcut(
@@ -564,9 +644,9 @@ class AsterInstallerApp(ctk.CTk):
                 )
                 self._log(f"Başlat menüsü kısayolu oluşturuldu: {sm_shortcut}")
             
-            # Step 5: Windows Registry registration
+            # Step 6: Windows Registry registration
             self._set_status("Sistem kayıtları yapılıyor...", 0.95)
-            self._log("[5/5] Windows Denetim Masası Program Ekle/Kaldır kaydı yapılıyor...")
+            self._log("[6/6] Windows Denetim Masası Program Ekle/Kaldır kaydı yapılıyor...")
             try:
                 reg_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\AsterBrowser"
                 with winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
