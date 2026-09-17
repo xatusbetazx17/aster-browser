@@ -31,6 +31,17 @@ jobs:
         run: python -m unittest discover -s installers/tests -p 'test_*.py' -v
       - name: Validate Python syntax
         run: python -m compileall -q installers
+      - name: Test the browser the installers actually ship
+        # The kit carries its own tests but nothing ran them, so two had been
+        # failing unnoticed - one of them because the settings page had stopped
+        # offering the default theme, which quietly moved anyone who saved
+        # settings onto another one with no way back. Extract the kit and run
+        # them here, where a red test is visible before a release is cut.
+        run: |
+          python -c "import zipfile; zipfile.ZipFile('Aster-Browser-Windows-Kit-v16.zip').extractall('kit-check')"
+      - name: Run the kit's own tests
+        working-directory: kit-check/aster-browser-windows-kit
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Test portable reading and assistant logic
         run: python -m unittest discover -s experiments/webkit/tests -p 'test_*.py' -v
       - name: Validate Linux bootstrap
