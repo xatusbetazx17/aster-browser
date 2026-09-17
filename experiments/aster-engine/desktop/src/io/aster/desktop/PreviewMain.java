@@ -63,10 +63,38 @@ public final class PreviewMain {
         window.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(stroke), stroke);
         window.getRootPane().getActionMap().put(stroke, new AbstractAction() { public void actionPerformed(ActionEvent event) { action.run(); } });
     }
+    /** One tab's page. A wheel notch glides the same distance Swing would have jumped. */
     private final class Tab extends JScrollPane {
         final PageCanvas canvas = new PageCanvas(); final java.util.List<URI> history = new ArrayList<>();
         int index = -1, generation; Future<?> pending; boolean closed; String message = "";
-        Tab() { setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.navigate = uri -> load(this, uri, -1); }
+        private final javax.swing.Timer glide = new javax.swing.Timer(16, null);
+        private int target, applied = -1;
+        Tab() {
+            setViewportView(canvas); getVerticalScrollBar().setUnitIncrement(28); canvas.navigate = uri -> load(this, uri, -1);
+            setWheelScrollingEnabled(false);  // Swing drops the bar straight onto its new value.
+            glide.addActionListener(event -> step()); addMouseWheelListener(this::wheel);
+        }
+        private void wheel(MouseWheelEvent event) {
+            JScrollBar bar = getVerticalScrollBar();
+            int span = bar.getMaximum() - bar.getVisibleAmount();
+            if (span <= bar.getMinimum()) return;
+            int step = event.getScrollType() == MouseWheelEvent.WHEEL_BLOCK_SCROLL
+                    ? bar.getBlockIncrement(1) : event.getScrollAmount() * bar.getUnitIncrement(1);
+            if (!glide.isRunning() || bar.getValue() != applied) target = bar.getValue();
+            target = Math.max(bar.getMinimum(), Math.min(span, target + (int) Math.round(event.getPreciseWheelRotation() * step)));
+            if (target != bar.getValue()) glide.start();
+        }
+        private void step() {
+            JScrollBar bar = getVerticalScrollBar();
+            if (applied >= 0 && bar.getValue() != applied) { glide.stop(); return; }  // A drag or a key took over.
+            int distance = target - bar.getValue();
+            if (distance == 0) { glide.stop(); return; }
+            int move = (int) Math.round(distance * 0.3);
+            applied = bar.getValue() + (move != 0 ? move : (distance > 0 ? 1 : -1));
+            bar.setValue(applied);
+        }
+        /** A new page opens at the top, with nothing still gliding towards the old one. */
+        void toTop() { glide.stop(); applied = -1; target = 0; getVerticalScrollBar().setValue(0); }
     }
     private Tab current() { return (Tab) tabs.getSelectedComponent(); }
     private void newTab() {
@@ -102,7 +130,7 @@ public final class PreviewMain {
                     }
                     tabs.setTitleAt(tabs.indexOfComponent(tab), plainLabel(document.title.length() > 26 ? document.title.substring(0, 26) + "…" : document.title));
                     tab.message = "Basic HTML/text · No JavaScript, video or DRM"; sync();
-                    tab.getVerticalScrollBar().setValue(0);
+                    tab.toTop();
                 });
             } catch (Exception e) { SwingUtilities.invokeLater(() -> {
                 if (!tab.closed && tab.generation == generation) { tab.message = "Could not open page: " + e.getMessage(); sync(); }

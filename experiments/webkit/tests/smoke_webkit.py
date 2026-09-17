@@ -83,6 +83,7 @@ def main():
             assert window is not None
             origin = f"http://127.0.0.1:{server.server_port}"
             first = window.current
+            assert first.view.get_settings().get_enable_smooth_scrolling()
             first.navigate(origin + "/first")
             wait_for(lambda: first.view.get_title() == "Script ran" and not first.view.is_loading(), "HTML/JavaScript did not render")
             first.navigate(origin + "/second")

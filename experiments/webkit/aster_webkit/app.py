@@ -49,6 +49,7 @@ class BrowserTab(Gtk.Box):
         settings = self.view.get_settings()
         settings.set_enable_developer_extras(True)
         settings.set_enable_hyperlink_auditing(False)
+        settings.set_enable_smooth_scrolling(True)  # WebKit steps the page without it.
         settings.set_javascript_can_open_windows_automatically(False)
         configure_media(settings)
         self.append(self.view)

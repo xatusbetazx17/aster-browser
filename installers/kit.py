@@ -1,4 +1,4 @@
-"""Read and replace files inside the kit both installers are built from.
+"""Read, replace and add files inside the kit both installers are built from.
 
 The Qt application's own source lives in Aster-Browser-Windows-Kit-v16.zip
 rather than in the working tree, so changing the browser means rewriting entries
@@ -53,6 +53,42 @@ def replace(updates: Mapping[str, bytes | str]) -> bool:
         items = [(item, payload.get(item.filename) or source.read(item.filename))
                  for item in source.infolist()]
 
+    _rewrite(items)
+    return True
+
+
+def add(files: Mapping[str, bytes | str]) -> bool:
+    """Write these files into the kit, new names included. True when it changed.
+
+    replace() refuses a name the kit does not carry, so a typo cannot quietly
+    drop a change. Shipping a new module is the one case that guard cannot
+    serve. A new entry takes its metadata from one the kit already holds, and
+    writing the same bytes twice is a no-op, so a build step can be re-run.
+    """
+    payload = {PREFIX + name: (data.encode("utf-8") if isinstance(data, str) else data)
+               for name, data in files.items()}
+
+    with zipfile.ZipFile(KIT) as source:
+        held = {item.filename for item in source.infolist()}
+        fresh = sorted(set(payload) - held)
+        if not fresh and all(source.read(name) == data for name, data in payload.items()):
+            return False
+        template = next(item for item in source.infolist() if not item.is_dir())
+        items = [(item, payload[item.filename] if item.filename in payload else source.read(item.filename))
+                 for item in source.infolist()]
+
+    for name in fresh:
+        entry = zipfile.ZipInfo(name, date_time=template.date_time)
+        entry.compress_type = template.compress_type
+        entry.external_attr = template.external_attr
+        entry.create_system = template.create_system
+        items.append((entry, payload[name]))
+
+    _rewrite(items)
+    return True
+
+
+def _rewrite(items) -> None:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target:
         for item, data in items:
@@ -62,4 +98,3 @@ def replace(updates: Mapping[str, bytes | str]) -> bool:
             info.create_system = item.create_system
             target.writestr(info, data)
     KIT.write_bytes(buffer.getvalue())
-    return True
